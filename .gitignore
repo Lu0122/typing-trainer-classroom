@@ -1,0 +1,28 @@
+node_modules/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+.env
+npm-debug.log*
+output/
+.playwright-cli/
+
+# Local runtime and build diagnostics
+*.log
+build-check.txt
+check.txt
+proc.txt
+smoke.txt
+state.txt
+env-example-dump.txt
+
+# Archives and local workspace metadata
+*.zip
+.claude/
+.workbuddy/
+.workbuddy-ai/
+
+# Vite-generated bundles; rebuild with `npm run build`
+public/index.html
+public/assets/*.js
+public/assets/*.css
