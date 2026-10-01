@@ -269,26 +269,34 @@ class EliminationRoom extends BossRoom {
     if (!this.players.has(this.captain)) this.captain = this.players.keys().next().value ?? null;
     if (this.phase === 'waiting' && this.startsAt !== null && this.now() >= this.startsAt) this.begin();
     if (this.phase !== 'running') return;
+    if (!this.activePlayers().length) { this.finish('abandoned'); return; }
+    if (this.initialPlayers > 1 && this.activePlayers().length === 1) { this.finish('survivor'); return; }
     if (this.now() >= this.endsAt) { this.finish('timeout'); return; }
-    while (this.nextEliminationAt && this.now() >= this.nextEliminationAt && this.nextEliminationAt < this.endsAt) {
-      this.resolveElimination(); this.eliminationRound++; this.nextEliminationAt += ELIMINATION_INTERVAL_MS;
+    while (this.phase === 'running' && this.nextEliminationAt && this.now() >= this.nextEliminationAt && this.nextEliminationAt < this.endsAt) {
+      this.resolveElimination();
+      if (this.phase !== 'running') break;
+      this.eliminationRound++; this.nextEliminationAt += ELIMINATION_INTERVAL_MS;
     }
   }
-  publicPlayer(player) { return { ...super.publicPlayer(player), score: player.score || 0, eliminated: !!player.eliminated }; }
+  publicPlayer(player) {
+    return { ...super.publicPlayer(player), score: player.score || 0, eliminated: !!player.eliminated,
+      survivalMs: this.startedAt === null ? 0 : Math.max(0, (player.eliminatedAt ?? this.result?.endedAt ?? this.now()) - this.startedAt) };
+  }
   finish(outcome) {
     if (this.phase !== 'running') return;
     const participants = [...this.retired, ...[...this.players.values()].map(player => this.publicPlayer(player))];
-    const survivors = participants.filter(player => !player.eliminated).sort((a, b) => b.score - a.score || b.accuracy - a.accuracy);
-    const winner = survivors[0] || [...participants].sort((a, b) => b.score - a.score || b.accuracy - a.accuracy)[0];
+    const survivors = [...this.players.values()].filter(player => !player.eliminated).map(player => this.publicPlayer(player)).sort((a, b) => b.score - a.score || b.accuracy - a.accuracy);
+    const winner = survivors[0] || null;
     this.result = { id: this.round, outcome, endedAt: this.now(), participants, winner, survivors: survivors.length,
-      awards: { contribution: winner || null, precision: [...participants].sort((a, b) => b.accuracy - a.accuracy)[0] || null, combo: [...participants].sort((a, b) => b.bestCombo - a.bestCombo)[0] || null } };
+      awards: { contribution: winner, precision: participants.filter(player => player.attempted >= 20).sort((a, b) => b.accuracy - a.accuracy || b.correct - a.correct)[0] || null, combo: participants.filter(player => player.bestCombo > 0).sort((a, b) => b.bestCombo - a.bestCombo)[0] || null } };
     this.save(this.result); for (const player of this.players.values()) this.recordPlayer(player, true);
     this.phase = 'finished'; this.event(outcome === 'survivor' ? `${winner?.name || '选手'} 成为最后幸存者！` : '淘汰赛结束，查看本局排名', 'stage');
   }
   state(id) {
     const base = super.state(id); const alive = base.players.filter(player => !player.eliminated);
-    return { ...base, gameType: 'elimination', activeCount: alive.length,
-      elimination: { round: this.eliminationRound, intervalMs: ELIMINATION_INTERVAL_MS, nextAt: this.nextEliminationAt, dangerCount: Math.max(1, Math.floor(alive.length / 4)) },
+    const players = base.players.sort((a, b) => Number(a.eliminated) - Number(b.eliminated) || b.score - a.score || b.accuracy - a.accuracy || b.combo - a.combo);
+    return { ...base, players, gameType: 'elimination', activeCount: alive.length,
+      elimination: { round: this.eliminationRound, totalRounds: Math.ceil(ROUND_MS / ELIMINATION_INTERVAL_MS), intervalMs: ELIMINATION_INTERVAL_MS, nextAt: this.nextEliminationAt, dangerCount: alive.length > 1 ? Math.max(1, Math.floor(alive.length / 4)) : 0 },
       me: base.me ? { ...base.me, task: base.me.eliminated ? null : base.me.task } : null };
   }
 }

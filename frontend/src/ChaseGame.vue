@@ -1,12 +1,12 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, Bike, Bot, CarFront, Flag, Gauge, Keyboard, Shield, Timer, Trophy } from 'lucide-vue-next';
 
 const props = defineProps({ user: Object });
 const emit = defineEmits(['back', 'login']);
 const state = ref(null), code = ref(''), role = ref('police'), draft = ref(''), message = ref(''), busy = ref(false), clock = ref(Date.now()), serverOffset = ref(0);
 const inputEl = ref(null);
-let poll, timer, flushTimer, stopped = false, reading = false;
+let poll, timer, flushTimer, startTimer, stopped = false, reading = null, composing = false, cleanLeave = false;
 const me = computed(() => state.value?.me || null);
 const opponent = computed(() => (state.value?.players || []).find(player => player.id !== props.user?.id) || null);
 const running = computed(() => state.value?.phase === 'running');
@@ -21,7 +21,7 @@ const countdown = computed(() => state.value?.phase === 'countdown' ? Math.max(1
 const target = computed(() => me.value?.task?.text || '');
 const accuracy = player => player?.attempted ? Math.round(player.correct / player.attempted * 100) : 100;
 const targetChars = computed(() => Array.from(target.value));
-const typedChars = computed(() => Array.from(me.value?.task?.typed || ''));
+const typedChars = computed(() => Array.from(draft.value));
 const humanPlayers = computed(() => (state.value?.players || []).filter(player => !player.bot));
 const finishedWinner = computed(() => state.value?.result?.winnerRole);
 const catchingGap = computed(() => {
@@ -53,24 +53,35 @@ async function api(action = '', body) {
   return data;
 }
 function apply(data) {
+  if (!data || stopped || (state.value?.round === data.round && state.value?.serverNow > data.serverNow)) return;
   if (!Array.isArray(data.players)) data.players = [];
   if (!Array.isArray(data.events)) data.events = [];
   const oldTicket = me.value?.task?.id;
   state.value = data; clock.value = Date.now(); serverOffset.value = data.serverNow - Date.now();
   if (oldTicket !== data.me?.task?.id) draft.value = data.me?.task?.typed || '';
+  clearTimeout(startTimer); startTimer = null;
+  // 倒计时到点立即同步开局，不再等下一次 650ms 轮询才启用输入框。
+  if (data.phase === 'countdown' && Number.isFinite(data.startsAt)) {
+    startTimer = setTimeout(() => { startTimer = null; return refresh(); }, Math.max(0, data.startsAt - data.serverNow) + 20);
+  }
+}
+function focusInput() {
+  const input = inputEl.value;
+  if (stopped || !running.value || !me.value?.task || !input || input.disabled) return;
+  input.focus({ preventScroll: true });
 }
 async function refresh() {
   if (stopped || reading || busy.value || !props.user) return;
-  reading = true;
-  try { apply(await api()); } catch (error) { if (!stopped) message.value = error.message; }
-  finally { reading = false; }
+  reading = (async () => { try { apply(await api()); } catch (error) { if (!stopped) message.value = error.message; } })();
+  await reading; reading = null;
 }
 async function action(path, body) {
   if (!props.user) { emit('login'); return; }
-  if (busy.value) return;
+  if (reading) await reading;
+  if (busy.value || stopped) return;
   busy.value = true; message.value = '';
   try { apply(await api(path, body)); }
-  catch (error) { message.value = error.message; if (error.status === 409) await refresh(); }
+  catch (error) { message.value = error.message; if (error.status === 409) apply(await api().catch(() => state.value)); }
   finally { busy.value = false; }
 }
 function createRoom() { action('/create', { role: 'police' }); }
@@ -78,8 +89,14 @@ function joinRoom() { action('/join-code', { code: code.value.trim() }); }
 function playBot() { action('/bot', { role: role.value }); }
 function startMatch() { action('/start', { seat: me.value?.seat }); }
 async function leave() {
-  if (me.value?.seat) await api('/leave', { seat: me.value.seat }).catch(() => {});
-  emit('back');
+  if (reading) await reading;
+  if (busy.value) { message.value = '正在同步输入，请稍后再退出。'; return; }
+  busy.value = true;
+  try {
+    if (me.value?.seat) await api('/leave', { seat: me.value.seat });
+    cleanLeave = true; stopped = true; emit('back');
+  } catch (error) { message.value = `退出失败，请重试：${error.message}`; }
+  finally { busy.value = false; }
 }
 async function copyCode() {
   if (!state.value?.code) return;
@@ -96,25 +113,39 @@ function input(event) {
   const locked = me.value.task?.typed || '';
   if (!value.startsWith(locked)) { draft.value = locked; event.target.value = locked; return; }
   draft.value = value.slice(0, target.value.length);
+  if (composing || event.isComposing) return;
   clearTimeout(flushTimer); flushTimer = setTimeout(flush, 110);
 }
 async function flush() {
-  if (!running.value || !me.value?.task || busy.value || draft.value.length <= (me.value.task.typed || '').length) return;
+  if (reading) await reading;
+  if (stopped || composing || !running.value || !me.value?.task || draft.value.length <= (me.value.task.typed || '').length) return;
+  if (busy.value) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 130); return; }
   busy.value = true;
+  let retryDelay = 130;
   try { apply(await api('/type', { seat: me.value.seat, ticket: me.value.task.id, text: draft.value.slice(0, (me.value.task.typed || '').length + 20) })); }
-  catch (error) { message.value = error.message; await refresh(); }
+  catch (error) {
+    message.value = error.message;
+    if ([400, 401, 403].includes(error.status)) return;
+    retryDelay = error.status === 429 ? 350 : 500;
+    if (error.status === 409) apply(await api().catch(() => state.value));
+  }
   finally { busy.value = false; }
-  if (draft.value.length > (me.value?.task?.typed || '').length) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 130); }
+  if (!stopped && draft.value.length > (me.value?.task?.typed || '').length) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, retryDelay); }
 }
 // 段落由服务端在输入完成后自动切换，回车不再需要，只阻止它插入换行。
 function onKeydown(event) {
+  if (composing || event.isComposing || event.keyCode === 229) return;
   if (event.key === 'Enter') event.preventDefault();
 }
+function compositionEnd(event) { composing = false; input(event); }
 function pageHide() {
-  if (me.value?.seat) navigator.sendBeacon('/api/chase/leave', new Blob([JSON.stringify({ seat: me.value.seat })], { type:'application/json' }));
+  if (!cleanLeave && me.value?.seat) navigator.sendBeacon('/api/chase/leave', new Blob([JSON.stringify({ seat: me.value.seat })], { type:'application/json' }));
 }
+watch(() => props.user?.id, refresh);
+// 等 Vue 更新并启用 textarea 后再聚焦；也覆盖输入框刚挂载和自动换段的情况。
+watch([running, () => me.value?.task?.id, inputEl], focusInput, { flush: 'post' });
 onMounted(() => { refresh(); poll = setInterval(refresh, 650); timer = setInterval(() => { clock.value = Date.now(); }, 100); window.addEventListener('pagehide', pageHide); });
-onBeforeUnmount(() => { stopped = true; clearInterval(poll); clearInterval(timer); clearTimeout(flushTimer); window.removeEventListener('pagehide', pageHide); pageHide(); });
+onBeforeUnmount(() => { stopped = true; clearInterval(poll); clearInterval(timer); clearTimeout(flushTimer); clearTimeout(startTimer); window.removeEventListener('pagehide', pageHide); pageHide(); });
 </script>
 
 <template>
@@ -142,7 +173,7 @@ onBeforeUnmount(() => { stopped = true; clearInterval(poll); clearInterval(timer
         <div class="chase-track-label start">起点</div><div class="chase-track-label checkpoint">公园环道</div>
         <div v-for="player in state.players" :key="player.id" class="chase-rider" :class="player.role" :style="riderStyle(player)">
           <div class="chase-name-tag">{{ player.bot ? '电脑' : player.id===user?.id ? '你' : player.name }}</div>
-          <img :src="player.role==='police'?'/assets/chase-police-rider.png':'/assets/chase-thief-rider.png'" :alt="roleTitle(player.role)"/>
+          <img :src="player.role==='police'?'/assets/chase-police-rider.png':'/assets/chase-thief-rider.png'" :alt="roleTitle(player)"/>
         </div>
       </div>
       <div v-if="state?.phase==='countdown'" class="chase-countdown"><strong>{{ countdown }}</strong><span>出发！</span></div>
@@ -153,10 +184,10 @@ onBeforeUnmount(() => { stopped = true; clearInterval(poll); clearInterval(timer
 
     <section v-if="state?.phase==='lobby' || !state" class="chase-setup" aria-label="比赛房间设置">
       <header><Bike :size="20"/><div><strong>选择比赛方式</strong><small>警察由房主创建，第二位玩家担任小偷</small></div></header>
-      <button class="chase-setup-primary" :disabled="!user" @click="createRoom"><CarFront :size="18"/>创建双人房</button>
-      <div class="chase-code"><input v-model="code" inputmode="numeric" maxlength="8" placeholder="输入房间号" @keydown.enter="joinRoom"/><button :disabled="!user" @click="joinRoom">加入</button></div>
+      <button class="chase-setup-primary" :disabled="busy" @click="createRoom"><CarFront :size="18"/>创建双人房</button>
+      <div class="chase-code"><input v-model="code" inputmode="numeric" maxlength="8" aria-label="房间邀请码" placeholder="输入房间号" @keydown.enter="joinRoom"/><button :disabled="busy" @click="joinRoom">加入</button></div>
       <div class="chase-role-choice"><button :class="{active:role==='police'}" @click="role='police'"><Shield :size="15"/>当警察</button><button :class="{active:role==='thief'}" @click="role='thief'"><Bike :size="15"/>当小偷</button></div>
-      <button class="chase-setup-bot" :disabled="!user" @click="playBot"><Bot :size="17"/>人机比赛</button>
+      <button class="chase-setup-bot" :disabled="busy" @click="playBot"><Bot :size="17"/>人机比赛</button>
       <small v-if="!user" class="chase-login-tip">登录后即可创建房间、加入好友或挑战电脑</small>
     </section>
 
@@ -169,7 +200,7 @@ onBeforeUnmount(() => { stopped = true; clearInterval(poll); clearInterval(timer
       </div>
       <template v-else>
         <div class="chase-target"><small>当前输入内容 · 打完自动换下一段</small><p><span v-for="(char,index) in targetChars" :key="index" :class="charClass(index)">{{ char }}</span><b v-if="running" class="chase-caret"></b></p></div>
-        <div class="chase-input-row"><textarea ref="inputEl" :value="draft" :disabled="!running || state.phase==='finished' || me?.role==null" placeholder="在此输入…" @input="input" @keydown.enter.prevent="onKeydown" @paste.prevent autocomplete="off" spellcheck="false"></textarea></div>
+        <div class="chase-input-row"><textarea ref="inputEl" :value="draft" :disabled="!running || state.phase==='finished' || me?.role==null" aria-label="输入上方目标文字" placeholder="在此输入…" @input="input" @compositionstart="composing = true" @compositionend="compositionEnd" @keydown.enter="onKeydown" @paste.prevent @drop.prevent autocomplete="off" spellcheck="false"></textarea></div>
         <div class="chase-my-metrics"><span><Gauge :size="18"/><small>正确率</small><b>{{ accuracy(me) }}%</b></span><span><Flag :size="18"/><small>正确字数</small><b>{{ me?.correct || 0 }}</b></span><span><Bike :size="18"/><small>当前连击</small><b>{{ me?.combo || 0 }}</b></span><span><Timer :size="18"/><small>剩余时间</small><b>{{ clockLabel }}</b></span></div>
       </template>
     </section>

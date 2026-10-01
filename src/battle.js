@@ -165,6 +165,8 @@ class Battle {
     const input = String(body.text ?? '').slice(0, 200);
     const expected = t.text.slice(0, input.length);
     const count = input.length - progress;
+    // 网络重试可能再次提交已确认的前缀，不能重复攻击或惩罚连击。
+    if (count <= 0 && input === expected) return this.state(id);
     if (count < 1 || count > 12 || input !== expected) {
       // 打错即中断连击：这是高连击威力的代价，避免“只靠快、不靠稳”。
       p.attempted += 1; p.combo = 0;

@@ -1,5 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const request = require('supertest');
+const { createDatabase } = require('../src/database');
+const { createApp } = require('../src/app');
+const { hashSessionToken } = require('../src/auth');
 const { ChaseRoom, ROUND_MS, START_COUNTDOWN_MS, THIEF_HEADSTART, STEP_METERS } = require('../src/chase');
 
 function setup() {
@@ -144,4 +148,39 @@ test('人机：玩家停手时电脑也停住，不会被偷袭', () => {
   assert.equal(room.position(bot), stopped);
   assert.equal(room.phase, 'running');
   assert.equal(ROUND_MS, 120_000);
+});
+
+test('追逐赛不能用换段接口跳过未完成的文字', () => {
+  const { room, advance } = setup();
+  const { police } = begin(room, advance);
+  const ticket = police.task.id;
+  assert.throws(() => room.next(police.id, { seat: police.seat, ticket }), /完整段落/);
+  assert.equal(police.task.id, ticket);
+  assert.equal(police.sequence, 1);
+});
+
+test('追逐接口保留新房间身份，并在加入满员房失败时保留原房间', async () => {
+  const db = createDatabase(':memory:');
+  const time = 1_000_000;
+  const app = createApp({ db, now: () => time });
+  try {
+    for (let id = 1; id <= 3; id++) {
+      db.prepare('INSERT INTO users(id,username,display_name,password_hash,is_active) VALUES(?,?,?,?,1)').run(id, `chase${id}`, `追逐同学${id}`, 'unused');
+      db.prepare('INSERT INTO user_sessions VALUES(?,?,?,?)').run(hashSessionToken(`chase${id}`), id, time, time + 999999);
+    }
+    const cookie = id => `typing_session=chase${id}`;
+    const old = await request(app).post('/api/chase/create').set('Cookie', cookie(1)).send({}).expect(200);
+    const current = await request(app).post('/api/chase/create').set('Cookie', cookie(1)).send({}).expect(200);
+    await request(app).post('/api/chase/leave').set('Cookie', cookie(1)).send({ seat: old.body.me.seat }).expect(200);
+    const afterOldLeave = await request(app).get('/api/chase').set('Cookie', cookie(1)).expect(200);
+    assert.equal(afterOldLeave.body.code, current.body.code);
+    assert.equal(afterOldLeave.body.me.seat, current.body.me.seat);
+
+    const target = await request(app).post('/api/chase/create').set('Cookie', cookie(2)).send({}).expect(200);
+    await request(app).post('/api/chase/join-code').set('Cookie', cookie(3)).send({ code: target.body.code }).expect(200);
+    await request(app).post('/api/chase/join-code').set('Cookie', cookie(1)).send({ code: target.body.code }).expect(409);
+    const afterFailedJoin = await request(app).get('/api/chase').set('Cookie', cookie(1)).expect(200);
+    assert.equal(afterFailedJoin.body.code, current.body.code);
+    assert.equal(afterFailedJoin.body.me.seat, current.body.me.seat);
+  } finally { db.close(); }
 });

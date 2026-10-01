@@ -17,7 +17,7 @@ const FULL_ROOM_START_MS = 3000;
 const RACE_PREPARE_MS = 0, RACE_COUNTDOWN_MS = 5000, RACE_LAUNCH_MS = RACE_COUNTDOWN_MS;
 
 // 音游模式：谱面由 buildChart 按对局 round 确定性生成，前端与服务端各算一份，不必互传。
-const RHYTHM_LEAD_MS = 3000;      // 开局预留的进场时间，第一个方块从上方落下
+const RHYTHM_LEAD_MS = 3000;      // 真正开赛前的准备倒计时，期间不下发音符
 // 方块从出现到抵达判定线的下落时长（前端据此定位）。
 // 这是「反应时间」的核心参数：太长则屏幕太空、节奏感弱；太短则新手来不及看清字母。
 // 112 BPM（半拍 268ms）下，2600ms 大约让 8~10 个方块同屏，
@@ -30,6 +30,7 @@ const RHYTHM_DIFFICULTIES = {
   hard: { id: 'hard', label: '困难', fallMs: 1900, perfectMs: 50, greatMs: 95, goodMs: 150, missMs: 240 },
 };
 const RHYTHM_KEYS_MAX = 32;       // 单次请求最多携带的按键数量，防止刷分
+const RHYTHM_FUTURE_TOLERANCE_MS = 250;
 // 常态漏键结算的「上报周期余量」。
 // 前端每秒轮询一次，并把这一秒内按下的键攒成一个批次上报；轮询（read）与按键（write）
 // 是两个独立请求，read 经常先到。批次本身也可能覆盖好几秒的按键。
@@ -129,14 +130,9 @@ class ArenaRoom {
     this.phase = 'running'; this.startedAt = this.now(); this.endsAt = this.now() + this.rules.durationMs;
     // 音游谱面按对局 round 生成，同局所有玩家共享同一份，无需网络传输。
     const chart = this.mode === 'rhythm'
-      ? buildChart(this.round, this.rules.durationMs - RHYTHM_LEAD_MS)
+      ? buildChart(this.round, this.rules.durationMs)
       : null;
-    // 谱面的 at 是按键判定时刻，而不是生成时刻。整体后移一段进场时间，
-    // 第一张方块先从顶部完整下落，抵达判定线时再进入 PERFECT/GREAT/GOOD 窗口。
-    if (chart) {
-      chart.notes.forEach(note => { note.at += RHYTHM_LEAD_MS; });
-      chart.durationMs = this.rules.durationMs;
-    }
+    // 各难度在 chartForDifficulty 中按自己的下落时长后移谱面。
     // 简单档把谱面密度降至四分之一：减少音符数量，同时留出更长的下落反应时间。
     // this.chart 仍代表默认简单谱面，保持既有读谱出口与默认玩家节奏一致。
     const easyChart = chart ? this.chartForDifficulty(chart, 'easy') : null;
@@ -149,10 +145,14 @@ class ArenaRoom {
     }
   }
   chartForDifficulty(chart, difficulty) {
-    if (!chart || difficulty !== 'easy') return chart;
-    // 简单难度只保留每四个谱面音符中的一个，给新手留出观察与反应时间。
-    // 重新编号以保持 chart.notes 下标、cursor 和 note.id 一致，判定游标才不会跳过后续音符。
-    return { ...chart, notes: chart.notes.filter((_, index) => index % 4 === 0).map((note, id) => ({ ...note, id })) };
+    if (!chart) return chart;
+    const fallMs = (RHYTHM_DIFFICULTIES[difficulty] || RHYTHM_DIFFICULTIES.easy).fallMs;
+    // 第一张卡片开赛后才从顶部入场，走满该难度的 fallMs 后到线。
+    // 尾部留出判定窗口；重新编号保持 cursor 和 note.id 一致。
+    const notes = chart.notes.filter((note, index) => (difficulty !== 'easy' || index % 4 === 0)
+      && note.at + fallMs < chart.durationMs - BEAT_MS)
+      .map((note, id) => ({ ...note, id, at: note.at + fallMs }));
+    return { ...chart, notes };
   }
   prepareChart(p, chart) {
     p.chart = chart; p.cursor = 0; p.resolved = new Set();
@@ -160,11 +160,17 @@ class ArenaRoom {
     p.lastGrade = ''; p.lastGradeId = 0; p.lastOffsetMs = 0;
     // -1 表示尚未收到任何按键，这样才能接受 at = 0 的第一个音符。
     p.lastKeyAt = -1;
+    p.lastKeyKeys = new Set();
   }
   start(id, body = {}) {
     this.tick();
     if (id !== this.host || this.players.get(id)?.seat !== body.seat) this.fail('只有房主可以提前开始', 403);
     if (this.phase !== 'waiting') this.fail('比赛已开始', 409);
+    if (this.mode === 'rhythm' && body.launchCountdown) {
+      if (this.launchRequestedAt !== null) return this.state(id);
+      this.launchRequestedAt = this.now(); this.startsAt = this.launchRequestedAt + RHYTHM_LEAD_MS;
+      return this.state(id);
+    }
     if (this.mode === 'race' && body.launchCountdown) {
       const notReady = [...this.players.values()].filter(player => player.id !== this.host && !player.ready);
       if (notReady.length) this.fail(`还有 ${notReady.length} 位选手未准备`, 409);
@@ -235,6 +241,7 @@ class ArenaRoom {
   }
   type(id, body = {}) {
     const p = this.player(id, body.seat);
+    if (this.mode !== 'race') this.fail('音游请通过字母按键参与判定', 400);
     if (body.ticket !== p.task.id) this.fail('题目已更新，请同步后继续', 409);
     // 注意：text 会被跨段顺延逻辑重新赋值，必须是 let。
     let text = body.text;
@@ -311,6 +318,7 @@ class ArenaRoom {
     const expired = expireNotes(p.chart, p.cursor, at, p.resolved, this.rhythmDifficulty(p));
     const missed = [];
     for (const note of expired.missed) {
+      p.resolved.add(note.id);
       p.counts.miss++; p.attempted++; p.combo = 0;
       p.lastGrade = 'miss'; p.lastGradeId++; p.lastOffsetMs = 0;
       missed.push({ key: note.letter, grade: 'miss', offsetMs: 0, noteId: note.id, expired: true });
@@ -320,7 +328,9 @@ class ArenaRoom {
     return missed;
   }
   press(id, body = {}) {
+    if (this.mode !== 'rhythm') this.fail('赛车请输入当前段落', 400);
     const p = this.player(id, body.seat);
+    if (body.round && body.round !== this.round) this.fail('对局已更新，请重新同步', 409);
     if (!p.chart) this.fail('谱面尚未生成，请同步后重试', 409);
     const keys = Array.isArray(body.keys) ? body.keys : [];
     if (!keys.length) return this.state(id);
@@ -337,26 +347,30 @@ class ArenaRoom {
       const reported = Number.isFinite(rawElapsed)
         ? (rawElapsed > 1e6 ? rawElapsed - this.startedAt : rawElapsed)
         : nowElapsed;
-      // 只做下界保护：未来时刻由 judgeKey 的判定窗与 lastKeyAt 递增共同约束，
-      // 这里不设上界，否则一次携带多个按键的请求会被截断成同一个时刻。
-      return { key: item?.key, el: Math.max(reported, 0) };
+      // 保留每个按键自己的时刻；拒绝未来按键，避免提前提交整局谱面得分。
+      if (!/^[a-z]$/i.test(String(item?.key || '')) || !Number.isFinite(rawElapsed)
+        || reported < 0 || reported > nowElapsed + RHYTHM_FUTURE_TOLERANCE_MS) this.fail('按键时间或字母无效，请同步后重试', 400);
+      return { key: item.key, el: reported };
     }).sort((a, b) => a.el - b.el);
     for (const { key, el } of ordered) {
       // 必须递增（允许相等，同一时刻的多次按键各自匹配不同音符），防止重放旧包重复计分
       if (el < p.lastKeyAt) continue;
-      // 先判定本次按键，再结算漏键。
-      // 顺序不能颠倒：settleMisses 会把游标推到「el 之前所有过期音符之后」，
-      // 如果先结算，本次按键本该命中的那个音符（正好已经过 JUDGE_MISS_MS，但仍可迟到判定）
-      // 就会被当作漏键结算掉，游标越过它之后 judgeKey 再也找不到它。
+      if (el !== p.lastKeyAt) p.lastKeyKeys.clear();
+      const upperKey = key.toUpperCase();
+      if (p.lastKeyKeys.has(upperKey)) continue;
+      p.lastKeyKeys.add(upperKey);
+      // 先按这个按键自己的时刻结算真正过期的音符，再从尚可命中的音符查找。
+      // 这样长时间停手后恢复输入仍能命中，旧漏键也不会清空这次新建立的连击。
+      results.push(...this.settleMisses(p, el));
       const hit = judgeKey(p.chart, p.cursor, key, el, p.resolved, this.rhythmDifficulty(p));
       if (!hit) {
         // 按了键但没有对应音符：不扣分，只中断连击并提示。
-        if (p.combo > 0) { p.combo = 0; p.lastGrade = 'miss'; p.lastGradeId++; p.lastOffsetMs = 0; }
+        p.combo = 0; p.lastGrade = 'miss'; p.lastGradeId++; p.lastOffsetMs = 0;
         results.push({ key: String(key || '').toUpperCase(), grade: 'miss', offsetMs: 0, noteId: -1 });
       } else {
         p.resolved.add(hit.note.id);
-        // 游标推进到已判定音符之后，批次内后续按键从新位置继续向后找。
-        if (hit.note.id >= p.cursor) p.cursor = hit.note.id + 1;
+        // 游标只跳过已处理的音符。命中后面的字母不能吞掉前面尚待判定的音符。
+        while (p.cursor < p.chart.notes.length && p.resolved.has(p.chart.notes[p.cursor].id)) p.cursor++;
         const grade = hit.grade;
         p.counts[grade]++;
         p.lastGrade = grade; p.lastGradeId++; p.lastOffsetMs = Math.round(el - hit.note.at);
@@ -368,14 +382,11 @@ class ArenaRoom {
         p.attempted++;
         results.push({ key: String(key || '').toUpperCase(), grade, offsetMs: Math.round(el - hit.note.at), noteId: hit.note.id });
       }
-      // 判定完这次按键后，再把 el 之前确实错过的音符补记为漏键。
-      // 用本次按键的时刻 el 而不是 nowElapsed，避免把批次里尚未轮到的音符提前结算。
-      results.push(...this.settleMisses(p, el));
       p.lastKeyAt = el;
     }
     // 收尾结算：把批次最后一个按键之后、已经越过失键容限的音符补记为漏键。
     // 这批音符不可能再被命中，提前结算可以让前端立刻看到漏键反馈。
-    results.push(...this.settleMisses(p, Math.max(nowElapsed, p.lastKeyAt)));
+    results.push(...this.settleMisses(p, Math.max(nowElapsed - RHYTHM_SETTLE_GRACE_MS, p.lastKeyAt)));
     p.keys = results;
     if (now - p.lastSaved >= 2000) { this.recordPlayer(p, false); p.lastSaved = now; }
     return this.state(id);
@@ -444,6 +455,10 @@ class ArenaRoom {
   leave(id, seat) { const p = this.players.get(id); if (p?.seat === seat) this.remove(p); this.tick(); return { ok: true }; }
   finish(outcome, winnerId = null) {
     if (this.phase !== 'running') return;
+    if (this.mode === 'rhythm') {
+      const at = Math.min(this.now(), this.endsAt) - this.startedAt;
+      for (const p of this.players.values()) this.settleMisses(p, at);
+    }
     // 结算前把每个人的速度推进到最后时刻，避免「最后一秒的距离」丢失。
     if (this.mode === 'race') { const at = this.now(); for (const p of this.players.values()) this.advanceSpeed(p, at); }
     const ranking = this.ranked();
@@ -483,7 +498,9 @@ class ArenaRoom {
             .filter(n => !(me?.resolved?.has(n.id)) && n.at - elapsed < rhythmDifficulty.fallMs + RHYTHM_LEAD_MS + 600 && n.at - elapsed > -rhythmDifficulty.missMs)
             .slice(0, 60)
             .map(n => ({ id: n.id, letter: n.letter, at: n.at, lane: n.lane })) }
-      : null;
+      : this.mode === 'rhythm' ? { bpm: BPM, beatMs: BEAT_MS, fallMs: rhythmDifficulty.fallMs,
+          laneCount: LANE_COUNT, lanes: LANE_LABELS.map((label, index) => ({ index, label, keys: LANE_LAYOUT[index] })),
+          totalNotes: 0, notes: [] } : null;
     const readyCount = this.mode === 'race' ? [...this.players.values()].filter(player => player.ready || player.id === this.host).length : 0;
     const allReady = this.mode === 'race' && this.players.size > 0 && readyCount === this.players.size;
     return { mode: this.mode, title: this.rules.title, target: this.rules.target, durationSeconds: this.rules.durationMs / 1000,
@@ -557,7 +574,7 @@ function installArena(app, { db, requireUser, now }) {
       lesson_title=excluded.lesson_title, correct_chars=excluded.correct_chars, wrong_chars=excluded.wrong_chars,
       accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at`)
       .run(player.id, mode, MODES[mode].title + (finalized ? '（已结算）' : '（进行中）'), player.correct, player.attempted - player.correct,
-        Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `${mode}:${round}:${player.seat}`);
+        mode === 'rhythm' ? accuracyOf(player.counts) : Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `${mode}:${round}:${player.seat}`);
   };
   const save = result => db.prepare('INSERT OR IGNORE INTO arena_results VALUES (?,?,?,?)').run(result.id, result.mode, result.endedAt, JSON.stringify(result));
   const hubs = Object.fromEntries(Object.keys(MODES).map(mode => [mode, createHub(mode, { now, record, save })]));
@@ -601,6 +618,6 @@ module.exports = { ArenaRoom, installArena, MODES, multiplier, GATHER_MS, RESULT
   RACE_PREPARE_MS, RACE_COUNTDOWN_MS, RACE_LAUNCH_MS,
   RACE_WRONG_SPEED_FACTOR,
   accuracyOf, comboMultiplier,
-  RHYTHM_LEAD_MS, RHYTHM_FALL_MS, RHYTHM_DIFFICULTIES, RHYTHM_KEYS_MAX, RHYTHM_SETTLE_GRACE_MS,
+  RHYTHM_LEAD_MS, RHYTHM_FALL_MS, RHYTHM_DIFFICULTIES, RHYTHM_KEYS_MAX, RHYTHM_SETTLE_GRACE_MS, RHYTHM_FUTURE_TOLERANCE_MS,
   JUDGE_PERFECT_MS, JUDGE_GREAT_MS, JUDGE_GOOD_MS, JUDGE_MISS_MS, GRADES, GRADE_KEYS,
   LANE_COUNT, LANE_LAYOUT, LANE_LABELS, BEAT_MS, BPM };

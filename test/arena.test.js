@@ -6,13 +6,45 @@ const { SPEED_MAX, GEARS, gearOf, gearMultiplier, typingSpeed, approachSpeed, ta
   advanceDistance, WINDOW_MS, KMH_TO_CELLS_PER_S } = require('../src/race-speed');
 const { buildChart, judgeKey, accuracyOf, comboMultiplier,
   JUDGE_PERFECT_MS, JUDGE_GREAT_MS, JUDGE_GOOD_MS, JUDGE_MISS_MS, LANE_COUNT, LETTER_LANE } = require('../src/rhythm-chart');
+
+test('rhythm start countdown keeps the chart empty until it ends and gives each difficulty a complete fall', () => {
+  for (const difficulty of ['easy', 'normal', 'hard']) {
+    const { room, join, advance } = setup('rhythm', difficulty);
+    const joined = join(1), body = { seat: joined.me.seat, launchCountdown: true };
+    const waiting = room.start(1, body);
+    assert.equal(waiting.phase, 'waiting'); assert.equal(waiting.chart.notes.length, 0);
+    assert.equal(waiting.startsAt - waiting.serverNow, 3000);
+    advance(1000);
+    assert.equal(room.start(1, body).startsAt, waiting.startsAt, '重复开始不能重置倒计时');
+    advance(1999); assert.equal(room.state(1).chart.notes.length, 0);
+    advance(1); const playing = room.state(1);
+    assert.equal(playing.phase, 'running');
+    assert.ok(playing.chart.notes[0].at >= playing.chart.fallMs, '第一张卡片不能直接出现在半空');
+    assert.ok(playing.chart.notes[0].at - playing.chart.fallMs < 500, '开赛后及时从顶部入场');
+  }
+});
+
+test('rhythm judges both keys of a chord at the same timestamp and protects retry scoring', () => {
+  const { room, join, start, setClock } = setup('rhythm'); join(1); start();
+  const p = room.players.get(1);
+  p.chart = { ...p.chart, notes: [{ id: 0, letter: 'A', lane: 1, at: 5000 }, { id: 1, letter: 'J', lane: 3, at: 5000 }] };
+  setClock(room.startedAt + 5000);
+  const packet = { seat: p.seat, keys: [{ key: 'A', at: 5000 }, { key: 'J', at: 5000 }] };
+  const hit = room.press(1, packet);
+  assert.equal(hit.me.counts.perfect, 2); assert.equal(hit.me.combo, 2);
+  assert.deepEqual(hit.me.keys.map(key => key.noteId), [0, 1]);
+  assert.equal(room.press(1, packet).me.combo, 2);
+});
 const { createDatabase } = require('../src/database');
 const { createApp } = require('../src/app');
 const { hashSessionToken } = require('../src/auth');
-function setup(mode) {
+function setup(mode, difficulty = 'normal') {
   let time = 100000; const saved = [], records = [];
   const room = new ArenaRoom(mode, { now: () => time, record: row => records.push(row), save: row => saved.push(row) });
-  const join = id => room.join({ id, displayName: `同学${id}` });
+  const join = id => {
+    const state = room.join({ id, displayName: `同学${id}` });
+    return mode === 'rhythm' ? room.chooseDifficulty(id, { seat: state.me.seat, difficulty }) : state;
+  };
   const start = () => room.start(1, { seat: room.state(1).me.seat });
   const advance = ms => { time += ms; };
   const type = (id, text) => { const me = room.state(id).me; return room.type(id, { seat: me.seat, ticket: me.task.id, text }); };
@@ -30,9 +62,12 @@ function setup(mode) {
     }
     return out;
   };
-  // 音游按键：把相对偏移换算成按键包。keepAlive 会先推进时钟避免离线超时。
-  const press = (id, keys) => { const me = room.state(id).me; return room.press(id, { seat: me.seat, keys }); };
-  const notes = () => room.chart.notes;
+  // 测试时钟至少推进到真实按键时刻，避免以未来谱面伪造提前命中。
+  const press = (id, keys) => {
+    time = Math.max(time, room.startedAt + Math.max(...keys.map(key => key.at)));
+    return room.press(id, { seat: room.players.get(id).seat, keys });
+  };
+  const notes = () => room.players.get(1)?.chart?.notes || room.chart.notes;
   const at = () => time - room.startedAt;
   return { room, join, start, advance, type, typeAll, press, notes, at, saved, records, clock: () => time, setClock: v => { time = v; } };
 }
@@ -53,13 +88,14 @@ for (const mode of ['race', 'rhythm']) {
     assert.throws(() => join(3), /本局已开始/);
   });
   test(`${mode}: invalid and duplicate packets cannot score; Enter never scores`, () => {
-    const { room, join, start, advance, type, typeAll, press, notes } = setup(mode); join(1); start(); advance(2000);
+    const { room, join, start, advance, type, typeAll, press, notes, setClock } = setup(mode); join(1); start(); advance(2000);
     const me = room.state(1).me;
     assert.throws(() => room.type(1, { seat: 'fake', ticket: me.task.id, text: '一' }), /身份已失效/);
     if (mode === 'rhythm') {
       // 伪造座位与重放旧包都不能得分。
       assert.throws(() => room.press(1, { seat: 'fake', keys: [{ key: 'A', at: 0 }] }), /身份已失效/);
       const first = notes()[0], packet = { seat: me.seat, keys: [{ key: first.letter, at: first.at }] };
+      setClock(room.startedAt + first.at);
       const scored = room.press(1, packet).me.score;
       assert.ok(scored > 0);
       // 同一时间戳重放：lastKeyAt 递增约束会丢弃，分数不再增长。
@@ -178,8 +214,10 @@ test('rhythm difficulty keeps the selected button parameters visible in the retu
   const joined = join(1); const seat = joined.me.seat;
   const easy = room.chooseDifficulty(1, { seat, difficulty: 'easy' });
   assert.equal(easy.me.difficulty, 'easy');
+  assert.equal(easy.chart.fallMs, 6800, '等待界面应显示选中难度的下落时长');
+  assert.equal(easy.chart.notes.length, 0);
   room.start(1, { seat });
-  assert.equal(room.state(1).chart.fallMs, 5000);
+  assert.equal(room.state(1).chart.fallMs, 6800);
   assert.equal(room.state(1).judgement.goodMs, 300);
 });
 
@@ -496,14 +534,79 @@ test('rhythm: wrong key breaks the combo without adding score or misses', () => 
   assert.equal(after.me.keys[0].noteId, -1);
 });
 test('rhythm: replayed packets cannot double-score', () => {
-  const { room, join, start, notes } = setup('rhythm'); join(1); join(2); start();
+  const { room, join, start, notes, setClock } = setup('rhythm'); join(1); join(2); start();
   const chart = notes();
   const me = room.state(1).me;
   const packet = { seat: me.seat, keys: [{ key: chart[0].letter, at: chart[0].at }] };
+  setClock(room.startedAt + chart[0].at);
   const first = room.press(1, packet).me.score;
   assert.ok(first > 0);
   assert.equal(room.press(1, packet).me.score, first);
+  assert.equal(room.state(1).me.combo, 1, '重试同一个包不能清空已有连击');
   assert.equal(room.state(1).me.counts.perfect, 1);
+});
+
+for (const difficulty of ['easy', 'normal', 'hard']) {
+  test(`rhythm ${difficulty}: every on-time note scores at a realistic reporting cadence`, () => {
+    const { room, join, start, notes, press } = setup('rhythm', difficulty);
+    join(1); start();
+    const chart = notes();
+    for (const note of chart) press(1, [{ key: note.letter, at: note.at }]);
+    const me = room.state(1).me;
+    assert.equal(me.counts.perfect, chart.length);
+    assert.equal(me.counts.miss, 0);
+    assert.equal(me.combo, chart.length);
+    assert.equal(me.accuracy, 100);
+  });
+
+  test(`rhythm ${difficulty}: timeout settles the entire unplayed chart before saving`, () => {
+    const { room, join, start, notes, setClock, saved, records } = setup('rhythm', difficulty);
+    join(1); start();
+    const count = notes().length;
+    setClock(room.endsAt);
+    const state = room.state(1);
+    assert.equal(state.phase, 'finished');
+    assert.equal(state.result.ranking[0].counts.miss, count);
+    assert.equal(state.result.ranking[0].judged, count);
+    assert.equal(saved.length, 1);
+    assert.equal(records.at(-1).player.attempted, count);
+    assert.equal(records.at(-1).finalized, true);
+  });
+}
+
+test('rhythm: hitting the next letter early preserves the previous hittable letter', () => {
+  const { room, join, start, notes, press } = setup('rhythm');
+  join(1); start();
+  const [first, second] = notes();
+  const secondAt = second.at - 100;
+  assert.ok(secondAt - first.at < JUDGE_GOOD_MS);
+  press(1, [{ key: second.letter, at: secondAt }]);
+  const me = press(1, [{ key: first.letter, at: secondAt + 10 }]).me;
+  assert.equal(me.correct, 2);
+  assert.equal(me.counts.miss, 0);
+  assert.equal(me.combo, 2);
+});
+
+test('rhythm: a delayed packet leaves newer pending notes available for the next packet', () => {
+  const { room, join, start, notes, setClock } = setup('rhythm');
+  join(1); start();
+  const [first, second] = notes(), seat = room.players.get(1).seat;
+  setClock(room.startedAt + second.at + 1000);
+  room.press(1, { seat, keys: [{ key: first.letter, at: first.at }] });
+  const me = room.press(1, { seat, keys: [{ key: second.letter, at: second.at }] }).me;
+  assert.equal(me.counts.perfect, 2);
+  assert.equal(me.counts.miss, 0);
+});
+
+test('rhythm: forged future times, stale rounds and text submissions cannot score', () => {
+  const { room, join, start, notes } = setup('rhythm');
+  join(1); start();
+  const player = room.players.get(1), note = notes()[0];
+  assert.throws(() => room.press(1, { seat: player.seat, keys: [{ key: note.letter, at: note.at }] }), /按键时间/);
+  assert.throws(() => room.press(1, { seat: player.seat, round: 'old-round', keys: [{ key: note.letter, at: 0 }] }), /对局已更新/);
+  assert.throws(() => room.type(1, { seat: player.seat, ticket: player.task.id, text: player.task.text.slice(0, 3) }), /字母按键/);
+  assert.equal(player.score, 0);
+  assert.equal(player.attempted, 0);
 });
 test('rhythm: ranking tie-breaks equal scores by perfect hits', () => {
   const { room, join, start, press, notes } = setup('rhythm'); join(1); join(2); start();
@@ -540,6 +643,7 @@ test('race/rhythm authenticated APIs are isolated, keep late entrants watching a
       if (mode === 'rhythm') {
         // 音游通过 /press 提交按键，命中前 3 个音符。
         const keys = start.body.chart.notes.slice(0, 3).map(n => ({ key: n.letter, at: n.at }));
+        time += keys.at(-1).at;
         await request(app).post(`/api/arena/${mode}/press`).set('Cookie', cookie).send({ seat: me.seat, keys }).expect(200);
         const replay = await request(app).post(`/api/arena/${mode}/press`).set('Cookie', cookie).send({ seat: me.seat, keys }).expect(200);
         assert.equal(replay.body.me.counts.perfect, 3);
@@ -559,5 +663,24 @@ test('race/rhythm authenticated APIs are isolated, keep late entrants watching a
       assert.equal(training.length, 1); assert.equal(training[0].correct_chars, 3); assert.match(training[0].lesson_title, /已结算/);
     }
     assert.equal(db.prepare('SELECT COUNT(*) n FROM arena_results').get().n, 2);
+  } finally { db.close(); }
+});
+
+test('rhythm growth records use the same weighted accuracy as the result board', async () => {
+  const db = createDatabase(':memory:'); let time = 100000;
+  const app = createApp({ db, now: () => time });
+  try {
+    db.prepare('INSERT INTO users(id,username,display_name,password_hash,is_active) VALUES(?,?,?,?,1)').run(1, 'rhythmqa', '音游同学', 'unused');
+    db.prepare('INSERT INTO user_sessions VALUES(?,?,?,?)').run(hashSessionToken('rhythmqa'), 1, time, time + 999999);
+    const cookie = 'typing_session=rhythmqa';
+    const joined = await request(app).post('/api/arena/rhythm/join').set('Cookie', cookie).send({}).expect(200);
+    const started = await request(app).post('/api/arena/rhythm/start').set('Cookie', cookie).send({ seat: joined.body.me.seat }).expect(200);
+    const note = started.body.chart.notes[0];
+    time += note.at + 100;
+    const played = await request(app).post('/api/arena/rhythm/press').set('Cookie', cookie)
+      .send({ seat: joined.body.me.seat, keys: [{ key: note.letter, at: note.at + 100 }] }).expect(200);
+    assert.equal(played.body.me.counts.great, 1);
+    assert.equal(played.body.me.accuracy, 70);
+    assert.equal(db.prepare("SELECT accuracy FROM training_sessions WHERE mode = 'rhythm'").get().accuracy, 70);
   } finally { db.close(); }
 });

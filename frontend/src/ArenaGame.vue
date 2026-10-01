@@ -3,12 +3,20 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, BarChart3, ChevronDown, CirclePlus, Flag, Gamepad2, Keyboard, Languages, Lightbulb, Medal, Music2, Play, Radio, Timer, Trophy, Users, Volume2, VolumeX } from 'lucide-vue-next';
 import RhythmBoard from './RhythmBoard.vue';
 import RaceBoard from './RaceBoard.vue';
+import { createRhythmClock, rhythmPhysicalKey } from './rhythm-timing.mjs';
 const props = defineProps({ user: Object, mode: { type: String, required: true } });
 const emit = defineEmits(['back', 'login']);
 const state = ref(null), draft = ref(''), error = ref(''), online = ref(true), busy = ref(false), clock = ref(Date.now());
+// 输入法候选仅用于保持输入框显示；判定、提交和前缀校验只使用已确认的 draft。
+const compositionDraft = ref(null);
+const inputValue = computed(() => compositionDraft.value ?? draft.value);
 const inviteCode = ref(''), inviteMessage = ref('');
 const inputEl = ref(null), exitDialog = ref(null), backButton = ref(null), feedback = ref('');
+const rhythmBoard = ref(null), confirmedInputId = ref(0);
+const rhythmClock = createRhythmClock(), responseTiming = new WeakMap();
+let inputSequence = 0;
 let reading = null, stopped = false, composing = false, wantsNext = false, cleanLeave = false;
+let keysSending = false;
 // 赛车输入的本地草稿不能被较旧的轮询快照覆盖。draftTaskId/draftDirty
 // 用来区分“服务器已确认的字”和“正在等待提交的字”。
 let draftTaskId = null, draftDirty = false;
@@ -32,6 +40,7 @@ const JUDGE_RATIO = 0.76;
 // 避免轮询间隔（1s）造成方块一跳一跳。
 const elapsed = computed(() => {
   const data = state.value; if (!data || data.elapsed == null) return 0;
+  if (!race.value) { clock.value; return rhythmClock.read(performance.now()); }
   return Math.max(0, data.elapsed + (clock.value - data.serverNow) + offset);
 });
 // 音游进行中隐藏文字输入面板，改为全键位捕获。
@@ -91,10 +100,10 @@ async function copyRoomCode() {
   catch { inviteMessage.value = `邀请码：${code}`; }
 }
 // 页脚快捷键：等待发车时按 Enter 立即开始（仅房主），任意时刻 Esc 返回大厅。
-function onRaceKeydown(event) {
-  if (!race.value || !props.user) return;
-  if (event.key === 'Escape') { if (!exitDialog.value?.open) requestExit(); return; }
-  if (event.key !== 'Enter') return;
+function onArenaKeydown(event) {
+  if (composing || event.isComposing || event.keyCode === 229) return;
+  if (event.key === 'Escape') { if (!exitDialog.value?.open) { event.preventDefault(); requestExit(); } return; }
+  if (!race.value || !props.user || event.key !== 'Enter') return;
   if (state.value?.phase !== 'waiting' || state.value?.startsAt || !isHost.value || exitDialog.value?.open) return;
   event.preventDefault();
   if (!busy.value) act('/start', { seat: me.value?.seat });
@@ -119,19 +128,26 @@ function beep(freq, dur = 0.05, gain = 0.035) {
 }
 
 async function api(path = '', body) {
+  const sentAt = performance.now();
   const lobbyQuery = body === undefined && !path && race.value ? '?lobby=1' : '';
   const r = await fetch(`/api/arena/${props.mode}${path}${lobbyQuery}`, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(7000) });
-  const data = await r.json(); if (!r.ok) throw Object.assign(new Error(data.message || '请求失败'), { status: r.status }); return data;
+  const data = await r.json(); if (!r.ok) throw Object.assign(new Error(data.message || '请求失败'), { status: r.status });
+  const receivedAt = performance.now(); responseTiming.set(data, { receivedAt, roundTripMs: receivedAt - sentAt });
+  return data;
 }
 function sync(data) {
   if (stopped) return;
   const old = me.value, oldTask = task.value?.id, oldRound = state.value?.round;
+  if (state.value?.serverNow > data.serverNow && oldRound === data.round) return;
+  if (oldRound !== data.round) { keyBuffer.value.length = 0; clearTimeout(flushTimer); flushTimer = null; inputSequence = 0; confirmedInputId.value = 0; }
   if (!online.value) error.value = '';
+  const timing = responseTiming.get(data);
+  rhythmClock.sync(data, timing?.receivedAt ?? performance.now(), timing?.roundTripMs || 0);
   state.value = data; online.value = true; offset = data.serverNow - Date.now(); clock.value = Date.now();
   clearTimeout(launchTimer); launchTimer = null;
   // 倒计时结束点主动拉一次权威状态，不依赖下一次轮询；请求失败仍由常规轮询重试。
-  if (race.value && data.phase === 'waiting' && data.startsAt) {
+  if (data.phase === 'waiting' && data.startsAt) {
     launchTimer = setTimeout(() => { launchTimer = null; refresh(); }, Math.max(0, data.startsAt - data.serverNow + 40));
   }
   const incomingTaskId = data.me?.task?.id || null;
@@ -140,6 +156,7 @@ function sync(data) {
   const localDraft = draft.value;
   const shouldResetDraft = oldRound !== data.round || (oldTask !== incomingTaskId && !sameLocalTask);
   if (shouldResetDraft) {
+    composing = false; compositionDraft.value = null;
     draft.value = incomingTyped; draftTaskId = incomingTaskId; draftDirty = false; wantsNext = false; error.value = '';
     if (data.me?.task && data.phase === 'running' && !exitDialog.value?.open) nextTick(() => inputEl.value?.focus({ preventScroll: true }));
   } else if (!composing) {
@@ -176,7 +193,7 @@ function sync(data) {
   }
 }
 async function refresh() {
-  if (!props.user || stopped || busy.value || reading) return;
+  if (!props.user || stopped || busy.value || keysSending || reading) return;
   reading = (async () => { try { sync(await api()); } catch (e) { online.value = false; error.value = e.message; } })();
   await reading; reading = null;
 }
@@ -196,15 +213,13 @@ async function chooseDifficulty(difficulty) {
 }
 function onInput(event) {
   if (!task.value) return;
-  const candidate = String(event.target.value || '').slice(0, task.value.text.length);
-  // 中文输入法的拼音组合文本也要先存进本地草稿；这里只更新画面，不提交到服务器。
-  // 否则轮询触发 Vue 重绘时，受控 textarea 会把输入法候选中的 yi/yiqi 清空。
+  const value = String(event.target.value || '');
+  // 保留完整拼音候选，避免轮询重绘清空输入法；候选不参与标红或计分。
   if (composing || event.isComposing) {
-    draft.value = candidate;
-    draftTaskId = task.value.id;
-    draftDirty = true;
+    compositionDraft.value = value;
     return;
   }
+  const candidate = value.slice(0, task.value.text.length);
   const locked = task.value.typed;
   const local = draft.value.startsWith(locked) ? draft.value : locked;
   // 输入法组合、轮询重绘或浏览器延迟更新可能暂时给到一个较短值。
@@ -218,16 +233,20 @@ function onInput(event) {
   draftTaskId = task.value.id; draftDirty = true;
   clearTimeout(sendTimer); sendTimer = setTimeout(flush, 160);
 }
-function compositionEnd() {
+function compositionStart(event) {
+  composing = true;
+  compositionDraft.value = String(event.target.value || '');
+  clearTimeout(sendTimer);
+}
+function compositionEnd(event) {
   composing = false;
-  // compositionend 后再读一次 textarea，避免拿到输入法尚未提交的旧值。
-  window.setTimeout(() => { if (inputEl.value) onInput({ target: inputEl.value }); }, 0);
+  compositionDraft.value = null;
+  // 此时输入框里是已确认的汉字，仍用确认前的 draft 校验，不能把拼音锁成前缀。
+  onInput(event);
 }
 function compositionUpdate(event) {
-  if (!task.value) return;
-  draft.value = String(event.target.value || '').slice(0, task.value.text.length);
-  draftTaskId = task.value.id;
-  draftDirty = true;
+  if (!task.value || !composing) return;
+  compositionDraft.value = String(event.target.value || '');
 }
 async function flush() {
   if (reading) await reading;
@@ -269,36 +288,55 @@ function charClass(char, i) { return i < draft.value.length ? (draft.value[i] ==
 const keyBuffer = ref([]);
 let flushTimer = null;
 const KEYS_MAX = 32;        // 与服务端 RHYTHM_KEYS_MAX 一致
-const FLUSH_MS = 130;       // 攒批窗口：短到玩家感觉不到延迟，长到能合并连续按键
+const FLUSH_MS = 24;        // 合并同一帧的多键，反馈在本地立即显示
 // 本地按键 → 相对开局的偏移。必须用与服务端判定完全同一条时间轴：
 // 以服务端本次下发的 elapsed 为锚点，加上「此刻」相对该次下发时刻的本地推进量。
 // 若直接用 now - startedAt 会因 startedAt 未下发而得到 NaN。
-function toElapsed() {
+function toElapsed(event) {
   const data = state.value;
   if (!data || data.elapsed == null) return 0;
-  return Math.max(0, Math.round(data.elapsed + (Date.now() - data.serverNow) + offset));
+  const now = performance.now();
+  // 使用实际按键时刻，避免主线程忙碌时把排队等待计入玩家的偏差。
+  const stamp = event?.timeStamp;
+  const at = Number.isFinite(stamp) && stamp > 0 && stamp <= now && now - stamp < 1000 ? stamp : now;
+  return Math.round(rhythmClock.read(at));
 }
 function onKeydown(event) {
-  if (!rhythmLive.value) return;
-  if (event.metaKey || event.ctrlKey || event.altKey) return;
-  const key = event.key;
-  if (key.length !== 1 || !/[a-zA-Z]/.test(key)) return;
+  if (!rhythmLive.value || !me.value || !online.value || exitDialog.value?.open) return;
+  if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+  const key = rhythmPhysicalKey(event);
+  if (!key) return;
   event.preventDefault();
-  keyBuffer.value.push({ key: key.toUpperCase(), at: toElapsed() });
+  const at = toElapsed(event), inputId = ++inputSequence;
+  rhythmBoard.value?.pressKey(key, at, inputId);
+  keyBuffer.value.push({ key, at, inputId });
   // 缓冲满了立刻发，避免超过服务端单包上限被拒。
   if (keyBuffer.value.length >= KEYS_MAX) { clearTimeout(flushTimer); flushTimer = null; flushKeys(); return; }
   if (!flushTimer) flushTimer = setTimeout(() => { flushTimer = null; flushKeys(); }, FLUSH_MS);
 }
 async function flushKeys() {
-  if (stopped || !keyBuffer.value.length || !me.value) return;
+  if (reading) await reading;
+  if (stopped || keysSending || !running.value || !keyBuffer.value.length || !me.value) return;
+  keysSending = true;
   const keys = keyBuffer.value.splice(0, KEYS_MAX);
+  const seat = me.value.seat, round = state.value.round;
   try {
-    sync(await api('/press', { seat: me.value.seat, keys }));
+    const data = await api('/press', { seat, round, keys });
+    if (stopped || state.value?.round !== round || me.value?.seat !== seat) return;
+    sync(data);
+    confirmedInputId.value = Math.max(confirmedInputId.value, ...keys.map(key => key.inputId || 0));
     error.value = '';
   } catch (e) {
+    if (stopped || state.value?.round !== round || me.value?.seat !== seat) return;
     error.value = e.message; online.value = !!e.status;
-    // 身份失效（换局/被移除）时直接丢弃缓冲，避免无限重试堆积。
-    if (e.status === 409 || e.status === 403) keyBuffer.value.length = 0;
+    if (e.status === 409 || e.status === 403 || e.status === 400) { keyBuffer.value.length = 0; confirmedInputId.value = inputSequence; refresh(); }
+    else if (!e.status || e.status >= 500 || e.status === 429) keyBuffer.value.unshift(...keys);
+  } finally {
+    keysSending = false;
+    if (!stopped && running.value && keyBuffer.value.length) {
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => { flushTimer = null; flushKeys(); }, online.value ? FLUSH_MS : 500);
+    }
   }
 }
 function requestExit() { if (me.value && state.value.phase !== 'finished') exitDialog.value.showModal(); else exit(); }
@@ -316,12 +354,12 @@ onMounted(() => {
   // 音游用全局键盘监听：26 键全开放，且不允许输入法参与。
   // 赛车用另一个全局监听：Enter 发车 / Esc 返回（对应页脚快捷键提示）。
   window.addEventListener('keydown', onKeydown);
-  window.addEventListener('keydown', onRaceKeydown);
+  window.addEventListener('keydown', onArenaKeydown);
 });
 onBeforeUnmount(() => {
   stopped = true; clearInterval(poll); clearInterval(clockTimer); clearTimeout(sendTimer); clearTimeout(feedbackTimer); clearTimeout(flushTimer); clearTimeout(launchTimer);
   window.removeEventListener('keydown', onKeydown);
-  window.removeEventListener('keydown', onRaceKeydown);
+  window.removeEventListener('keydown', onArenaKeydown);
   if (!cleanLeave && me.value) fetch(`/api/arena/${props.mode}/leave`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seat: me.value.seat }) }).catch(() => {});
 });
 </script>
@@ -358,7 +396,7 @@ onBeforeUnmount(() => {
               <div><button type="button" :class="{ 'is-selected': selectedDifficulty === 'easy' }" :aria-pressed="selectedDifficulty === 'easy'" :disabled="running || busy" @click="chooseDifficulty('easy')">简单</button><button type="button" :class="{ 'is-selected': selectedDifficulty === 'normal' }" :aria-pressed="selectedDifficulty === 'normal'" :disabled="running || busy" @click="chooseDifficulty('normal')">普通</button><button type="button" :class="{ 'is-selected': selectedDifficulty === 'hard' }" :aria-pressed="selectedDifficulty === 'hard'" :disabled="running || busy" @click="chooseDifficulty('hard')">困难</button></div>
             </div>
           </header>
-          <RhythmBoard :chart="chart" :judgement="judgement" :me="me" :running="running" :elapsed="elapsed" :judge-ratio="JUDGE_RATIO" />
+          <RhythmBoard :key="state?.round || props.mode" ref="rhythmBoard" :chart="chart" :judgement="judgement" :me="me" :running="running" :elapsed="elapsed" :read-elapsed="toElapsed" :countdown="state?.phase === 'waiting' && state?.startsAt ? remaining : null" :confirmed-input-id="confirmedInputId" :judge-ratio="JUDGE_RATIO" />
         </template>
         <p v-if="feedback" class="arena-hit-feedback" role="status">{{ feedback }}</p>
       </section>
@@ -426,12 +464,12 @@ onBeforeUnmount(() => {
           <header><strong><Radio :size="19"/>实时对战</strong><small><i></i>在线玩家 {{ state?.players.length || 0 }}/{{ state?.capacity || 60 }}</small></header>
           <button v-if="!props.user" class="arena-primary" @click="join"><Gamepad2 :size="18"/>登录并参赛</button>
           <button v-else-if="!me && state?.phase === 'waiting'" class="arena-primary" :disabled="busy" @click="join"><Gamepad2 :size="18"/>加入音游挑战</button>
-          <div v-if="me && state?.phase === 'waiting'" class="arena-gather"><strong>{{ remaining }} 秒后自动开始</strong><p>等待同学一起加入。</p><button v-if="state.host === props.user?.id" class="arena-secondary" :disabled="busy" @click="act('/start', { seat: me.seat })">{{ state.players.length === 1 ? '单人试练' : '立即开始' }}</button></div>
+          <div v-if="me && state?.phase === 'waiting'" class="arena-gather"><strong>{{ remaining }} 秒后自动开始</strong><p>{{ state.launchRequestedAt ? '准备好，倒计时结束后出发。' : '等待同学一起加入。' }}</p><button v-if="state.host === props.user?.id" class="arena-secondary" :disabled="busy || !!state.launchRequestedAt" @click="act('/start', { seat: me.seat, launchCountdown: true })">{{ state.players.length === 1 ? '单人试练' : '立即开始' }}</button></div>
           <p v-if="!me && running" class="arena-observer">正在观战。开赛后不再加入，请等下一局。</p>
           <p v-if="!running && !me" class="arena-invite-note">还没有同学对战，快来邀请朋友一起挑战吧！</p>
         </section>
         <section class="arena-board arena-leader-panel">
-          <header><strong><Medal :size="19"/>今日排行榜</strong><small>实时更新</small></header>
+          <header><strong><Medal :size="19"/>本局排行榜</strong><small>实时更新</small></header>
           <ol class="arena-ranking"><li v-for="p in state?.players || []" :key="p.seat" :class="{ 'is-self': p.id === props.user?.id }"><span class="arena-rank">{{ p.rank }}</span><div><strong>{{ p.name }}<small v-if="p.id === props.user?.id">你</small></strong><span>{{ p.accuracy }}% 准确率 · Perfect {{ p.counts?.perfect || 0 }}</span></div><b>{{ p.score }}<small>分</small></b></li><li v-if="!state?.players.length" class="arena-empty">暂无成绩<br/><small>完成一局即可登榜</small></li></ol>
           <div v-if="me" class="arena-personal"><span>PERFECT<strong>{{ me.counts?.perfect || 0 }}</strong></span><span>MISS<strong>{{ me.counts?.miss || 0 }}</strong></span></div>
         </section>
@@ -453,7 +491,7 @@ onBeforeUnmount(() => {
           </header>
           <div v-if="task && running" class="arena-target rg-target"><span v-for="(char,index) in task.text" :key="index" :class="charClass(char,index)">{{ char }}</span></div>
           <div class="arena-input-row rg-input-row">
-            <textarea id="arena-input" ref="inputEl" :value="draft" :maxlength="task?.text.length" :disabled="!task || !running || !online" @compositionstart="composing = true" @compositionupdate="compositionUpdate" @compositionend="compositionEnd" @input="onInput" @keydown.enter="next" @paste.prevent @drop.prevent autocomplete="off" spellcheck="false" placeholder="点击这里，开始输入文字…"></textarea>
+            <textarea id="arena-input" ref="inputEl" :value="inputValue" :disabled="!task || !running || !online" @compositionstart="compositionStart" @compositionupdate="compositionUpdate" @compositionend="compositionEnd" @input="onInput" @keydown.enter="next" @paste.prevent @drop.prevent autocomplete="off" spellcheck="false" placeholder="点击这里，开始输入文字…"></textarea>
             <button v-if="state?.phase === 'waiting'" class="rg-go" :class="{ 'is-ready-toggle': !isHost }" :disabled="busy || !me || !!state?.startsAt || (isHost && !allReady)" @click="isHost ? act('/start', { seat: me.seat }) : toggleRaceReady()"><strong><Play :size="16"/>{{ state?.startsAt ? '准备发车中' : isHost ? '开始发车' : myReady ? '取消准备' : '准备' }}</strong><small>{{ state?.startsAt ? '赛道上正在倒计时' : isHost ? (allReady ? '所有人已准备，点击开始' : `${readyCount}/${state?.players.length || 0} 已准备`) : myReady ? '点击取消自己的准备状态' : '点击后等待房主开始' }}</small></button>
           </div>
         </template>

@@ -70,6 +70,19 @@ test('accepts a short correct prefix as one batched attack request',()=>{
  const task=b.task(1);const prefix=task.text.slice(0,4);const state=b.attackCharacters(1,{ticket:task.id,text:prefix});
  assert.equal(state.me.attacks,4);assert.equal(state.me.correct,4);assert.equal(state.lastAttack.characters,4);assert.equal(state.lastAttack.power,0.6);assert.equal(b.task(1).progress,4);
 });
+test('retrying a committed prefix preserves territory, accuracy and combo',()=>{
+ const {b,join}=setup();join(1,'red');join(2,'blue');
+ const task=b.task(1),prefix=task.text.slice(0,6);
+ const first=b.attackCharacters(1,{ticket:task.id,text:prefix});
+ for(const text of [prefix,prefix.slice(0,3)]){
+  const replay=b.attackCharacters(1,{ticket:task.id,text});
+  assert.equal(replay.me.correct,first.me.correct);
+  assert.equal(replay.me.combo,6);
+  assert.equal(replay.players.find(player=>player.id===1).accuracy,100);
+  assert.equal(replay.event,first.event);
+  assert.deepEqual(replay.territory,first.territory);
+ }
+});
 test('combo ramps up conquest power and exposes the tier to clients',()=>{
  const {b,join}=setup();join(1,'red');join(2,'blue');
  // 连击 1—4 为基础威力，每字 0.15。

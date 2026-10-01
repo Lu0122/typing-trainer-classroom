@@ -8,6 +8,7 @@ const emit=defineEmits(['back','login']);
 const state=ref(null), task=ref(null), input=ref(''), error=ref(''), busy=ref(false), characterSending=ref(false), connected=ref(true), result=ref(null), dismissed=ref(''), attackPulse=ref(''), globalAnnouncement=ref(null), leaveConfirmOpen=ref(false), leaving=ref(false), leftCleanly=ref(false), activityPinned=ref(true), activityNewCount=ref(0), activityExpanded=ref(false), activityListEl=ref(null);
 const inputEl=ref(null);
 let poll, pending=false, stopped=false, attackPulseTimer, characterSendTimer, broadcastTimer, queuedTicket='';
+let advanceRequested = false;
 const seenBroadcastIds = new Set(); let broadcastHydrated = false; let lastActivityId = 0; let activityHydrated = false;
 async function api(path,options={}) { const r=await fetch('/api/battle'+path,{...options,signal:AbortSignal.timeout(5000),headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok) throw new Error(data.message||'连接失败'); return data; }
 async function refresh() {
@@ -52,6 +53,8 @@ function attackCharacter() { clearTimeout(characterSendTimer); sendCharacterBatc
 async function advanceTask() {
   if (busy.value || !task.value || state.value?.phase !== 'running') return;
   if (input.value.length !== task.value.text.length) { error.value = '请先完成整段输入，再按回车进入下一段'; return; }
+  if (characterSending.value) { advanceRequested = true; return; }
+  advanceRequested = false;
   const currentTask = task.value; busy.value = true; error.value = '';
   try {
     state.value = await api('/advance', { method: 'POST', body: JSON.stringify({ ticket: currentTask.id, text: input.value }) });
@@ -64,7 +67,11 @@ function handleBattleEnter(event) {
   event.preventDefault();
   if (!task.value || state.value?.phase !== 'running') return;
   if (input.value.length !== task.value.text.length) { error.value = '请先完成整段输入，再按回车进入下一段'; return; }
-  clearTimeout(characterSendTimer); advanceTask();
+  clearTimeout(characterSendTimer);
+  if (characterSending.value || canAttackCharacter.value) {
+    advanceRequested = true;
+    if (!characterSending.value) sendCharacterBatch();
+  } else advanceTask();
 }
 async function sendCharacterBatch() {
   if (characterSending.value || !task.value || !canAttackCharacter.value) return;
@@ -74,7 +81,7 @@ async function sendCharacterBatch() {
   try {
     state.value=await api('/characters',{method:'POST',body:JSON.stringify({ticket:currentTask.id,text:prefix})});
     const completed=prefix.length>=currentTask.text.length;
-    if(completed) { task.value=null; input.value=''; queuedTicket=''; }
+    if(completed) { advanceRequested=false; task.value=null; input.value=''; queuedTicket=''; }
     else task.value={...currentTask,progress:prefix.length};
     attackPulse.value=state.value?.me?.team||'red'; clearTimeout(attackPulseTimer); attackPulseTimer=setTimeout(()=>{attackPulse.value='';},280);
     if(state.value.result) result.value=state.value.result;
@@ -83,6 +90,7 @@ async function sendCharacterBatch() {
     characterSending.value=false;
     if(!task.value) await refresh();
     else if(input.value.length>taskProgress.value && input.value===task.value.text.slice(0,input.value.length)) { clearTimeout(characterSendTimer); characterSendTimer=setTimeout(sendCharacterBatch,0); }
+    else if(advanceRequested) await advanceTask();
     nextTick(()=>inputEl.value?.focus());
   }
 }

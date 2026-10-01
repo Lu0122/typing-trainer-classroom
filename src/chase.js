@@ -162,6 +162,7 @@ class ChaseRoom {
     if (!player || player.seat !== body.seat || player.bot) this.fail('参赛身份无效', 409);
     if (this.phase !== 'running') this.fail('比赛尚未开始或已经结束', 409);
     if (body.ticket !== player.task?.id) this.fail('题目已更新，请继续当前段落');
+    if (player.task.typed.length !== player.task.text.length) this.fail('请输入完整段落，完成后会自动换段', 409);
     this.newTask(player);
     return this.state(id);
   }
@@ -243,13 +244,15 @@ function installChase(app, { db, requireUser, now = Date.now }) {
     prune(); const room = rooms.get(String(req.body?.code || '').trim());
     if (!room) throw Object.assign(new Error('房间号无效或房间已关闭'),{status:404});
     if (room.players.has(req.user.id)) return room.state(req.user.id);
+    // 加入失败时保留原房间，只有目标房间接纳成功才退出原房间。
+    const state = room.join(req.user);
     if (findRoom(req.user.id)) detach(req.user.id);
-    const state = room.join(req.user); memberRooms.set(req.user.id,room); return state;
+    memberRooms.set(req.user.id,room); return state;
   }));
   app.post('/api/chase/start', requireUser, route(req => { const room=findRoom(req.user.id); if(!room)throw Object.assign(new Error('请先创建或加入房间'),{status:409}); return room.start(req.user.id,req.body?.seat); }));
   app.post('/api/chase/type', requireUser, route(req => { const room=findRoom(req.user.id); if(!room)throw Object.assign(new Error('请先创建或加入房间'),{status:409}); return room.type(req.user.id,req.body); }));
   app.post('/api/chase/next', requireUser, route(req => { const room=findRoom(req.user.id); if(!room)throw Object.assign(new Error('请先创建或加入房间'),{status:409}); return room.next(req.user.id,req.body); }));
-  app.post('/api/chase/leave', requireUser, route(req => { const room=findRoom(req.user.id); if(room){room.leave(req.user.id,req.body?.seat);memberRooms.delete(req.user.id);if(!room.players.size)rooms.delete(room.code);}return {ok:true}; }));
+  app.post('/api/chase/leave', requireUser, route(req => { const room=findRoom(req.user.id); if(room && room.players.get(req.user.id)?.seat === req.body?.seat){room.leave(req.user.id,req.body.seat);memberRooms.delete(req.user.id);if(!room.players.size)rooms.delete(room.code);}return {ok:true}; }));
 }
 
 module.exports = { ChaseRoom, installChase, ROUND_MS, START_COUNTDOWN_MS, TRACK_METERS, THIEF_HEADSTART, STEP_METERS, PASSAGES };

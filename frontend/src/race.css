@@ -33,7 +33,22 @@
 .is-race .rg-create{width:100%;min-height:42px;border-radius:10px;background:#fff;color:var(--ar-ink)}
 .is-race .rg-countdown{margin:2px 0 0;text-align:center;font-size:12px;color:var(--ar-muted)}
 .is-race .rg-launch-overlay{position:absolute;inset:0;z-index:20;display:grid;place-items:center;align-content:center;gap:8px;text-align:center;pointer-events:none;background:radial-gradient(circle at 50% 55%,#d96a2030,transparent 38%),linear-gradient(#17202b30,#17202b4a)}.is-race .rg-launch-overlay span{font-size:18px;font-weight:800;letter-spacing:4px;color:#fff;text-shadow:0 2px 8px #000}.is-race .rg-launch-overlay strong{font:900 clamp(108px,15vw,190px)/.85 Consolas,monospace;letter-spacing:4px;color:#fff1d8;text-shadow:0 0 22px #ffb15a,0 5px 16px #000b;animation:rgLaunchPop .45s cubic-bezier(.2,.9,.3,1.2) both}.is-race .rg-launch-overlay small{font-size:14px;color:#ffe9c7;letter-spacing:2px;text-shadow:0 2px 5px #000}.is-race .rg-launch-overlay.is-prepare strong{font:900 clamp(42px,6vw,76px)/1 'Microsoft YaHei',sans-serif;color:#ffe2bd;letter-spacing:7px}.is-race .rg-launch-overlay.is-countdown strong{color:#fff}.is-race .rg-launch-overlay.is-countdown{background:radial-gradient(circle at 50% 52%,#ff8e3524,transparent 34%),linear-gradient(#17202b22,#17202b45)}@keyframes rgLaunchPop{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}
-.is-race .rg-match-choice{display:grid;gap:10px;margin-top:12px}.is-race .rg-match-choice button{margin:0;text-align:left;justify-content:flex-start;padding:10px 13px}.is-race .rg-match-choice button>span{display:grid;gap:1px}.is-race .rg-match-choice button strong{font-size:13px}.is-race .rg-match-choice button small{font-size:10px;font-weight:400;opacity:.76}.is-race .rg-code-entry{display:grid;gap:5px;padding:11px;border:1px solid var(--ar-line);border-radius:10px;background:#fff}.is-race .rg-code-entry label{font-size:11px;color:var(--ar-muted)}.is-race .rg-code-entry>div{display:flex;gap:7px}.is-race .rg-code-entry input{min-width:0;flex:1;height:38px;padding:0 10px;border:1px solid #d1d5d9;border-radius:8px;background:#fbfbfa;color:var(--ar-ink);font:700 15px Consolas,monospace;letter-spacing:2px}.is-race .rg-code-entry input:focus{outline:2px solid #e0762f44;border-color:var(--ar-accent)}.is-race .rg-code-entry button{flex:0 0 58px;justify-content:center;border:0;border-radius:8px;background:var(--ar-accent);color:#fff;font-weight:700}.is-race .rg-invite-message{margin:7px 0 0;text-align:center;color:#ad5b25;font-size:11px}.is-race .rg-room-code{display:grid;width:100%;gap:1px;margin-top:12px;padding:10px;border-color:#e4a36f;background:#fff8ef;color:#7e4a26}.is-race .rg-room-code span,.is-race .rg-room-code small{font-size:10px;font-weight:400;color:#9b765d}.is-race .rg-room-code strong{font:800 24px/1.15 Consolas,monospace;letter-spacing:4px;color:var(--ar-accent)}
+.is-race .rg-match-choice{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:10px;margin-top:12px}
+.is-race .rg-match-choice button{margin:0;text-align:left;justify-content:flex-start;padding:10px 13px}
+.is-race .rg-match-choice button>span{display:grid;gap:1px}
+.is-race .rg-match-choice button strong{font-size:13px}
+.is-race .rg-match-choice button small{font-size:10px;font-weight:400;opacity:.76}
+/* 输入框可以收窄，加入按钮按文字保留宽度，避免整行撑出侧栏被裁切。 */
+.is-race .rg-code-entry{display:grid;min-width:0;gap:5px;padding:11px;border:1px solid var(--ar-line);border-radius:10px;background:#fff}
+.is-race .rg-code-entry label{font-size:11px;color:var(--ar-muted)}
+.is-race .rg-code-entry>div{display:grid;grid-template-columns:minmax(0,1fr) auto;min-width:0;gap:8px}
+.is-race .rg-code-entry input{width:100%;min-width:0;height:44px;margin:0;padding:0 10px;border:1px solid #d1d5d9;border-radius:8px;background:#fbfbfa;color:var(--ar-ink);font:700 15px Consolas,monospace;letter-spacing:2px}
+.is-race .rg-code-entry input:focus{outline:2px solid #e0762f44;border-color:var(--ar-accent)}
+.is-race .rg-code-entry button{display:inline-flex;align-items:center;justify-content:center;min-width:64px;min-height:44px;padding:0 12px;border:0;border-radius:8px;background:var(--ar-accent);color:#fff;font-weight:700;text-align:center;white-space:nowrap}
+.is-race .rg-invite-message{margin:7px 0 0;text-align:center;color:#ad5b25;font-size:11px}
+.is-race .rg-room-code{display:grid;width:100%;gap:1px;margin-top:12px;padding:10px;border-color:#e4a36f;background:#fff8ef;color:#7e4a26}
+.is-race .rg-room-code span,.is-race .rg-room-code small{font-size:10px;font-weight:400;color:#9b765d}
+.is-race .rg-room-code strong{font:800 24px/1.15 Consolas,monospace;letter-spacing:4px;color:var(--ar-accent)}
 
 /* ── 右侧栏：房间成员 / 邀请空态 ── */
 .is-race .rg-room{flex:1 1 auto;min-height:60px;border-top:1px solid var(--ar-line);margin-top:12px;padding-top:6px;overflow:auto;scrollbar-width:thin}
@@ -106,4 +121,3 @@
   .is-race .rg-footer{flex-direction:column;align-items:flex-start;gap:5px}
 }
 @media(prefers-reduced-motion:reduce){.is-race .rg-dot[data-phase="running"]{animation:none!important}}
-.is-race .rg-code-entry button{padding:0}

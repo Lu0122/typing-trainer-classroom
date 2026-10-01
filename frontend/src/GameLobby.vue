@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowRight, BarChart3, Bug, CarFront, CircleCheck, Flag, Gamepad2, Keyboard, Music2, Play, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
+import { ArrowRight, BarChart3, Bug, CarFront, CircleCheck, Flag, Gamepad2, Info, Keyboard, Music2, Play, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
 
 const props = defineProps({ user: { type: Object, default: null } });
 const emit = defineEmits(['select', 'back', 'growth', 'leaderboard', 'account', 'bug-report']);
@@ -46,12 +46,12 @@ function trackGlow(event) {
           <button type="button" @click="$emit('growth')"><CircleCheck :size="16"/>成就任务</button>
         </nav>
         <div class="lobby-actions">
-          <button class="lobby-bug-link" type="button" @click="$emit('bug-report')"><Bug :size="15"/><span>Bug反馈</span></button>
+          <button class="lobby-bug-link" type="button" aria-label="Bug反馈" @click="$emit('bug-report')"><Bug :size="15"/><span>Bug反馈</span></button>
           <button class="lobby-account" type="button" @click="$emit('account')">
             <span class="lobby-avatar"><img v-if="user?.avatarUrl" :src="user.avatarUrl" :alt="`${user.displayName}的头像`"/><UsersRound v-else :size="14"/></span>
             <b>{{ user?.displayName || '登录 / 注册' }}</b>
           </button>
-          <button class="lobby-cta" type="button" @click="joinAction"><Play :size="14"/><span class="cta-txt">一起打字，一起上场</span></button>
+          <button class="lobby-cta" type="button" aria-label="一起打字，一起上场" @click="joinAction"><Play :size="14"/><span class="cta-txt">一起打字，一起上场</span></button>
         </div>
       </div>
     </header>
@@ -102,9 +102,9 @@ function trackGlow(event) {
                 </svg>
               </span>
             </div>
-            <p>输入正确的字让赛车加速，<br/>连续打对触发氮气冲刺，<br/>抢先跑完 160 格，冲过终点。</p>
+            <p>输入越快，赛车越快，<br/>保持准确率提速升档，<br/>抢先跑完 800 米，冲过终点。</p>
             <footer>
-              <span class="choice-meta"><i><Users :size="14"/>1—60 人</i><i><Timer :size="14"/>最长 2 分钟</i></span>
+              <span class="choice-meta"><i><Users :size="14"/>1—4 人</i><i><Timer :size="14"/>最长 2 分钟</i></span>
               <strong>上车比赛<ArrowRight :size="16"/></strong>
             </footer>
           </button>
@@ -238,7 +238,7 @@ function trackGlow(event) {
 .lobby-logo{width:36px;height:36px;display:block;filter:drop-shadow(0 3px 8px #2d74d44d)}
 .lobby-logo svg{width:100%;height:100%;display:block}
 .lobby-brand-copy b{display:block;font-size:17px;font-weight:800;color:#1c2b3a;letter-spacing:.02em}
-.lobby-brand-copy small{display:block;margin-top:1px;font-size:9px;font-weight:700;letter-spacing:2.4px;color:#97a9bf}
+.lobby-brand-copy small{display:block;margin-top:1px;font-size:9px;font-weight:700;letter-spacing:2.4px;color:#97a9bf;white-space:nowrap}
 .lobby-nav{display:flex;align-items:center;gap:6px}
 .lobby-bug-link{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #dce8f5;border-radius:999px;background:#fff;color:#587895;font-size:11px;cursor:pointer}
 .lobby-bug-link:hover{border-color:#9ec3f0;background:#f4f9ff;color:#347bd0}
@@ -344,6 +344,7 @@ function trackGlow(event) {
 .lobby-foot>span i{width:1px;height:11px;background:#d4e0ef}
 
 /* ---- 响应式 ---- */
+@media(max-width:1200px){.cta-txt{display:none}.lobby-topbar-inner{gap:16px}.lobby-nav button{white-space:nowrap;padding:8px 10px}}
 @media(max-width:960px){.lobby-nav{display:none}.lobby-hero h1{font-size:32px}}
 @media(max-width:680px){
   .game-choices{grid-template-columns:1fr}
@@ -351,10 +352,13 @@ function trackGlow(event) {
   .lobby-script{display:none}
   .choice-art{width:128px;height:82px}
   .game-choice>p br{display:none}
+  .game-choice footer{flex-wrap:wrap;gap:12px}
+  .choice-meta{flex-wrap:wrap}
+  .choice-meta i,.game-choice footer strong{white-space:nowrap}
   .lobby-topbar-inner{gap:12px;width:calc(100% - 32px)}
   .lobby-foot{flex-direction:column;align-items:flex-start;gap:8px}
 }
-@media(max-width:560px){.cta-txt{display:none}.lobby-account b{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(max-width:560px){.lobby-brand-copy small,.lobby-bug-link span{display:none}.lobby-actions{gap:6px}.lobby-account b{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lobby-cta{padding:9px 12px}}
 @media(prefers-reduced-motion:reduce){
   .game-choice,.game-choice footer strong,.lobby-cta,.lobby-account{transition:none}
   .game-choice:hover{transform:none}

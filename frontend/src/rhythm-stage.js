@@ -340,7 +340,8 @@ export function createStage(host, options = {}) {
   blocks.geometry.setAttribute('aAtlas', atlasAttr);
   // 挂进 world 组：便于整体管理，也为将来可能的整体变换留出口。
   world.add(blocks);
-  disposables.push(blockGeometry, blockMaterial, atlasAttr);
+  // BufferAttribute 由 geometry 统一释放，没有独立的 dispose 方法。
+  disposables.push(blockGeometry, blockMaterial);
 
   // 复用的临时对象：每帧要写上百个实例矩阵，避免反复 new。
   const scratch = new THREE.Object3D();
@@ -579,7 +580,8 @@ export function createStage(host, options = {}) {
     },
     dispose() {
       observer.disconnect();
-      for (const item of disposables) item.dispose();
+      // 多材质 Mesh 的 material 是数组；共享材质只释放一次。
+      for (const item of new Set(disposables.flat())) item?.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

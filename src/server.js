@@ -20,6 +20,7 @@ if (!process.env.ADMIN_PASSWORD) {
 }
 
 const server = app.listen(port, host, () => {
+  console.log(`项目目录：${path.join(__dirname, '..')}`);
   console.log(`字练场已启动：http://localhost:${port}`);
   const addresses = Object.values(os.networkInterfaces()).flat().filter((item) => item && item.family === 'IPv4' && !item.internal);
   for (const item of addresses) console.log(`局域网访问：http://${item.address}:${port}`);

@@ -4,14 +4,8 @@
 // 谱面不下发整份：服务端只给出「还落在下落窗口内、且本人尚未判定」的音符，
 // 本组件按下落时长 fallMs 把每个音符插值到判定线位置。
 //
-// 时间轴的关键处理（这是画面顺滑的来源）：
-//   服务端以 1Hz 轮询下发 elapsed 与可见音符。若直接拿这两个值渲染，
-//   方块会每秒跳一格，新音符也会在半空中凭空出现。所以这里做三件事：
-//     1) 在服务端 elapsed 的基础上叠加本地时钟推进量，方块每帧连续下移；
-//     2) 音符一旦进入视野就缓存到本地，判定/过期后才移除 —— 服务端剔除旧音符时，
-//        空中的方块不会突然消失；
-//     3) 本地外推与服务端值之间允许小幅漂移，每次服务端值到达时把漂移收敛一部分，
-//        既保证连续，也不会长期跑偏。
+// 画面和按键都读取父组件的单调时钟，不在舞台另加漂移。
+// 音符缓存保留完整下落轨迹；本地反馈立即呈现，服务端回包再确认计分。
 //
 // 26 个字母全开放，横向分四条道：道位由服务端按键盘手区/行区映射（同字母恒定同一条道），
 // 用于视觉分区与「该用哪只手」的提示；判定由服务端按「按键时刻与音符时刻的差值」完成，与道位无关。
@@ -21,6 +15,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { CircleGauge, Flame, Music2, Star, Target, Zap } from 'lucide-vue-next';
 import { createStage, LANE_COUNT } from './rhythm-stage.js';
+import { predictRhythmPress, rhythmPosition } from './rhythm-timing.mjs';
 
 const props = defineProps({
   chart: Object,          // { beatMs, bpm, fallMs, laneCount, lanes, notes:[{id,letter,at,lane}], totalNotes }
@@ -29,10 +24,13 @@ const props = defineProps({
   running: Boolean,
   judgeRatio: { type: Number, default: 0.86 },
   elapsed: { type: Number, default: 0 },
+  readElapsed: Function,
+  countdown: { type: Number, default: null },
+  confirmedInputId: { type: Number, default: 0 },
 });
 
 const notes = computed(() => props.chart?.notes || []);
-const fallMs = computed(() => props.chart?.fallMs || 2600);
+const fallMs = computed(() => props.chart?.fallMs || 6800);
 const laneDefs = computed(() => props.chart?.lanes || []);
 const laneCount = LANE_COUNT;
 
@@ -42,6 +40,21 @@ const laneCount = LANE_COUNT;
 const liveNotes = ref([]);
 const seen = new Map();          // id → note，按插入顺序即按 at 递增
 const resolved = new Set();      // 已在服务端判定掉的音符 id
+const pendingPresses = ref([]);
+const flashed = new Set();
+const localFeedback = ref(null), feedbackId = ref(0), hitFlashes = ref([]);
+let effectSequence = 0;
+function pendingResolved() {
+  return new Set([...resolved, ...pendingPresses.value.filter(press => press.result.noteId >= 0).map(press => press.result.noteId)]);
+}
+const displayCombo = computed(() => {
+  let combo = props.me?.combo || 0;
+  for (const press of pendingPresses.value) {
+    if (press.resetCombo || press.result.grade === 'miss') combo = 0;
+    if (press.result.grade !== 'miss') combo++;
+  }
+  return combo;
+});
 // 未命中的音符要穿过判定线并从屏幕底部离场；保留约 0.35 个下落周期，
 // 而不是在线上方立刻删掉，运动逻辑才符合常见下落音游的手感。
 const PAST_KEEP_MS = 950;
@@ -50,9 +63,10 @@ function refreshLive() {
   const elapsed = props.elapsed;
   const cutoff = elapsed - PAST_KEEP_MS;
   for (const [id, note] of seen) {
-    if (resolved.has(id) || note.at + fallMs.value < cutoff) seen.delete(id);
+    if (resolved.has(id) || note.at < cutoff) seen.delete(id);
   }
-  liveNotes.value = [...seen.values()].sort((a, b) => a.at - b.at);
+  const hidden = pendingResolved();
+  liveNotes.value = [...seen.values()].filter(note => !hidden.has(note.id)).sort((a, b) => a.at - b.at);
 }
 // 服务端下发的音符只增不减地并进本地缓存；移除交给 refreshLive 的两条判据。
 watch(notes, list => {
@@ -64,25 +78,45 @@ watch(() => props.elapsed, refreshLive);
 // 判定回馈到达时（gradeId 变化），把它翻译成舞台上的命中特效。
 const grade = computed(() => props.me?.grade || '');
 const gradeId = computed(() => props.me?.gradeId || 0);
-const hitFlash = ref(null);
-watch(gradeId, () => {
-  if (!gradeId.value || !grade.value) return;
-  // 服务端用 noteId = -1 表示「按了键但没有对应音符」，这种没有方块可以吃掉。
-  const noteId = props.me?.keys?.[0]?.noteId ?? -1;
-  const note = seen.get(noteId);
-  if (note) {
+function showResult(result, updateFeedback = true) {
+  if (updateFeedback) { localFeedback.value = result; feedbackId.value++; }
+  const note = seen.get(result.noteId);
+  if (!note) return;
+  flashed.add(result.noteId);
+  stageRef.value?.markJudged(result.noteId, result.grade, note.lane);
+  const p = Math.max(0, Math.min(1.35, rhythmPosition(note, props.readElapsed?.() ?? props.elapsed, fallMs.value, props.judgeRatio).p));
+  const trackWidth = 42 + Math.min(1, p) * 44 + Math.max(0, p - 1) * 60;
+  hitFlashes.value = [...hitFlashes.value, {
+    id: ++effectSequence, grade: result.grade,
+    left: 50 - trackWidth / 2 + trackWidth * ((note.lane + 0.5) / laneCount),
+    top: 7 + p * (props.judgeRatio * 100 - 7),
+    width: Math.max(6.5, trackWidth / laneCount * 0.42), expiresAt: performance.now() + 460,
+  }].slice(-12);
+}
+function pressKey(key, at, inputId) {
+  if (!props.running) return;
+  const hidden = pendingResolved();
+  const available = [...seen.values()];
+  const result = predictRhythmPress(available, key, at, hidden, props.judgement || {});
+  const resetCombo = available.some(note => !hidden.has(note.id) && at - note.at > (props.judgement?.missMs ?? 320));
+  pendingPresses.value.push({ inputId, result, resetCombo });
+  showResult(result); refreshLive();
+}
+defineExpose({ pressKey });
+watch([gradeId, () => props.confirmedInputId], ([id], [oldId]) => {
+  const latest = props.me?.keys?.at(-1);
+  const hasNewerInput = pendingPresses.value.some(press => press.inputId > props.confirmedInputId);
+  // 回包确认本地反馈；同一个命中不重复闪光，双押的每张卡片各自保留特效。
+  for (const result of props.me?.keys || []) {
+    const noteId = result.noteId;
+    const updateFeedback = !hasNewerInput && id !== oldId && result === latest;
+    if (noteId < 0) { if (updateFeedback) showResult(result); continue; }
+    if (resolved.has(noteId)) continue;
+    if (!flashed.has(noteId) || localFeedback.value?.noteId === noteId && localFeedback.value?.grade !== result.grade) showResult(result, updateFeedback);
+    else if (updateFeedback) localFeedback.value = result;
     resolved.add(noteId);
-    const progress = (visualElapsed.value - (note.at - fallMs.value)) / Math.max(1, fallMs.value);
-    const p = Math.max(0, Math.min(1.35, progress));
-    const trackWidth = 42 + Math.min(1, p) * 44 + Math.max(0, p - 1) * 60;
-    hitFlash.value = {
-      id: gradeId.value, grade: grade.value,
-      left: 50 - trackWidth / 2 + trackWidth * ((note.lane + 0.5) / laneCount),
-      top: 7 + p * 69,
-      width: Math.max(6.5, trackWidth / laneCount * 0.42),
-    };
-  } else hitFlash.value = null;
-  stageRef.value?.markJudged(noteId, grade.value, note?.lane ?? -1);
+  }
+  pendingPresses.value = pendingPresses.value.filter(press => press.inputId > props.confirmedInputId);
   refreshLive();
 });
 
@@ -102,38 +136,39 @@ let frame = 0, lastTime = 0;
 // 注意：不能只 cancelAnimationFrame(frame)。tick 在函数**开头**就重排了下一帧，
 // 所以 frame 里存的是「下一次」的 id，取消它并不能阻止紧接着的那一帧继续递归。
 // 必须用一个显式标志让 tick 自己不再重排。
-let running = true;
+let animating = true;
 // 外部注入的固定谱面（验收用）。为 null 时画对局里的真实谱面。
 // 必须在模块作用域声明：tick() 也要读它。
 let frozen = null;
-// 时间轴锚点：每次服务端 elapsed 到达时记下「服务端值」与「本地时刻」，
-// 两帧之间用本地时间推进；drift 记录本地外推相对服务端的累计偏差。
-let anchorElapsed = 0, anchorAt = 0, drift = 0;
-const DRIFT_CLAMP_MS = 120;
 
 function tick(now) {
-  if (!running) { frame = 0; return; }
+  if (!animating) { frame = 0; return; }
   frame = requestAnimationFrame(tick);
   const delta = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   if (!stageRef.value) return;
   // 关键：用本地时钟外推，方块每帧都在动，而不是跟着 1Hz 轮询每秒跳一格。
-  const elapsed = anchorElapsed + (performance.now() - anchorAt) + drift;
+  const elapsed = props.readElapsed?.() ?? props.elapsed;
+  if (hitFlashes.value.some(flash => flash.expiresAt <= now)) hitFlashes.value = hitFlashes.value.filter(flash => flash.expiresAt > now);
   // frozen 非空时画脚本指定的固定谱面（验收用），否则画对局里的真实谱面。
   const frozenView = frozen;
+  const renderedNotes = frozenView?.notes || (props.running ? liveNotes.value.filter(note => {
+    const p = rhythmPosition(note, elapsed, fallMs.value, props.judgeRatio).p;
+    return p >= 0 && p <= 1.35;
+  }) : []);
   if (frozenView) {
     visualElapsed.value = frozenView.elapsed;
     stageRef.value.render({ notes: frozenView.notes, elapsed: frozenView.elapsed + frozenView.fallMs, fallMs: frozenView.fallMs }, delta);
   } else {
     visualElapsed.value = elapsed;
-    stageRef.value.render({ notes: liveNotes.value, elapsed: elapsed + fallMs.value, fallMs: fallMs.value }, delta);
+    stageRef.value.render({ notes: renderedNotes, elapsed: elapsed + fallMs.value, fallMs: fallMs.value }, delta);
   }
   // 画布渲染后 DOM 里已经没有方块元素，验收脚本无从断言「场上有几个方块」。
   // 这里把渲染统计挂到 canvas 的 dataset 上，脚本读它就等价于读 .rn-note 的数量；
   // 同时暴露相机探针（判定线/远端的实际投影位置），让脚本能验证三维与 CSS 的判定线对齐。
   const canvas = host.value?.firstElementChild;
   if (canvas instanceof HTMLElement) {
-    canvas.dataset.notes = String(liveNotes.value.length);
+    canvas.dataset.notes = String(renderedNotes.length);
     canvas.dataset.lanes = String(laneCount);
     const probe = stageRef.value.probe?.();
     if (probe) {
@@ -145,15 +180,6 @@ function tick(now) {
     }
   }
 }
-watch(() => props.elapsed, value => {
-  // 新值到达时，先算出「按本地时钟本应走到哪」，把差额的一半折进 drift。
-  // 折一半而不是全量对齐：全量对齐会把漂移一次性抹平，方块的位移会出现肉眼可见的一顿；
-  // 折半则让画面在几次轮询内平滑贴合服务端时间轴，长时间也不会跑偏。
-  const predicted = anchorElapsed + (performance.now() - anchorAt) + drift;
-  drift = Math.max(-DRIFT_CLAMP_MS, Math.min(DRIFT_CLAMP_MS, (predicted - value) * 0.5));
-  anchorElapsed = value;
-  anchorAt = performance.now();
-}, { immediate: true });
 
 onMounted(() => {
   if (!host.value) return;
@@ -176,53 +202,30 @@ onMounted(() => {
   frame = requestAnimationFrame(tick);
 });
 onBeforeUnmount(() => {
-  running = false;
+  animating = false;
   cancelAnimationFrame(frame);
   delete window.__rnStage__;
   stageRef.value?.dispose();
   stageRef.value = null;
 });
 
-// 已判定音符数。放在倒计时之前定义：showCountdown 依赖它判断「是否还在开局」。
+// 已判定音符数。
 const judged = computed(() => props.me?.judged || 0);
-// 谱面里的 at 就是服务端的判定时刻；视觉上方块抵达判定线时也正好使用这个时间点。
-// 首个音符的时刻在开局时锚定，避免服务端剔除旧音符后倒计时被后续音符重置。
-const firstJudgeAt = ref(null);
-watch(notes, list => {
-  if (firstJudgeAt.value !== null || !list.length) return;
-  firstJudgeAt.value = list[0].at;
-}, { immediate: true });
-
-// 开场倒计时：读数稳定地 3→2→1，末段切「按」，与第一个方块落到判定线的瞬间严格对齐。
-const COUNTDOWN_WINDOW_MS = 3200;
-const openingLeftMs = computed(() => {
-  if (!props.running || firstJudgeAt.value === null) return null;
-  return firstJudgeAt.value - props.elapsed;
-});
-const showCountdown = computed(() => {
-  const left = openingLeftMs.value;
-  if (left === null) return false;
-  // 一旦有过判定（开局已打出第一下），倒计时就不再出现，避免整局中途弹窗打扰。
-  if (judged.value > 0) return false;
-  // 只在开局的有限窗口内显示，且不要拖到负数（否则会一直停在「按」）。
-  return left <= COUNTDOWN_WINDOW_MS && left > -280;
-});
-// 整秒读数；进入最后 0.3 秒时切换为 '按'，提示「就是现在」。
-const countdownText = computed(() => {
-  const ms = openingLeftMs.value ?? 0;
-  if (ms <= 300) return '按';
-  return String(Math.ceil(ms / 1000));
-});
+// 倒计时属于 waiting 阶段，结束后才生成和显示卡片。
+const showCountdown = computed(() => !props.running && props.countdown > 0 && props.countdown <= 3);
+const countdownText = computed(() => String(Math.ceil(props.countdown || 0)));
 // 倒计时数字用 key 触发缩放动画，每次换数字都重新弹一下，抓住注意力。
 const countdownKey = computed(() => countdownText.value);
 
-const gradeText = computed(() => ({ perfect: 'PERFECT', great: 'GREAT', good: 'GOOD', miss: 'MISS' }[grade.value] || ''));
+const displayGrade = computed(() => localFeedback.value?.grade || grade.value);
+const gradeText = computed(() => ({ perfect: 'PERFECT', great: 'GREAT', good: 'GOOD', miss: 'MISS' }[displayGrade.value] || ''));
 const offsetText = computed(() => {
-  const ms = props.me?.lastOffsetMs;
-  if (ms === undefined || ms === null || !grade.value) return '';
-  if (grade.value === 'miss') {
-    if (props.me?.keys?.[0]?.noteId === -1) return '无效按键';
-    return props.me?.keys?.[0]?.expired ? '错过音符' : '未命中';
+  const result = localFeedback.value || props.me?.keys?.at(-1);
+  const ms = result?.offsetMs ?? props.me?.lastOffsetMs;
+  if (ms === undefined || ms === null || !displayGrade.value) return '';
+  if (displayGrade.value === 'miss') {
+    if (result?.noteId === -1) return '未命中当前字母';
+    return result?.expired ? '错过音符' : '未命中';
   }
   return ms > 0 ? `+${ms}ms 偏晚` : ms < 0 ? `${ms}ms 偏早` : '精准';
 });
@@ -234,7 +237,7 @@ const comboMultiplier = computed(() => props.me?.multiplier || 1);
 
 // 完美/优秀/良好/漏键各档用不同颜色，便于一眼分辨。
 const GRADE_TONE = { perfect: '#7be5d5', great: '#8fd0f0', good: '#e9c877', miss: '#ff8a9b' };
-const strokeTone = computed(() => GRADE_TONE[grade.value] || '#7be5d5');
+const strokeTone = computed(() => GRADE_TONE[displayGrade.value] || '#7be5d5');
 
 // 四条道的表头：方位标签与该道的字母池，全部来自服务端下发的同一份分区，
 // 避免前端再硬编码一份字母表、与服务端漂移。
@@ -248,13 +251,14 @@ const laneHeaders = computed(() => {
 // 横向宽度、纵向位置和缩放都按当前下落进度计算，因此它与服务端的同一条节拍时间轴同步。
 const visualElapsed = ref(0);
 const shownNotes = computed(() => {
+  if (!props.running && !frozen) return [];
   const source = frozen?.notes || liveNotes.value;
   const fall = frozen?.fallMs || fallMs.value;
   const now = visualElapsed.value;
   const positioned = source.map(note => {
     // note.at 是服务端评分时刻；方块在此前 fallMs 从顶部走到判定线。
-    const progress = (now - (note.at - fall)) / Math.max(1, fall);
-    if (progress < -0.08 || progress > 1.35) return null;
+    const progress = rhythmPosition(note, now, fall, props.judgeRatio).p;
+    if (progress < 0 || progress > 1.35) return null;
     const p = Math.max(0, Math.min(1.35, progress));
     const onTrack = Math.min(1, p);
     // 赛道从远端 42% 宽逐步张开到近端 86% 宽；越线后再向外扩，直至离开屏幕。
@@ -278,7 +282,7 @@ const shownNotes = computed(() => {
     return {
       ...note,
       style: {
-        left: `${note.left}%`, top: `${7 + note.p * 69}%`, width: `${Math.max(6.5, note.trackWidth / laneCount * 0.42)}%`,
+        left: `${note.left}%`, top: `${7 + note.p * (props.judgeRatio * 100 - 7)}%`, width: `${Math.max(6.5, note.trackWidth / laneCount * 0.42)}%`,
         '--note-scale': (approachScale * crowdScale).toFixed(3),
         zIndex: String(10 + Math.round(note.p * 100)),
       },
@@ -293,7 +297,7 @@ const shownNotes = computed(() => {
     <div class="rn-stats">
       <div class="rn-stat is-combo">
         <span class="rn-metric-icon"><Flame :size="31"/></span>
-        <div><span>当前连击</span><strong>{{ me?.combo || 0 }}<small>COMBO</small></strong></div>
+        <div><span>当前连击</span><strong>{{ displayCombo }}<small>COMBO</small></strong></div>
       </div>
       <div class="rn-stat is-score">
         <span class="rn-metric-icon"><Star :size="28"/></span>
@@ -312,7 +316,7 @@ const shownNotes = computed(() => {
     </div>
 
     <!-- 中央：四条下落轨道（three.js 渲染）+ 覆盖其上的道位表头、判定线与判定回馈 -->
-    <div class="rn-field" :aria-label="`四道下落轨道，共 ${liveNotes.length} 个方块在视野内`">
+    <div class="rn-field" :aria-label="`四道下落轨道，共 ${shownNotes.length} 个方块在视野内`">
       <!-- canvas 挂载点。aria-hidden：它只是侧栏与统计数据的可视表达 -->
       <div ref="host" class="rn-stage" aria-hidden="true"></div>
       <!-- 玩家视线真正聚焦的赛道与大键帽：用 DOM 层保证字母始终清楚可读。 -->
@@ -324,7 +328,7 @@ const shownNotes = computed(() => {
         </svg>
         <span v-for="note in shownNotes" :key="`visual-${note.id}`" class="rn-dom-note" :class="`is-lane-${note.lane}`" :style="note.style">{{ note.letter }}</span>
       </div>
-      <span v-if="hitFlash" :key="`hit-${hitFlash.id}`" class="rn-hit-burst" :class="`is-${hitFlash.grade}`" :style="{ left: `${hitFlash.left}%`, top: `${hitFlash.top}%`, width: `${hitFlash.width}%` }" aria-hidden="true"></span>
+      <span v-for="flash in hitFlashes" :key="`hit-${flash.id}`" class="rn-hit-burst" :class="`is-${flash.grade}`" :style="{ left: `${flash.left}%`, top: `${flash.top}%`, width: `${flash.width}%` }" aria-hidden="true"></span>
       <div class="rn-stage-slogan is-left" aria-hidden="true">TYPE<br/>TO THE<br/>BEAT</div>
       <div class="rn-stage-slogan is-right" aria-hidden="true"><span>♫</span>让打字<br/>也成为一种快乐！</div>
       <!-- 四条道的表头：方位与字母池，帮助建立「哪只手、哪条道」的印象。
@@ -341,14 +345,14 @@ const shownNotes = computed(() => {
         <span class="rn-judge-label"><Target :size="13"/>判定线</span>
       </div>
       <!-- 判定回馈：按 gradeId 作为 key，每次判定重新播放动画 -->
-      <div v-if="gradeText" :key="gradeId" class="rn-feedback" :class="`is-${grade}`">
+      <div v-if="gradeText" :key="feedbackId" class="rn-feedback" :class="`is-${displayGrade}`">
         <strong>{{ gradeText }}</strong>
         <small v-if="offsetText">{{ offsetText }}</small>
       </div>
       <!-- 开场倒计时：盖在轨道正中的大号读数，开局第一眼就看得到 -->
       <div v-if="showCountdown" class="rn-countdown" aria-live="polite">
-        <strong :key="countdownKey" :class="{ 'is-go': countdownText === '按' }">{{ countdownText }}</strong>
-        <small>{{ countdownText === '按' ? '就是现在' : '秒后开始' }}</small>
+        <strong :key="countdownKey">{{ countdownText }}</strong>
+        <small>秒后开始</small>
       </div>
       <p v-else-if="!liveNotes.length && running" class="rn-idle">方块即将出现，准备跟上节奏…</p>
     </div>
