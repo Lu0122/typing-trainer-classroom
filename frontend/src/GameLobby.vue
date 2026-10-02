@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowRight, BarChart3, Bug, CarFront, CircleCheck, Flag, Gamepad2, Info, Keyboard, Music2, Play, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
+import { ArrowRight, BarChart3, Bug, CarFront, CircleCheck, Flag, Footprints, Gamepad2, Info, Keyboard, Music2, Play, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
 
 const props = defineProps({ user: { type: Object, default: null } });
 const emit = defineEmits(['select', 'back', 'growth', 'leaderboard', 'account', 'bug-report']);
@@ -67,6 +67,12 @@ function trackGlow(event) {
         </header>
 
         <div class="game-choices">
+          <button class="game-choice runner-choice" type="button" @click="$emit('select', 'runner')" @pointermove="trackGlow">
+            <div class="choice-head"><div class="choice-titles"><div class="choice-name"><Footprints class="name-ico" :size="19"/>遗迹逃亡 <span class="runner-new">NEW</span></div><small>无限路线 · 打字冒险</small></div>
+              <span class="choice-art" aria-hidden="true"><svg viewBox="0 0 168 104"><path d="M47 101L76 22h20l29 79" fill="#c5d1ae" stroke="#749967" stroke-width="2"/><path d="M56 91h59M62 74h47M69 54h33" stroke="#94a983" stroke-width="2"/><path d="M48 23V7h70v16M59 7v44M108 7v44" fill="none" stroke="#799877" stroke-width="9"/><path d="M70 6h26" stroke="#eec879" stroke-width="6"/><circle cx="83" cy="53" r="7" fill="#d99a5c"/><path d="M83 61l-3 17m2-13l-13 8m14-9l12 6m-15 7l-11 17m11-17l13 12" fill="none" stroke="#267f74" stroke-width="7" stroke-linecap="round"/><path d="M28 50l-13-4 10-7M136 34l14-4-9-9" stroke="#dab46b" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="127" cy="72" r="7" fill="#ffd98b" stroke="#dcb55c" stroke-width="2"/></svg></span>
+            </div><p>打出文字，跳跃、滑铲、躲开障碍。<br/>路线无限生成，关卡越来越快，挑战最远逃亡纪录。</p>
+            <footer><span class="choice-meta"><i><Users :size="14"/>单人冒险</i><i><Trophy :size="14"/>今日 / 总榜</i></span><strong>开始逃亡<ArrowRight :size="16"/></strong></footer>
+          </button>
           <button class="game-choice race-choice" type="button" @click="$emit('select', 'race')" @pointermove="trackGlow">
             <div class="choice-head">
               <div class="choice-titles">
@@ -270,6 +276,8 @@ function trackGlow(event) {
 
 /* ---- 模式卡片 ---- */
 .game-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.game-choice.runner-choice{--accent:#41846b;--accent-soft:#e6f0db;--accent-ink:#54745b;--body-ink:#576f57;--meta-ink:#769078;--card-line:#cdddc4;--btn-from:#518663;--btn-to:#2a6656;--btn-glow:#41846b50;background:linear-gradient(160deg,#f6f5e8,#e7f2e4)}
+.runner-new{padding:3px 6px;border-radius:5px;color:#725324;background:#f8dda1;font:700 9px Consolas,monospace;letter-spacing:.06em}
 .game-choice{--accent:#2f7bd9;--accent-soft:#e9f2fe;--accent-ink:#5b7ba3;--body-ink:#5e7693;--meta-ink:#7d94ad;--card-line:#d5e4fa;--btn-from:#3f8ae0;--btn-to:#2a6cc8;--btn-glow:#3f8ae059;position:relative;display:flex;flex-direction:column;text-align:left;padding:24px 26px 22px;border:1px solid var(--card-line);border-radius:16px;cursor:pointer;overflow:hidden;font-family:inherit;transition:transform .22s cubic-bezier(.2,.75,.25,1),box-shadow .22s,border-color .22s}
 .game-choice::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;background-image:radial-gradient(240px 180px at var(--glow-x,50%) var(--glow-y,50%),var(--accent),transparent 70%);opacity:0;transition:opacity .25s}
 .game-choice:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 16px 30px -12px var(--btn-glow)}

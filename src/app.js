@@ -1326,6 +1326,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   require('./boss').installBoss(app, { db, requireUser, now });
   require('./arena').installArena(app, { db, requireUser, now });
   require('./chase').installChase(app, { db, requireUser, now });
+  require('./runner').installRunner(app, { db, requireUser, now });
   app.use('/vendor/lucide', express.static(path.join(__dirname, '..', 'node_modules', 'lucide', 'dist', 'umd')));
   app.use(express.static(publicPath));
   app.get('/admin', (request, response) => response.sendFile(path.join(publicPath, 'admin.html')));

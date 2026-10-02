@@ -77,7 +77,7 @@ async function loadStats() {
   el.statPassages.textContent = `${stats.activePassages} 篇文章正在使用`;
 }
 
-const modeNames = { beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', challenge: '一分钟挑战' };
+const modeNames = { beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', runner: '遗迹逃亡', challenge: '一分钟挑战' };
 function renderOverviewCharts(overview) {
   if (!window.echarts || !el.overviewSpeedChart) return;
   const daily = overview.daily || [];
@@ -228,7 +228,7 @@ async function loadUserClassFilter() {
 }
 
 function modeLabel(mode) {
-  return ({ beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', challenge: '一分钟挑战' })[mode] || mode;
+  return ({ beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', runner: '遗迹逃亡', challenge: '一分钟挑战' })[mode] || mode;
 }
 
 function changeText(value, suffix = '') {
