@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { RunnerRun, COUNTDOWN_MS, GRACE_MS } = require('../src/runner');
+const { RunnerRun, challengeFor, COUNTDOWN_MS, GRACE_MS, RECOVERY_MS } = require('../src/runner');
 const { createDatabase } = require('../src/database');
 const { createApp } = require('../src/app');
 const { hashSessionToken } = require('../src/auth');
@@ -72,6 +72,109 @@ test('runner can pause and resume the initial countdown and generates Chinese in
   assert.match(context.run.task.text, /[\u4e00-\u9fff]/);
   for (let i = 1; i <= 100; i++) clear(context, i);
   assert.equal(context.run.level, 11); assert.ok(context.run.task.duration >= 3300);
+});
+
+test('a collision stops the world and input; recovery ends with a fresh full-time obstacle', () => {
+  const context = setup(); begin(context); const { run } = context;
+  const ticket = run.task.id;
+  context.advance(run.task.duration + GRACE_MS); run.tick();
+  const distance = run.distance, activeMs = run.activeMs, at = run.now();
+  assert.equal(run.phase, 'recovering'); assert.equal(run.lives, 2); assert.equal(run.task.id, ticket);
+  assert.equal(run.recovery.until, at + RECOVERY_MS);
+  assert.throws(() => run.type({ ticket, text: run.task.text, inputId: 1 }), /当前不能输入/);
+  context.advance(RECOVERY_MS - 1); run.tick();
+  assert.equal(run.distance, distance); assert.equal(run.activeMs, activeMs); assert.equal(run.lives, 2);
+  context.advance(1); run.tick();
+  assert.equal(run.phase, 'running'); assert.equal(run.distance, distance); assert.equal(run.recovery, null);
+  assert.notEqual(run.task.id, ticket); assert.equal(run.task.deadline - run.now(), run.task.duration);
+});
+
+test('last life plays recovery without respawning and saves exactly once after that animation', () => {
+  const context = setup(); begin(context); const { run } = context;
+  run.lives = 1; context.advance(run.task.duration + GRACE_MS); run.tick();
+  assert.equal(run.phase, 'recovering'); assert.equal(context.saves, 0); assert.equal(run.lives, 0);
+  const distance = run.distance; context.advance(RECOVERY_MS - 1); run.tick(); assert.equal(context.saves, 0);
+  context.advance(1); run.tick(); assert.equal(run.phase, 'finished'); assert.equal(run.reason, 'collision');
+  assert.equal(run.distance, distance); assert.equal(context.saves, 1); run.tick(); run.finish(); assert.equal(context.saves, 1);
+});
+
+test('pause, re-paused resume countdown, and restart retain the remaining recovery animation', () => {
+  const context = setup(); begin(context); const { run } = context;
+  context.advance(run.task.duration + GRACE_MS + 650); run.pause();
+  const remaining = RECOVERY_MS - 650, distance = run.distance, poseTime = run.pausedAt;
+  assert.equal(run.pausedRecoveryMs, remaining); context.advance(100000); run.resume();
+  context.advance(900); run.pause(); assert.equal(run.pausedRecoveryMs, remaining); assert.equal(run.pausedAt, poseTime);
+  const restored = new RunnerRun({ saved: run.snapshot(), now: run.now });
+  restored.resume(); context.advance(COUNTDOWN_MS); restored.tick();
+  assert.equal(restored.phase, 'recovering'); assert.equal(restored.recovery.until - run.now(), remaining);
+  context.advance(remaining - 1); restored.tick(); assert.equal(restored.distance, distance); assert.equal(restored.lives, 2);
+  context.advance(1); restored.tick(); assert.equal(restored.phase, 'running'); assert.equal(restored.task.sequence, 2);
+});
+
+test('pausing in the reporting grace or during a resumed countdown never moves the obstacle', () => {
+  const context = setup(); begin(context); const { run } = context;
+  const routeAt = run.task.routeAt;
+  context.advance(run.task.duration + 200); run.pause(); assert.equal(run.pausedRemaining, -200);
+  context.advance(50000); run.resume(); context.advance(1000); run.pause(); assert.equal(run.pausedRemaining, -200);
+  run.resume(); context.advance(COUNTDOWN_MS + GRACE_MS - 200); run.tick();
+  assert.equal(run.phase, 'recovering'); assert.ok(Math.abs(run.distance - routeAt) < 1e-8);
+});
+
+test('fork choices have distinct prefixes; either verified word commits exactly one corresponding turn', () => {
+  for (const language of ['english', 'chinese']) for (const direction of ['left', 'right']) {
+    const context = setup(language); begin(context); const { run } = context;
+    for (let i = 1; i < 5; i++) clear(context, i);
+    assert.equal(run.task.action, 'fork'); const [left, right] = run.task.choices;
+    assert.notEqual(left.text[0], right.text[0]);
+    assert.throws(() => run.type({ ticket: run.task.id, inputId: 5, text: '', direction: 'up' }), /请选择左路或右路/);
+    const choice = run.task.choices.find(choice => choice.direction === direction);
+    run.type({ ticket: run.task.id, inputId: 5, text: choice.text, direction });
+    assert.equal(run.task.cleared, true); assert.equal(run.task.text, choice.text); assert.equal(run.heading, 0);
+    run.type({ ticket: run.task.id, inputId: 6, text: otherWord(choice.text), direction: direction === 'left' ? 'right' : 'left' });
+    assert.equal(run.task.selection, direction);
+    context.advance(run.task.deadline + GRACE_MS - run.now()); run.tick(); run.tick();
+    assert.equal(run.turnCount, 1); assert.equal(run.routeTurns.length, 1); assert.equal(run.routeTurns[0].direction, direction);
+    assert.equal(run.heading, direction === 'left' ? -Math.PI / 3 : Math.PI / 3); assert.equal(run.accuracy, 100);
+  }
+  function otherWord(word) { return word === 'sun' ? 'run' : 'sun'; }
+});
+
+test('missed forks do not turn; unlimited successful routes bound stored history', () => {
+  const context = setup(); begin(context); const { run } = context;
+  for (let i = 1; i < 5; i++) clear(context, i);
+  context.advance(run.task.duration + GRACE_MS + RECOVERY_MS); run.tick();
+  assert.equal(run.heading, 0); assert.equal(run.turnCount, 0); assert.equal(run.task.sequence, 6);
+  for (let i = 6; i <= 500; i++) clear(context, i);
+  assert.equal(run.turnCount, 99); assert.equal(run.routeTurns.length, 8); assert.equal(run.routeTurns.at(-1).sequence, 500);
+  for (let i = 1; i <= 500; i++) {
+    const fork = challengeFor('test', i * 5, i % 2 ? 'chinese' : 'english');
+    assert.notEqual(fork.choices[0].text[0], fork.choices[1].text[0]);
+  }
+});
+
+test('server restart during recovery preserves a paused recovery, not a new obstacle or lost life', async () => {
+  const db = createDatabase(':memory:'); let time = 1000000;
+  try {
+    let app = createApp({ db, now: () => time });
+    db.prepare('INSERT INTO users(id,username,display_name,password_hash) VALUES(1,?,?,?)').run('recovery', '复活试玩', 'unused');
+    db.prepare('INSERT INTO user_sessions VALUES(?,?,?,?)').run(hashSessionToken('recovery'), 1, time, time + 99999999);
+    const cookie = 'typing_session=recovery';
+    const started = (await request(app).post('/api/runner/start').set('Cookie', cookie).send({})).body;
+    time += COUNTDOWN_MS; let state = (await request(app).get('/api/runner').set('Cookie', cookie)).body;
+    time = state.task.deadline + GRACE_MS + 800;
+    state = (await request(app).get('/api/runner').set('Cookie', cookie)).body;
+    time += 100000; app = createApp({ db, now: () => time });
+    let restored = (await request(app).get('/api/runner').set('Cookie', cookie)).body;
+    assert.equal(restored.phase, 'paused'); assert.equal(restored.pausedPhase, 'recovering'); assert.equal(restored.pausedRecoveryMs, RECOVERY_MS - 800);
+    assert.equal(restored.lives, 2); assert.equal(restored.distance, state.distance);
+    await request(app).post('/api/runner/resume').set('Cookie', cookie).send({ runId: started.id });
+    time += 100; app = createApp({ db, now: () => time });
+    restored = (await request(app).get('/api/runner').set('Cookie', cookie)).body;
+    assert.equal(restored.pausedPhase, 'recovering'); assert.equal(restored.pausedRecoveryMs, RECOVERY_MS - 800);
+    await request(app).post('/api/runner/resume').set('Cookie', cookie).send({ runId: started.id }); time += COUNTDOWN_MS;
+    restored = (await request(app).get('/api/runner').set('Cookie', cookie)).body;
+    assert.equal(restored.phase, 'recovering'); assert.equal(restored.recovery.until - time, RECOVERY_MS - 800);
+  } finally { db.close(); }
 });
 
 test('runner APIs protect ownership, persist best scores and training, deduplicate players and restart paused', async () => {

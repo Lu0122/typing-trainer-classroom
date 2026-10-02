@@ -72,7 +72,7 @@ export function createRunnerAssets(renderer) {
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     for (const name of ['paving', 'stone', 'edge']) { palette[name].map = map; palette[name].needsUpdate = true; }
   });
-  return { geometry, material, palette, box, plain, sphere, cylinder, capsule, coin, leaf, vine, ring, shadowMap, waterMap, loadImage,
+  return { geometry, material, texture, palette, box, plain, sphere, cylinder, capsule, coin, leaf, vine, ring, shadowMap, waterMap, loadImage,
     dispose() { disposed = true; geometries.forEach(item => item.dispose()); materials.forEach(item => item.dispose()); textures.forEach(item => item.dispose()); } };
 }
 

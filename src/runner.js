@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 
-const COUNTDOWN_MS = 3000, GRACE_MS = 350, LEVEL_STEPS = 10;
+const COUNTDOWN_MS = 3000, GRACE_MS = 350, LEVEL_STEPS = 10, RECOVERY_MS = 2600;
+const TURN_ANGLE = Math.PI / 3;
 const WORDS = {
   english: [
     ['run', 'sun', 'jump', 'tree', 'path', 'gold', 'wind', 'rock', 'lake', 'wild', 'leaf', 'gate', 'fire', 'dash', 'moon', 'star'],
@@ -21,12 +22,17 @@ function challengeFor(seed, sequence, language) {
   const hash = crypto.createHash('sha256').update(`${seed}:${sequence}`).digest();
   const tier = level < 3 ? 0 : level < 7 ? 1 : 2;
   const pool = WORDS[language][tier];
-  const action = ACTIONS[(sequence - 1 + hash[0] % 3) % ACTIONS.length];
+  const action = sequence % 5 === 0 ? 'fork' : ACTIONS[(sequence - 1 + hash[0] % 3) % ACTIONS.length];
+  const text = pool[hash[1] % pool.length];
+  const otherText = pool.find((word, index) => index >= (hash[1] + 1) % pool.length && word[0] !== text[0]) || pool.find(word => word[0] !== text[0]);
+  const choices = action === 'fork' ? [
+    { direction: 'left', name: '藤蔓密林', text }, { direction: 'right', name: '晨光古塔', text: otherText }
+  ] : undefined;
   // 中文长度随难度增加，给输入法留足完整上屏时间。
   const duration = language === 'chinese'
     ? Math.max(3300, 6500 + tier * 1100 - (level - 1) * 180)
     : Math.max(2400, 4800 + tier * 600 - (level - 1) * 180);
-  return { sequence, level, text: pool[hash[1] % pool.length], action, label: ACTION_LABELS[action], duration };
+  return { sequence, level, text, action, label: action === 'fork' ? '岔路选择' : ACTION_LABELS[action], duration, ...(choices ? { choices, selection: 'left' } : {}) };
 }
 
 class RunnerRun {
@@ -41,26 +47,41 @@ class RunnerRun {
       this.activeMs = 0; this.lastTickAt = this.startsAt; this.lastInputId = 0;
       this.task = null; this.event = null; this.endedAt = null; this.reason = null;
     }
+    this.routeTurns ||= []; this.heading ||= 0; this.turnCount ||= 0;
+    this.observedAt ??= this.lastTickAt;
+    if (this.task && !Number.isFinite(this.task.routeAt)) this.task.routeAt = this.distance + Math.max(0, this.task.deadline + GRACE_MS - this.lastTickAt) / 1000 * this.speed;
   }
   get level() { return 1 + Math.floor(this.passed / LEVEL_STEPS); }
   get speed() { return 8 + Math.min(13, (this.level - 1) * .55); }
   get accuracy() { return this.attempted ? Math.round(this.correct / this.attempted * 100) : 100; }
   newTask(at) {
     const spec = challengeFor(this.id, this.passed + 1, this.language);
-    this.task = { ...spec, id: crypto.randomUUID(), startsAt: at, deadline: at + spec.duration, typed: '', cleared: false };
+    this.task = { ...spec, id: crypto.randomUUID(), startsAt: at, deadline: at + spec.duration,
+      routeAt: this.distance + (spec.duration + GRACE_MS) / 1000 * this.speed, typed: '', cleared: false };
   }
   tick() {
     const time = this.now();
+    this.observedAt = time;
     if (this.phase === 'countdown' && time >= this.startsAt) {
       this.phase = 'running'; this.lastTickAt = this.startsAt;
-      if (this.task) {
+      if (this.pausedPhase === 'recovering') {
+        this.phase = 'recovering';
+        this.recovery.at = this.startsAt - (RECOVERY_MS - this.pausedRecoveryMs);
+        this.recovery.until = this.startsAt + this.pausedRecoveryMs;
+      } else if (this.task) {
         this.task.startsAt = this.startsAt;
         this.task.deadline = this.startsAt + this.pausedRemaining;
       } else this.newTask(this.startsAt);
     }
-    if (this.phase !== 'running') return;
+    if (!['running', 'recovering'].includes(this.phase)) return;
     // 每次先走到障碍结算点，再更新速度，避免长时间断线凭空跑远。
-    while (this.phase === 'running') {
+    while (['running', 'recovering'].includes(this.phase)) {
+      if (this.phase === 'recovering') {
+        if (time < this.recovery.until) return;
+        const at = this.recovery.until;
+        if (this.lives <= 0) { this.finish('collision', at); return; }
+        this.recovery = null; this.phase = 'running'; this.lastTickAt = at; this.newTask(at);
+      }
       const boundary = this.task.deadline + GRACE_MS;
       const end = Math.min(time, boundary), elapsed = Math.max(0, end - this.lastTickAt);
       this.distance += elapsed / 1000 * this.speed; this.activeMs += elapsed; this.lastTickAt = end;
@@ -68,10 +89,19 @@ class RunnerRun {
       if (!this.task.cleared) {
         this.lives--; this.combo = 0;
         this.event = { sequence: this.task.sequence, action: this.task.action, outcome: 'miss', at: boundary };
+        this.recovery = { sequence: this.task.sequence, action: this.task.action, at: boundary, until: boundary + RECOVERY_MS, distance: this.distance };
+        this.passed++; this.phase = 'recovering';
+        continue;
+      }
+      if (this.task.action === 'fork') {
+        const from = this.heading, direction = this.task.selection;
+        this.heading += direction === 'left' ? -TURN_ANGLE : TURN_ANGLE;
+        this.routeTurns.push({ sequence: this.task.sequence, distance: this.distance, from, to: this.heading, direction });
+        this.routeTurns = this.routeTurns.slice(-8); this.turnCount++;
+        this.routeName = this.task.choices.find(choice => choice.direction === direction).name;
       }
       this.passed++;
-      if (this.lives <= 0) this.finish('collision', boundary);
-      else this.newTask(boundary);
+      this.newTask(boundary);
     }
   }
   type(body) {
@@ -80,9 +110,18 @@ class RunnerRun {
     if (!Number.isSafeInteger(body.inputId) || body.inputId < 1) fail('输入序号不正确');
     if (body.inputId <= this.lastInputId) return;
     if (this.phase !== 'running') fail('当前不能输入', 409);
-    if (typeof body.text !== 'string' || body.text.length > this.task.text.length + 8 || /[\r\n\x00-\x1f]/.test(body.text)) fail('输入内容不正确');
+    const maxLength = Math.max(this.task.text.length, ...(this.task.choices || []).map(choice => choice.text.length));
+    if (typeof body.text !== 'string' || body.text.length > maxLength + 8 || /[\r\n\x00-\x1f]/.test(body.text)) fail('输入内容不正确');
     if (this.task.cleared) { this.lastInputId = body.inputId; return; }
-    const previous = this.task.typed, target = this.task.text;
+    let previous = this.task.typed;
+    if (this.task.action === 'fork') {
+      const direction = body.direction || this.task.selection;
+      const choice = this.task.choices.find(item => item.direction === direction);
+      if (!choice) fail('请选择左路或右路');
+      if (direction !== this.task.selection) previous = '';
+      this.task.selection = direction; this.task.text = choice.text;
+    }
+    const target = this.task.text;
     let common = 0;
     while (common < Math.min(previous.length, body.text.length) && previous[common] === body.text[common]) common++;
     for (let i = common; i < body.text.length; i++) {
@@ -93,13 +132,15 @@ class RunnerRun {
     if (body.text === target) {
       this.task.cleared = true; this.cleared++; this.combo++; this.bestCombo = Math.max(this.combo, this.bestCombo);
       this.score += Math.round((100 + target.length * 10) * (1 + Math.min(2, Math.floor(this.combo / 10) * .25)) * (1 + (this.level - 1) * .1));
-      this.event = { sequence: this.task.sequence, action: this.task.action, outcome: 'clear', at: this.now() };
+      this.event = { sequence: this.task.sequence, action: this.task.action, direction: this.task.selection, outcome: 'clear', at: this.now() };
     }
   }
   pause() {
     this.tick();
-    if (!['running', 'countdown'].includes(this.phase)) return;
-    this.pausedRemaining = this.task ? Math.max(0, this.task.deadline - this.now()) : null;
+    if (!['running', 'countdown', 'recovering'].includes(this.phase)) return;
+    if (this.phase !== 'countdown') this.pausedRemaining = this.task ? Math.max(-GRACE_MS, this.task.deadline - this.now()) : null;
+    if (!(this.phase === 'countdown' && this.pausedPhase === 'recovering')) { this.pausedPhase = this.phase; this.pausedAt = this.now(); }
+    if (this.phase === 'recovering') this.pausedRecoveryMs = Math.max(0, this.recovery.until - this.now());
     this.phase = 'paused';
   }
   resume() {
@@ -118,7 +159,14 @@ class RunnerRun {
     this.tick();
     return { ...this.snapshot(), level: this.level, speed: this.speed, accuracy: this.accuracy,
       serverNow: this.now(), levelProgress: this.passed % LEVEL_STEPS, levelSteps: LEVEL_STEPS,
-      upcoming: [1, 2].map(ahead => challengeFor(this.id, this.passed + ahead + 1, this.language)) };
+      upcoming: (() => {
+        let routeAt = this.task?.routeAt ?? this.distance;
+        return [1, 2].map(ahead => {
+          const spec = challengeFor(this.id, (this.task?.sequence ?? this.passed + 1) + ahead, this.language);
+          routeAt += (spec.duration + GRACE_MS) / 1000 * (8 + Math.min(13, (spec.level - 1) * .55));
+          return { ...spec, routeAt };
+        });
+      })() };
   }
 }
 
@@ -150,7 +198,9 @@ function installRunner(app, { db, requireUser, now }) {
         run = new RunnerRun({ now, onFinish: finish, saved });
         // 重启后恢复为暂停，使用最后保存的剩余时间，不让服务器停机消耗生命。
         if (run.phase !== 'paused') {
-          run.pausedRemaining = run.task ? Math.max(0, run.task.deadline - run.lastTickAt) : null;
+          if (!(run.phase === 'countdown' && run.pausedPhase === 'recovering')) { run.pausedPhase = run.phase; run.pausedAt = run.observedAt; }
+          if (run.phase === 'recovering') run.pausedRecoveryMs = Math.max(0, run.recovery.until - run.observedAt);
+          if (run.phase !== 'countdown') run.pausedRemaining = run.task ? Math.max(-GRACE_MS, run.task.deadline - run.lastTickAt) : null;
           run.phase = 'paused';
         }
         active.set(userId, run); persist(run);
@@ -207,4 +257,4 @@ function installRunner(app, { db, requireUser, now }) {
     return { rows: rows.slice(0, 20).map(mapRow), myBest: rows.find(row => row.userId === req.user?.id) ? mapRow(rows.find(row => row.userId === req.user?.id)) : null, total: rows.length, period, language };
   }));
 }
-module.exports = { RunnerRun, challengeFor, installRunner, COUNTDOWN_MS, GRACE_MS, LEVEL_STEPS };
+module.exports = { RunnerRun, challengeFor, installRunner, COUNTDOWN_MS, GRACE_MS, LEVEL_STEPS, RECOVERY_MS };

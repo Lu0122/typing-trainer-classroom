@@ -63,14 +63,15 @@ test('contact feedback occurs at crossing and retains a jump landing after the n
   const tracker = createContactTracker();
   const state = { id: 'run', phase: 'running', score: 100, task: { sequence: 1, action: 'jump', deadline: 10000, cleared: true } };
   assert.deepEqual(tracker.update(state, 9900), []);
-  assert.equal(tracker.update(state, 10000)[0].kind, 'pass');
-  assert.deepEqual(tracker.update(state, 10010), []);
+  assert.deepEqual(tracker.update(state, 10000), []);
+  assert.equal(tracker.update(state, 10350)[0].kind, 'pass');
+  assert.deepEqual(tracker.update(state, 10360), []);
   const next = { ...state, task: { sequence: 2, action: 'slide', deadline: 15000 } };
-  assert.equal(tracker.latestAction(10200).action, 'jump');
-  assert.equal(tracker.update(next, 10560)[0].kind, 'land');
-  assert.equal(tracker.trailingObstacle(10560, 2).sequence, 1);
-  assert.equal(tracker.trailingObstacle(11600, 2), undefined);
-  assert.deepEqual(tracker.update(next, 10570), []);
+  assert.equal(tracker.latestAction(10550).action, 'jump');
+  assert.equal(tracker.update(next, 10910)[0].kind, 'land');
+  assert.equal(tracker.trailingObstacle(10910, 2).sequence, 1);
+  assert.equal(tracker.trailingObstacle(11950, 2), undefined);
+  assert.deepEqual(tracker.update(next, 10920), []);
 });
 
 test('contact feedback deduplicates collisions and discards stale or paused collisions', async () => {
@@ -92,10 +93,44 @@ test('contact history survives an unlimited run without replaying past actions',
   for (let sequence = 1; sequence <= 500; sequence++) {
     const deadline = sequence * 4000;
     const state = { id: 'run', phase: 'running', score: sequence * 100, task: { sequence, action: 'jump', deadline, cleared: true } };
-    assert.equal(tracker.update(state, deadline)[0].kind, 'pass');
-    assert.equal(tracker.update(state, deadline + 560)[0].kind, 'land');
-    assert.deepEqual(tracker.update(state, deadline + 2001), []);
-    assert.equal(tracker.latestAction(deadline + 2001), undefined);
-    assert.equal(tracker.trailingObstacle(deadline + 2001, sequence + 1), undefined);
+    assert.equal(tracker.update(state, deadline + 350)[0].kind, 'pass');
+    assert.equal(tracker.update(state, deadline + 910)[0].kind, 'land');
+    assert.deepEqual(tracker.update(state, deadline + 2351), []);
+    assert.equal(tracker.latestAction(deadline + 2351), undefined);
+    assert.equal(tracker.trailingObstacle(deadline + 2351, sequence + 1), undefined);
   }
+});
+
+test('unconfirmed collisions clamp world movement even when the next server poll is delayed', async () => {
+  const { createRunnerMotion, projectedDistance } = await helpers;
+  const state = { id: 'run', phase: 'running', serverNow: 1000, distance: 9, speed: 8, task: { deadline: 1000, routeAt: 10 } };
+  const motion = createRunnerMotion(); motion.step(state, 1000, 0);
+  for (let now = 1016; now < 5000; now += 16) assert.ok(motion.step(state, now, .016) <= 10);
+  assert.equal(projectedDistance(state, 5000), 10);
+  assert.equal(motion.step({ ...state, phase: 'recovering', distance: 10 }, 7000, .016), 10);
+});
+
+test('wall recoil, gate knockdown and gap fall are distinct; only remaining lives can respawn', async () => {
+  const { recoveryPose, createContactTracker } = await helpers;
+  const at = 1000;
+  const wall = recoveryPose({ at, action: 'left' }, at + 850, 2), gate = recoveryPose({ at, action: 'slide' }, at + 850, 2), gap = recoveryPose({ at, action: 'jump' }, at + 850, 2);
+  assert.ok(wall.back > .8 && wall.rx > 0); assert.ok(gate.rx < -1.4); assert.ok(gap.y <= -9);
+  assert.equal(recoveryPose({ at, action: 'jump' }, at + 1400, 2).visible, false);
+  assert.equal(recoveryPose({ at, action: 'jump' }, at + 1450, 2).respawning, true);
+  assert.equal(recoveryPose({ at, action: 'jump' }, at + 1450, 0).respawning, false);
+  const state = { id: 'run', phase: 'recovering', lives: 2, recovery: { sequence: 1, at } };
+  const tracker = createContactTracker(); assert.deepEqual(tracker.update(state, at + 1449), []);
+  assert.equal(tracker.update(state, at + 1450)[0].kind, 'respawn'); assert.deepEqual(tracker.update(state, at + 1500), []);
+  assert.deepEqual(tracker.update({ ...state, lives: 0, recovery: { sequence: 2, at } }, at + 2000), []);
+});
+
+test('a server-rejected late word cannot play successful crossing or landing effects after revival', async () => {
+  const { createContactTracker } = await helpers;
+  const tracker = createContactTracker();
+  const state = { id: 'run', phase: 'running', task: { sequence: 1, action: 'jump', deadline: 10000 } };
+  tracker.update(state, 10340, true);
+  const missed = { ...state, phase: 'recovering', lives: 2, event: { outcome: 'miss', sequence: 1, action: 'jump', at: 10350 }, recovery: { sequence: 1, at: 10350 } };
+  assert.equal(tracker.update(missed, 10350, true)[0].kind, 'miss');
+  assert.equal(tracker.latestAction(10400), undefined);
+  assert.deepEqual(tracker.update({ ...state, task: { sequence: 2, action: 'slide', deadline: 15000 } }, 12950), []);
 });

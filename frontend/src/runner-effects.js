@@ -19,22 +19,31 @@ export function createRunnerEffects(scene, assets, reducedMotion) {
   let cursor = 0, ringAge = 1, ringLife = 0, impactAge = 2, stepAge = 0;
   const color = new THREE.Color();
   function burst(kind, x, y, z, amount) {
-    const dust = kind === 'dust', hit = kind === 'miss';
+    const dust = kind === 'dust', hit = ['miss', 'stone', 'fall'].includes(kind);
     for (let i = 0; i < (reducedMotion ? Math.min(8, amount) : amount); i++) {
       const index = cursor++ % count, p = particles[index], angle = Math.random() * Math.PI * 2;
       const speed = dust ? .5 + Math.random() * 1.5 : 1.5 + Math.random() * 3;
       Object.assign(p, { age: 0, life: dust ? .35 + Math.random() * .25 : .4 + Math.random() * .35,
         x, y, z, vx: Math.cos(angle) * speed, vy: dust ? .3 + Math.random() : 1 + Math.random() * 3,
-        vz: Math.sin(angle) * speed, gravity: dust ? 1 : 7 });
-      color.set(dust ? '#d9c799' : hit ? (i % 2 ? '#ffad54' : '#ff6350') : (i % 2 ? '#fff0ad' : '#8affc4'));
+        vz: Math.sin(angle) * speed, gravity: dust ? 1 : kind === 'fall' ? 15 : kind === 'respawn' ? -2 : 7 });
+      color.set(dust || kind === 'stone' ? '#d9c799' : hit ? (i % 2 ? '#ffad54' : '#ff6350') : kind === 'respawn' ? (i % 2 ? '#ffe5a0' : '#d2fff3') : (i % 2 ? '#fff0ad' : '#8affc4'));
       tints[index * 3] = color.r; tints[index * 3 + 1] = color.g; tints[index * 3 + 2] = color.b;
       sizes[index] = dust ? .22 + Math.random() * .24 : .12 + Math.random() * .16;
     }
     geometry.attributes.aTint.needsUpdate = true; geometry.attributes.aSize.needsUpdate = true;
   }
   function contact(event, x, z, elevation = 0) {
-    if (event.kind === 'miss') { impactAge = 0; burst('miss', x, 1.2, z - .2, 48); }
+    if (event.kind === 'miss') {
+      impactAge = 0;
+      if (event.action === 'jump') burst('fall', x, .1, z, 25);
+      else if (event.action === 'slide') { burst('stone', x, 1.7, z - .2, 32); burst('dust', x, .1, z, 24); }
+      else burst('miss', x, 1.2, z - .2, 48);
+    }
     else if (event.kind === 'land') burst('dust', x, .08, z, 42);
+    else if (event.kind === 'respawn') {
+      burst('respawn', x, .4, z, 60); ringAge = 0; ringLife = .85;
+      ripple.position.set(x, .11, z); ringMaterial.color.set('#ffe09a');
+    }
     else {
       burst('pass', x, .65 + elevation, z, 32);
       ringAge = 0; ringLife = .5; ripple.position.set(x, .11, z); ringMaterial.color.set('#8affc4');
