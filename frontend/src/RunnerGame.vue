@@ -1,25 +1,30 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Footprints, Heart, Pause, Play, Trophy, Volume2, VolumeX } from 'lucide-vue-next';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Footprints, Heart, Pause, Play, SlidersHorizontal, Trophy, Volume2, VolumeX } from 'lucide-vue-next';
 import RunnerLeaderboard from './RunnerLeaderboard.vue';
 import { createRunnerScene } from './runner-scene';
+import { createRunnerClock, projectedDistance } from './runner-motion.mjs';
 const props = defineProps({ user: Object });
 const emit = defineEmits(['back', 'login']);
 const state = ref({ phase: 'idle' }), draft = ref(''), composing = ref(false), language = ref('english');
 const busy = ref(false), connected = ref(true), message = ref(''), sceneMessage = ref('');
 const sceneHost = ref(null), editor = ref(null), rankingDialog = ref(null), sound = ref(false);
+const quality = ref('auto'), feedback = ref(null), impact = ref(false);
+const qualityLabel = computed(() => ({ auto: '自动画质', smooth: '流畅画质', high: '精细画质' }[quality.value]));
 const period = ref('all'), board = ref(null), rankingError = ref(''), rankingLoading = ref(false);
 const resultRank = computed(() => board.value?.language === state.value.language ? board.value?.myBest?.rank : null);
 const clock = ref(performance.now());
-let poll, clockTimer, sendTimer, startTimer, scene, stopped = false, reading, writing, pending = null, inputId = 0;
-let clockServer = Date.now(), clockPerformance = performance.now(), rankRequest = 0, lastEvent, lastFinished, audio;
+let poll, clockTimer, sendTimer, startTimer, boundaryTimer, feedbackTimer, impactTimer, scene, stopped = false, reading, writing, pending = null, inputId = 0;
+let rankRequest = 0, lastEvent, lastFinished, audio, feedbackId = 0;
+const presentationClock = createRunnerClock();
 const task = computed(() => state.value.task);
 const running = computed(() => state.value.phase === 'running');
 const solved = computed(() => !!task.value && !composing.value && draft.value === task.value.text);
-const serverTime = () => clockServer + performance.now() - clockPerformance;
-const seconds = computed(() => Math.max(0, ((task.value?.deadline || 0) - (clockServer + clock.value - clockPerformance)) / 1000));
-const countdown = computed(() => Math.max(0, Math.ceil(((state.value.startsAt || 0) - (clockServer + clock.value - clockPerformance)) / 1000)));
-const distance = computed(() => Math.floor((state.value.distance || 0) + (running.value && task.value ? Math.max(0, Math.min(clockServer + clock.value - clockPerformance, task.value.deadline + 350) - state.value.serverNow) / 1000 * state.value.speed : 0)));
+const serverTime = () => presentationClock.now(performance.now());
+const visualTime = computed(() => presentationClock.now(clock.value));
+const seconds = computed(() => Math.max(0, ((task.value?.deadline || 0) - visualTime.value) / 1000));
+const countdown = computed(() => Math.max(0, Math.ceil(((state.value.startsAt || 0) - visualTime.value) / 1000)));
+const distance = computed(() => Math.floor(projectedDistance(state.value, visualTime.value)));
 const actionIcon = computed(() => ({ jump: ArrowUp, slide: ArrowDown, left: ArrowLeft, right: ArrowRight }[task.value?.action] || Footprints));
 const inputEnabled = computed(() => running.value && !!task.value && connected.value && !busy.value);
 async function api(path = '', body) {
@@ -34,16 +39,19 @@ function focusInput() { if (!stopped && inputEnabled.value && !rankingDialog.val
 function apply({ data, before, after }) {
   if (stopped) return;
   const previousTask = task.value?.id, previousRun = state.value.id;
-  state.value = data; clockServer = data.serverNow + (after - before) / 2; clockPerformance = after; clock.value = after;
+  presentationClock.sync(data.serverNow, before, after, previousRun !== data.id);
+  state.value = data; clock.value = after;
   connected.value = true; inputId = Math.max(inputId, data.lastInputId || 0);
   if (previousTask !== data.task?.id || previousRun !== data.id) { draft.value = data.task?.typed || ''; pending = null; composing.value = false; message.value = ''; }
   if (data.language && (previousRun !== data.id || ['running', 'paused', 'countdown'].includes(data.phase))) language.value = data.language;
   if (data.event && `${data.id}:${data.event.sequence}:${data.event.outcome}` !== lastEvent) {
     lastEvent = `${data.id}:${data.event.sequence}:${data.event.outcome}`;
-    playTone(data.event.outcome === 'clear');
+    if (data.event.outcome === 'clear') playTone('ready');
   }
   clearTimeout(startTimer);
+  clearTimeout(boundaryTimer);
   if (data.phase === 'countdown') startTimer = setTimeout(refresh, Math.max(0, data.startsAt - serverTime()) + 10);
+  if (data.phase === 'running' && data.task) boundaryTimer = setTimeout(refresh, Math.max(40, data.task.deadline + 365 - serverTime()));
   if (data.phase === 'finished' && lastFinished !== data.id) { lastFinished = data.id; loadRanking(); }
 }
 async function refresh() {
@@ -102,15 +110,33 @@ function prepareSound() {
   if (!sound.value) return;
   try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume().catch(() => {}); } catch { sound.value = false; }
 }
-function playTone(success) {
+function playTone(kind) {
   if (!sound.value || !audio || audio.state !== 'running') return;
   const oscillator = audio.createOscillator(), gain = audio.createGain(), at = audio.currentTime;
-  oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(success ? 660 : 170, at); oscillator.frequency.exponentialRampToValueAtTime(success ? 990 : 90, at + .16);
-  gain.gain.setValueAtTime(.04, at); gain.gain.exponentialRampToValueAtTime(.001, at + .22);
+  const [from, to, volume] = { ready: [660, 880, .025], pass: [880, 1320, .04], land: [130, 65, .045], miss: [170, 55, .06] }[kind];
+  oscillator.type = kind === 'miss' ? 'triangle' : 'sine'; oscillator.frequency.setValueAtTime(from, at); oscillator.frequency.exponentialRampToValueAtTime(to, at + .16);
+  gain.gain.setValueAtTime(volume, at); gain.gain.exponentialRampToValueAtTime(.001, at + .22);
   oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(at); oscillator.stop(at + .23);
   oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
 }
-function toggleSound() { sound.value = !sound.value; prepareSound(); }
+function contactFeedback(event) {
+  if (stopped) return;
+  const labels = { jump: '跨越成功', slide: '滑铲通过', left: '向左闪避', right: '向右闪避' };
+  feedback.value = { id: ++feedbackId, kind: event.kind, title: event.kind === 'miss' ? '撞到障碍' : event.kind === 'land' ? '稳稳落地' : labels[event.action],
+    detail: event.kind === 'miss' ? `剩余 ${event.lives} 次机会` : event.kind === 'land' ? '' : event.points > 0 ? `+${event.points} 分` : '成功通过' };
+  clearTimeout(feedbackTimer); feedbackTimer = setTimeout(() => { feedback.value = null; }, event.kind === 'land' ? 650 : 1000);
+  playTone(event.kind);
+  if (event.kind === 'miss') {
+    impact.value = true; clearTimeout(impactTimer); impactTimer = setTimeout(() => { impact.value = false; }, 300);
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) navigator.vibrate?.(45);
+  }
+}
+function cycleQuality() {
+  quality.value = { auto: 'smooth', smooth: 'high', high: 'auto' }[quality.value];
+  scene?.setQuality(quality.value);
+  nextTick(focusInput);
+}
+function toggleSound() { sound.value = !sound.value; prepareSound(); nextTick(focusInput); }
 function pauseBeacon() { if (state.value.id && ['running', 'countdown'].includes(state.value.phase)) navigator.sendBeacon('/api/runner/pause', new Blob([JSON.stringify({ runId: state.value.id })], { type: 'application/json' })); }
 function visibility() { if (document.hidden && ['running', 'countdown'].includes(state.value.phase)) action('/pause'); }
 function keydown(event) {
@@ -120,13 +146,13 @@ watch([inputEnabled, () => task.value?.id], () => nextTick(focusInput), { flush:
 watch([period, language], loadRanking);
 watch(() => props.user?.id, refresh);
 onMounted(() => {
-  try { scene = createRunnerScene(sceneHost.value, () => ({ state: state.value, now: serverTime(), solved: solved.value }), text => { sceneMessage.value = text; }); }
+  try { scene = createRunnerScene(sceneHost.value, () => ({ state: state.value, now: serverTime(), solved: solved.value, connected: connected.value }), text => { sceneMessage.value = text; }, { onFeedback: contactFeedback, quality: quality.value }); }
   catch { sceneMessage.value = '3D 场景暂时不可用，打字挑战仍可继续。'; }
   refresh(); loadRanking(); poll = setInterval(refresh, 650); clockTimer = setInterval(() => { clock.value = performance.now(); }, 50);
   document.addEventListener('visibilitychange', visibility); window.addEventListener('keydown', keydown); window.addEventListener('pagehide', pauseBeacon);
 });
 onBeforeUnmount(() => {
-  pauseBeacon(); stopped = true; clearInterval(poll); clearInterval(clockTimer); clearTimeout(sendTimer); clearTimeout(startTimer); scene?.dispose(); audio?.close().catch(() => {});
+  pauseBeacon(); stopped = true; clearInterval(poll); clearInterval(clockTimer); clearTimeout(sendTimer); clearTimeout(startTimer); clearTimeout(boundaryTimer); clearTimeout(feedbackTimer); clearTimeout(impactTimer); scene?.dispose(); audio?.close().catch(() => {});
   document.removeEventListener('visibilitychange', visibility); window.removeEventListener('keydown', keydown); window.removeEventListener('pagehide', pauseBeacon);
 });
 </script>
@@ -136,12 +162,14 @@ onBeforeUnmount(() => {
     <header class="runner-header">
       <button class="runner-back" aria-label="返回大厅" :disabled="busy" @click="back"><ArrowLeft :size="18"/><span>返回大厅</span></button>
       <div class="runner-brand"><Footprints :size="25"/><div><strong>遗迹逃亡</strong><small>TYPE · RUN · EXPLORE</small></div></div>
-      <div class="runner-header-actions"><button class="runner-icon-button" :aria-label="sound ? '关闭音效' : '开启音效'" :title="sound ? '关闭音效' : '开启音效'" @click="toggleSound"><component :is="sound ? Volume2 : VolumeX" :size="19"/></button><button class="runner-button runner-ranking-button" @click="openRanking"><Trophy :size="17"/>排行榜</button></div>
+      <div class="runner-header-actions"><button class="runner-button runner-quality-button" :aria-label="`${qualityLabel}，点击切换画质`" :title="`${qualityLabel}，点击切换画质`" @click="cycleQuality"><SlidersHorizontal :size="18"/><span>{{ qualityLabel }}</span></button><button class="runner-icon-button" :aria-label="sound ? '关闭音效' : '开启音效'" :title="sound ? '关闭音效' : '开启音效'" @click="toggleSound"><component :is="sound ? Volume2 : VolumeX" :size="19"/></button><button class="runner-button runner-ranking-button" @click="openRanking"><Trophy :size="17"/>排行榜</button></div>
     </header>
     <main class="runner-layout">
-      <section class="runner-stage" aria-label="无限打字逃亡赛场" :class="{ 'is-hit': state.event?.outcome === 'miss' && state.event.sequence === task?.sequence - 1 }">
+      <section class="runner-stage" aria-label="无限打字逃亡赛场" :class="{ 'is-hit': impact }">
         <div ref="sceneHost" class="runner-canvas"></div>
         <div class="runner-vignette" aria-hidden="true"></div>
+        <div class="runner-impact-flash" aria-hidden="true"></div>
+        <div v-if="feedback && ['running','finished'].includes(state.phase)" :key="feedback.id" class="runner-contact-feedback" :class="`is-${feedback.kind}`" role="status"><strong>{{ feedback.title }}</strong><span v-if="feedback.detail">{{ feedback.detail }}</span></div>
         <div class="runner-hud"><div><span>关卡</span><strong>{{ state.level || 1 }}<small> / ∞</small></strong></div><div><span>逃亡距离</span><strong>{{ distance.toLocaleString() }}<small> m</small></strong></div><div class="runner-hearts" aria-label="剩余失误机会"><Heart v-for="n in 3" :key="n" :size="20" :class="{ 'is-empty': n > (state.lives ?? 3) }"/><small>{{ state.lives ?? 3 }} / 3</small></div><button v-if="['running','countdown','paused'].includes(state.phase)" class="runner-icon-button runner-pause" :disabled="busy" :aria-label="state.phase === 'paused' ? '继续游戏' : '暂停游戏'" @click="togglePause"><component :is="state.phase === 'paused' ? Play : Pause" :size="20"/></button></div>
         <div v-if="state.phase === 'idle'" class="runner-overlay runner-intro">
           <span class="runner-eyebrow">无限路线 · 打字冒险</span><h1>向未知，<br/><em>再跑远一点。</em></h1><p>打出目标文字，跳跃、滑铲、避开障碍。<br/>每 10 个障碍进入下一关，三次失误结束。</p>
