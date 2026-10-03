@@ -3,11 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, ArrowRight, Bike, Bot, Camera, Copy, Flag, Gauge, Keyboard, Shield, Timer, Trophy } from 'lucide-vue-next';
 import { createChaseScene } from './chase-scene';
 import { chasePoint } from './chase-motion.mjs';
+import { chasePressure } from './chase-camera.mjs';
 
 const props = defineProps({ user: Object });
 const emit = defineEmits(['back', 'login']);
 const state = ref(null), code = ref(''), role = ref('police'), draft = ref(''), message = ref(''), busy = ref(false), clock = ref(Date.now()), serverOffset = ref(0);
-const inputEl = ref(null), sceneEl = ref(null), sceneMessage = ref(''), cameraMode = ref('follow'), quality = ref('auto'), composing = ref(false), resultVisible = ref(false);
+const inputEl = ref(null), sceneEl = ref(null), sceneMessage = ref(''), cameraMode = ref('pursuit'), quality = ref('auto'), composing = ref(false), resultVisible = ref(false);
 let poll, timer, flushTimer, startTimer, resultTimer, stopped = false, reading = null, cleanLeave = false, scene;
 const me = computed(() => state.value?.me || null);
 const running = computed(() => state.value?.phase === 'running');
@@ -28,9 +29,11 @@ const thief = computed(() => state.value?.players?.find(player => player.role ==
 const racers = computed(() => ['police','thief'].map(kind => state.value?.players?.find(player => player.role === kind) || { role: kind, name: '等待加入', correct: 0, combo: 0, speedKmh: 0 }));
 const phaseLabel = computed(() => ({ lobby:'海港环道', waiting:'等待对手', countdown:'即将出发', running:'正在追逐', finished:'比赛结束' })[state.value?.phase || 'lobby']);
 const qualityLabel = computed(() => ({ auto:'自动', smooth:'流畅', high:'精细' })[quality.value]);
-const catchingGap = computed(() => {
-  return police.value && thief.value ? Math.max(0, Math.round(thief.value.position - police.value.position)) : 16;
-});
+const gapPressure = computed(() => chasePressure(police.value && thief.value ? thief.value.position - police.value.position : 16, state.value?.trackMeters || 520));
+const catchingGap = computed(() => gapPressure.value.label);
+const cameraLabel = computed(() => ({ pursuit:'追逐', follow:'跟随', overview:'全景' })[cameraMode.value]);
+const nextCameraLabel = computed(() => ({ pursuit:'跟随', follow:'全景', overview:'追逐' })[cameraMode.value]);
+const gapCaption = computed(() => gapPressure.value.laps ? `小偷领先 ${gapPressure.value.laps} 圈` : !running.value ? '追逐距离' : gapPressure.value.level === 'danger' ? me.value?.role === 'thief' ? '警察逼近' : '就快追上' : gapPressure.value.level === 'near' ? '距离很近' : '追逐距离');
 const roleTitle = player => player?.role === 'police' ? '警察' : '小偷';
 const portrait = player => `/assets/chase/${player.role === 'police' ? 'police' : 'thief'}-portrait-v2.png`;
 const playerLabel = player => player.id === props.user?.id ? '你' : player.bot ? '电脑' : player.name;
@@ -38,7 +41,7 @@ function radarPoint(player) {
   const point = chasePoint(player.position || (player.role === 'thief' ? 16 : 0), state.value?.trackMeters || 520);
   return { x: 100 + point.x * 2.6, y: 62 + point.z * 2.6 };
 }
-function toggleCamera() { cameraMode.value = cameraMode.value === 'follow' ? 'overview' : 'follow'; focusInput(); }
+function toggleCamera() { cameraMode.value = ({ pursuit:'follow', follow:'overview', overview:'pursuit' })[cameraMode.value]; focusInput(); }
 function cycleQuality() { quality.value = ({ auto:'smooth', smooth:'high', high:'auto' })[quality.value]; scene?.setQuality(quality.value); focusInput(); }
 
 async function api(action = '', body) {
@@ -160,12 +163,12 @@ onBeforeUnmount(() => { stopped = true; scene?.dispose(); clearInterval(poll); c
 </script>
 
 <template>
-  <main class="chase-game" :class="{ 'is-playing': running || countdown, 'is-setup': isLobby || state?.phase === 'waiting' }">
+  <main class="chase-game" :class="{ 'is-playing': running || countdown, 'is-setup': isLobby || state?.phase === 'waiting', 'chase-pressure-near': running && gapPressure.level === 'near', 'chase-pressure-danger': running && gapPressure.level === 'danger' }">
     <header class="chase-topbar">
       <button class="chase-back" type="button" @click="leave" aria-label="返回游戏大厅"><ArrowLeft :size="19"/><span>返回大厅</span></button>
       <div class="chase-title"><Shield :size="27"/><div><h1>生死时速</h1><p>海港追逐</p></div></div>
       <div class="chase-view-controls">
-        <button type="button" @click="toggleCamera" :aria-label="cameraMode === 'follow' ? '切换到全景视角' : '切换到跟随视角'"><Camera :size="16"/><span>{{ cameraMode === 'follow' ? '跟随' : '全景' }}</span></button>
+        <button type="button" @click="toggleCamera" :aria-label="cameraLabel + '视角，切换到' + nextCameraLabel"><Camera :size="16"/><span>{{ cameraLabel }}</span></button>
         <button type="button" @click="cycleQuality" :aria-label="'画质：' + qualityLabel"><Gauge :size="16"/><span>{{ qualityLabel }}</span></button>
       </div>
       <div class="chase-top-metrics"><span v-if="state?.code" class="chase-room-id">房间 {{ state.code }}</span><Timer :size="18"/><strong>{{ clockLabel }}</strong></div>
@@ -180,7 +183,7 @@ onBeforeUnmount(() => { stopped = true; scene?.dispose(); clearInterval(poll); c
             <div><strong>{{ roleTitle(player) }}<small v-if="player.id"> · {{ playerLabel(player) }}</small></strong><span><b>{{ player.speedKmh || 0 }}</b> km/h</span></div>
           </div>
         </div>
-        <div class="chase-gap" v-if="state?.phase !== 'finished'"><Shield :size="16"/><span>追逐距离</span><strong>{{ catchingGap }}<small> m</small></strong><Bike :size="17"/></div>
+        <div class="chase-gap" v-if="state?.phase !== 'finished'"><Shield :size="16"/><span>{{ gapCaption }}</span><strong>{{ catchingGap }}<small> m</small></strong><Bike :size="17"/></div>
         <div v-if="countdown" class="chase-countdown" aria-live="assertive"><span>准备出发</span><strong :key="countdown">{{ countdown }}</strong><small>倒计时结束后直接打字</small></div>
         <div v-if="state?.phase === 'finished' && resultVisible" class="chase-result" :class="state.result.winnerRole" aria-live="polite">
           <Trophy :size="32"/><strong>{{ state.result.left ? '对手已经离开赛道' : state.result.outcome === 'caught' ? '警察抓到小偷！' : '小偷成功逃脱！' }}</strong>
