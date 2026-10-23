@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, ArrowRight, Bike, Bot, Camera, Copy, Flag, Gauge, Keyboard, Shield, Timer, Trophy } from 'lucide-vue-next';
+import AppHeader from './AppHeader.vue';
 import { createChaseScene } from './chase-scene';
 import { chasePoint } from './chase-motion.mjs';
 import { chasePressure } from './chase-camera.mjs';
@@ -164,15 +165,28 @@ onBeforeUnmount(() => { stopped = true; scene?.dispose(); clearInterval(poll); c
 
 <template>
   <main class="chase-game" :class="{ 'is-playing': running || countdown, 'is-setup': isLobby || state?.phase === 'waiting', 'chase-pressure-near': running && gapPressure.level === 'near', 'chase-pressure-danger': running && gapPressure.level === 'danger' }">
-    <header class="chase-topbar">
-      <button class="chase-back" type="button" @click="leave" aria-label="返回游戏大厅"><ArrowLeft :size="19"/><span>返回大厅</span></button>
-      <div class="chase-title"><Shield :size="27"/><div><h1>生死时速</h1><p>海港追逐</p></div></div>
-      <div class="chase-view-controls">
-        <button type="button" @click="toggleCamera" :aria-label="cameraLabel + '视角，切换到' + nextCameraLabel"><Camera :size="16"/><span>{{ cameraLabel }}</span></button>
-        <button type="button" @click="cycleQuality" :aria-label="'画质：' + qualityLabel"><Gauge :size="16"/><span>{{ qualityLabel }}</span></button>
-      </div>
-      <div class="chase-top-metrics"><span v-if="state?.code" class="chase-room-id">房间 {{ state.code }}</span><Timer :size="18"/><strong>{{ clockLabel }}</strong></div>
-    </header>
+    <AppHeader
+      title="生死时速"
+      subtitle="海港追逐"
+      :icon="Shield"
+      back-label="返回大厅"
+      :user="props.user"
+      @back="leave"
+      @account="emit('login')"
+    >
+      <template #status>
+        <span v-if="state?.code">房间 {{ state.code }}</span>
+        <b>{{ clockLabel }}</b>
+      </template>
+      <template #actions>
+        <button class="ah-link" type="button" @click="toggleCamera" :aria-label="`${cameraLabel}视角，切换到${nextCameraLabel}`">
+          <Camera :size="15" />{{ cameraLabel }}
+        </button>
+        <button class="ah-link" type="button" @click="cycleQuality" :aria-label="`画质：${qualityLabel}`">
+          <Gauge :size="15" />{{ qualityLabel }}
+        </button>
+      </template>
+    </AppHeader>
     <div class="chase-layout">
       <section class="chase-world" aria-label="海港环道，警察与小偷沿同一条赛道追逐">
         <div ref="sceneEl" class="chase-scene"></div><div class="chase-vignette"></div>

@@ -30,7 +30,9 @@ const PAGES = [
 
 const VIEWPORTS = [
   { width: 1920, height: 1080 },
-  { width: 1366, height: 768 }
+  { width: 1440, height: 900 },
+  { width: 1366, height: 768 },
+  { width: 1280, height: 720 }
 ];
 
 fs.mkdirSync(OUT, { recursive: true });
@@ -54,7 +56,13 @@ const rows = [];
 for (const viewport of VIEWPORTS) {
   const page = await context.newPage();
   await page.setViewportSize(viewport);
-  page.on('pageerror', (error) => problems.push(`[${viewport.width}] ${error.message}`));
+  page.on('pageerror', (error) => problems.push(`[${viewport.width}] pageerror: ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') problems.push(`[${viewport.width}] console: ${message.text()}`);
+  });
+  page.on('response', (response) => {
+    if (response.status() === 404) problems.push(`[${viewport.width}] 404: ${response.url()}`);
+  });
 
   for (const item of PAGES) {
     // 查询参数里必须带上页面 key：只改 hash 不会触发整页加载，会量到上一个页面
@@ -83,8 +91,8 @@ for (const viewport of VIEWPORTS) {
         };
       }, item.selector);
       rows.push({ viewport: `${viewport.width}x${viewport.height}`, page: item.key, selector: item.selector, ...measured });
-      if (viewport.width === 1920) {
-        await page.screenshot({ path: path.join(OUT, `before-${item.key}.png`) });
+      if (viewport.width === 1920 || viewport.width === 1280) {
+        await page.screenshot({ path: path.join(OUT, `after-${item.key}-${viewport.width}.png`) });
       }
     } catch (error) {
       rows.push({ viewport: `${viewport.width}x${viewport.height}`, page: item.key, error: error.message });

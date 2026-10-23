@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Footprints, Heart, Pause, Play, SlidersHorizontal, Trophy, Volume2, VolumeX } from 'lucide-vue-next';
 import RunnerLeaderboard from './RunnerLeaderboard.vue';
+import AppHeader from './AppHeader.vue';
+const gameNav = computed(() => [{ key: 'leaderboard', label: '排行榜', icon: Trophy }]);
 import { createRunnerScene } from './runner-scene';
 import { createRunnerClock, projectedDistance } from './runner-motion.mjs';
 const props = defineProps({ user: Object });
@@ -178,11 +180,26 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="runner-game">
-    <header class="runner-header">
-      <button class="runner-back" aria-label="返回大厅" :disabled="busy" @click="back"><ArrowLeft :size="18"/><span>返回大厅</span></button>
-      <div class="runner-brand"><Footprints :size="25"/><div><strong>遗迹逃亡</strong><small>TYPE · RUN · EXPLORE</small></div></div>
-      <div class="runner-header-actions"><button class="runner-button runner-quality-button" :aria-label="`${qualityLabel}，点击切换画质`" :title="`${qualityLabel}，点击切换画质`" @click="cycleQuality"><SlidersHorizontal :size="18"/><span>{{ qualityLabel }}</span></button><button class="runner-icon-button" :aria-label="sound ? '关闭音效' : '开启音效'" :title="sound ? '关闭音效' : '开启音效'" @click="toggleSound"><component :is="sound ? Volume2 : VolumeX" :size="19"/></button><button class="runner-button runner-ranking-button" @click="openRanking"><Trophy :size="17"/>排行榜</button></div>
-    </header>
+    <AppHeader
+      title="遗迹逃亡"
+      subtitle="TYPE · RUN · EXPLORE"
+      :icon="Footprints"
+      back-label="返回大厅"
+      :nav="gameNav"
+      :user="props.user"
+      @back="back"
+      @nav="openRanking"
+      @account="emit('login')"
+    >
+      <template #actions>
+        <button class="ah-link" type="button" :aria-label="`${qualityLabel}，点击切换画质`" @click="cycleQuality">
+          <SlidersHorizontal :size="15" />{{ qualityLabel }}
+        </button>
+        <button class="ah-link" type="button" :aria-label="sound ? '关闭音效' : '开启音效'" @click="toggleSound">
+          <component :is="sound ? Volume2 : VolumeX" :size="15" />
+        </button>
+      </template>
+    </AppHeader>
     <main class="runner-layout">
       <section class="runner-stage" aria-label="无限打字逃亡赛场" :class="{ 'is-hit': impact }">
         <div ref="sceneHost" class="runner-canvas"></div>

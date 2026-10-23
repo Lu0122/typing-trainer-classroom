@@ -5,26 +5,46 @@
 
 | 视口 | 页面 | 当前 header | 高度 | scrollHeight / innerHeight | 页面 |
 | --- | --- | --- | --- | --- | --- |
-| 1920x1080 | home | topbar | 104 | 1080 / 1080 | 正常 |
-| 1920x1080 | games | lobby-topbar | 63 | 1080 / 1080 | 正常 |
-| 1920x1080 | rhythm | arena-header | 72 | 1080 / 1080 | 正常 |
-| 1920x1080 | race | arena-header | 64 | 1080 / 1080 | 正常 |
-| 1920x1080 | battle | battle-header | 71 | 1080 / 1080 | 正常 |
-| 1920x1080 | boss | boss-header | 60 | 1080 / 1080 | 正常 |
-| 1920x1080 | chase | chase-topbar | 72 | 1080 / 1080 | 正常 |
-| 1920x1080 | runner | runner-header | 72 | 1080 / 1080 | 正常 |
+| 1920x1080 | home | app-header hero | 104 | 1080 / 1080 | 正常 |
+| 1920x1080 | games | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1920x1080 | rhythm | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1920x1080 | race | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1920x1080 | battle | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1920x1080 | boss | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1920x1080 | chase | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1920x1080 | runner | app-header compact | 56 | 1080 / 1080 | 正常 |
 | 1920x1080 | bug | app-header compact | 56 | 1213 / 1080 | 溢出 |
-| 1920x1080 | competition | competition-header | 68 | 1080 / 1080 | 正常 |
-| 1366x768 | home | topbar | 104 | 768 / 768 | 正常 |
-| 1366x768 | games | lobby-topbar | 63 | 768 / 768 | 正常 |
-| 1366x768 | rhythm | arena-header | 72 | 768 / 768 | 正常 |
-| 1366x768 | race | arena-header | 52 | 768 / 768 | 正常 |
-| 1366x768 | battle | battle-header | 71 | 768 / 768 | 正常 |
-| 1366x768 | boss | boss-header | 60 | 768 / 768 | 正常 |
-| 1366x768 | chase | chase-topbar | 72 | 768 / 768 | 正常 |
-| 1366x768 | runner | runner-header | 72 | 768 / 768 | 正常 |
+| 1920x1080 | competition | app-header compact | 56 | 1080 / 1080 | 正常 |
+| 1440x900 | home | app-header hero | 104 | 900 / 900 | 正常 |
+| 1440x900 | games | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | rhythm | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | race | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | battle | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | boss | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | chase | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | runner | app-header compact | 56 | 900 / 900 | 正常 |
+| 1440x900 | bug | app-header compact | 56 | 1213 / 900 | 溢出 |
+| 1440x900 | competition | app-header compact | 56 | 900 / 900 | 正常 |
+| 1366x768 | home | app-header hero | 104 | 768 / 768 | 正常 |
+| 1366x768 | games | app-header compact | 56 | 768 / 768 | 正常 |
+| 1366x768 | rhythm | app-header compact | 56 | 768 / 768 | 正常 |
+| 1366x768 | race | app-header compact | 56 | 768 / 768 | 正常 |
+| 1366x768 | battle | app-header compact | 56 | 768 / 768 | 正常 |
+| 1366x768 | boss | app-header compact | 56 | 768 / 768 | 正常 |
+| 1366x768 | chase | app-header compact | 56 | 768 / 768 | 正常 |
+| 1366x768 | runner | app-header compact | 56 | 768 / 768 | 正常 |
 | 1366x768 | bug | app-header compact | 56 | 1213 / 768 | 溢出 |
-| 1366x768 | competition | competition-header | 68 | 768 / 768 | 正常 |
+| 1366x768 | competition | app-header compact | 56 | 768 / 768 | 正常 |
+| 1280x720 | home | app-header hero | 104 | 720 / 720 | 正常 |
+| 1280x720 | games | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | rhythm | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | race | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | battle | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | boss | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | chase | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | runner | app-header compact | 56 | 720 / 720 | 正常 |
+| 1280x720 | bug | app-header compact | 56 | 1213 / 720 | 溢出 |
+| 1280x720 | competition | app-header compact | 56 | 720 / 720 | 正常 |
 
 ## 控制台错误
 

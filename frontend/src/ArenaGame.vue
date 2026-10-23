@@ -3,9 +3,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, BarChart3, ChevronDown, CirclePlus, Flag, Gamepad2, Keyboard, Languages, Lightbulb, Medal, Music2, Play, Radio, Timer, Trophy, Users, Volume2, VolumeX } from 'lucide-vue-next';
 import RhythmBoard from './RhythmBoard.vue';
 import RaceBoard from './RaceBoard.vue';
+import AppHeader from './AppHeader.vue';
 import { createRhythmClock, rhythmPhysicalKey } from './rhythm-timing.mjs';
 const props = defineProps({ user: Object, mode: { type: String, required: true } });
-const emit = defineEmits(['back', 'login']);
+const emit = defineEmits(['back', 'login', 'leaderboard']);
+// 游戏页只保留「排行榜」一项，返回大厅由 header 的返回按钮承担
+const gameNav = computed(() => [{ key: 'leaderboard', label: '排行榜', icon: BarChart3 }]);
 const state = ref(null), draft = ref(''), error = ref(''), online = ref(true), busy = ref(false), clock = ref(Date.now());
 // 输入法候选仅用于保持输入框显示；判定、提交和前缀校验只使用已确认的 draft。
 const compositionDraft = ref(null);
@@ -366,7 +369,25 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="arena-game" :class="race ? 'is-race' : 'is-rhythm'">
-    <header class="arena-header"><button ref="backButton" class="arena-back" @click="requestExit"><ArrowLeft :size="17"/>{{ race ? '返回大厅' : '返回大厅' }}</button><div class="arena-brand"><Flag v-if="race" :size="24"/><Music2 v-else :size="24"/><strong>{{ title }}<small>{{ race ? 'TYPE & DRIVE' : 'HIT THE LETTERS' }}</small></strong></div><nav v-if="!race" class="rhythm-topnav" aria-label="游戏模式"><span class="is-active"><Gamepad2 :size="17"/>练习模式</span><span><Trophy :size="17"/>挑战模式</span><span><BarChart3 :size="17"/>排行榜</span></nav><div class="arena-room-status"><span v-if="race">房间：{{ state?.roomNo ?? '--' }}</span><span v-else>{{ state?.phase === 'running' ? '等级荣誉' : '等待来袭' }}</span><span><Users :size="15"/>{{ state?.players.length || 0 }}/{{ state?.capacity || (race ? 4 : 60) }}</span><b><Timer :size="17"/>{{ race && state?.phase === 'waiting' ? '00:00' : time }}</b></div></header>
+    <AppHeader
+      ref="backButton"
+      :title="title"
+      :subtitle="race ? 'TYPE & DRIVE' : 'HIT THE LETTERS'"
+      :icon="race ? Flag : Music2"
+      back-label="返回大厅"
+      :nav="gameNav"
+      :user="props.user"
+      @back="requestExit"
+      @nav="emit('leaderboard')"
+      @account="emit('login')"
+    >
+      <template #status>
+        <span v-if="race">房间 {{ state?.roomNo ?? '--' }}</span>
+        <span v-else>{{ state?.phase === 'running' ? '等级荣誉' : '等待来袭' }}</span>
+        <span><Users :size="15" />{{ state?.players.length || 0 }}/{{ state?.capacity || (race ? 4 : 60) }}</span>
+        <b>{{ race && state?.phase === 'waiting' ? '00:00' : time }}</b>
+      </template>
+    </AppHeader>
     <main class="arena-layout">
       <section class="arena-stage">
         <template v-if="race">

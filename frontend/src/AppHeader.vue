@@ -10,7 +10,7 @@
 //   compact  56px  功能页与游戏页用，隐藏副标题与装饰
 //
 // 四个槽位固定：品牌（props 生成） / 导航（nav 数组） / 状态（status 插槽） / 操作（actions 插槽）。
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { ArrowLeft, UserRound } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -22,29 +22,41 @@ const props = defineProps({
   user: { type: Object, default: null },
   showUser: { type: Boolean, default: true },
   decor: { type: Boolean, default: false },
+  clickableBrand: { type: Boolean, default: false },
   nav: { type: Array, default: () => [] } // [{ key, label, icon, active }]
 });
 
-const emit = defineEmits(['back', 'account', 'nav']);
+const emit = defineEmits(['back', 'account', 'nav', 'brand']);
 
 const hero = computed(() => props.variant === 'hero');
+
+// 弹窗关闭后把焦点还给返回按钮，沿用各游戏页原有的无障碍行为
+const backEl = ref(null);
+defineExpose({ focus: () => backEl.value?.focus() });
 </script>
 
 <template>
   <header class="app-header" :class="variant">
     <div v-if="decor && hero" class="ah-decor" aria-hidden="true"><span>A</span><span>B</span><span>C</span></div>
 
-    <button v-if="backLabel" class="ah-back" type="button" @click="emit('back')">
+    <button v-if="backLabel" ref="backEl" class="ah-back" type="button" @click="emit('back')">
       <ArrowLeft :size="17" />{{ backLabel }}
     </button>
 
-    <div class="ah-brand">
+    <component
+      :is="clickableBrand ? 'button' : 'div'"
+      class="ah-brand"
+      :class="{ 'is-clickable': clickableBrand }"
+      :type="clickableBrand ? 'button' : undefined"
+      :title="clickableBrand ? '返回首页' : undefined"
+      @click="clickableBrand && emit('brand')"
+    >
       <span class="ah-mark"><component :is="icon" v-if="icon" :size="hero ? 24 : 20" /></span>
       <span class="ah-copy">
         <b>{{ title }}</b>
         <small v-if="subtitle">{{ subtitle }}</small>
       </span>
-    </div>
+    </component>
 
     <nav v-if="nav.length" class="ah-nav" aria-label="页面导航">
       <button
@@ -109,6 +121,11 @@ const hero = computed(() => props.variant === 'hero');
 .ah-back:hover{background:rgba(255,255,255,.26)}
 
 .ah-brand{flex:none;display:flex;align-items:center;gap:10px;min-width:0}
+.ah-brand.is-clickable{
+  padding:0;border:0;background:transparent;color:inherit;font:inherit;
+  text-align:left;cursor:pointer;
+}
+.ah-brand.is-clickable:hover .ah-mark{background:rgba(255,255,255,.32)}
 .ah-mark{
   flex:none;display:grid;place-items:center;
   width:38px;height:38px;border-radius:11px;
@@ -169,6 +186,11 @@ const hero = computed(() => props.variant === 'hero');
   border:1px solid rgba(255,255,255,.42);border-radius:999px;
   background:rgba(255,255,255,.14);color:#fff;
   font:inherit;font-size:12px;cursor:pointer;text-decoration:none;white-space:nowrap;
+}
+:slotted(.ah-note){
+  display:inline-block;max-width:34ch;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:rgba(255,255,255,.86);font-size:12px;
 }
 
 @media (max-width:1440px){

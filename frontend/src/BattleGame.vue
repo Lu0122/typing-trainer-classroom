@@ -2,9 +2,11 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { ArrowDown, BarChart3, ChevronRight, FileText, Flag, Flame, Gauge, Keyboard, Send, Target, Users, Timer, Trophy, Volume2, Zap } from 'lucide-vue-next';
 import BattleMap from './BattleMap.vue';
+import AppHeader from './AppHeader.vue';
 import './battle.css';
 const props=defineProps({ user:Object });
-const emit=defineEmits(['back','login']);
+const emit=defineEmits(['back','login','leaderboard']);
+const gameNav = computed(() => [{ key: 'leaderboard', label: '排行榜', icon: Trophy }]);
 const state=ref(null), task=ref(null), input=ref(''), error=ref(''), busy=ref(false), characterSending=ref(false), connected=ref(true), result=ref(null), dismissed=ref(''), attackPulse=ref(''), globalAnnouncement=ref(null), leaveConfirmOpen=ref(false), leaving=ref(false), leftCleanly=ref(false), activityPinned=ref(true), activityNewCount=ref(0), activityExpanded=ref(false), activityListEl=ref(null);
 const inputEl=ref(null);
 let poll, pending=false, stopped=false, attackPulseTimer, characterSendTimer, broadcastTimer, queuedTicket='';
@@ -141,7 +143,23 @@ onBeforeUnmount(()=>{stopped=true;clearTimeout(characterSendTimer);clearTimeout(
 <template>
 <div class="battle-game" :class="{'attack-pulse-red':attackPulse==='red','attack-pulse-blue':attackPulse==='blue'}">
   <transition name="battle-broadcast"><div v-if="globalAnnouncement" class="battle-broadcast-overlay" :class="globalAnnouncement.team" role="status" aria-live="polite"><div class="battle-broadcast-card"><span>全场播报</span><strong>{{ globalAnnouncement.title }}</strong><small>{{ globalAnnouncement.detail }}</small></div></div></transition>
-  <header class="battle-header"><div class="battle-brand"><Keyboard :size="42"/><div><h1><em>红</em><b>蓝</b>打字占领战</h1><p>打出你的速度 · 占领更多土地</p></div></div><div class="battle-header-notice"><Flag :size="14"/><span>{{connected?(state?.notice||'选择阵营，两人加入后自动开始。'):'连接中断，正在重连…'}}</span></div><div class="battle-status"><span>公共房间<strong>1024</strong></span><span>当前热度<strong>{{ state?.phase==='running'?'激战中':state?.phase==='finished'?'已结束':'等待加入' }}</strong></span><span>对局用时<strong>{{ elapsed }}</strong></span><span>在线人数<strong>{{ state?.online||0 }}/60</strong></span></div><button class="battle-back" @click="requestLeave">返回游戏大厅</button></header>
+      <AppHeader
+      title="打字占领战"
+      subtitle="红蓝对抗"
+      :icon="Keyboard"
+      back-label="返回大厅"
+      :nav="gameNav"
+      :user="props.user"
+      @back="requestLeave"
+      @nav="emit('leaderboard')"
+      @account="emit('login')"
+    >
+      <template #status>
+        <span class="ah-note">{{ connected ? (state?.notice || '选择阵营，两人加入后自动开始。') : '连接中断，正在重连…' }}</span>
+        <span>在线 <b>{{ state?.online || 0 }}/60</b></span>
+        <b>{{ elapsed }}</b>
+      </template>
+    </AppHeader>
   <div class="battle-layout">
     <aside v-for="team in ['red','blue']" :key="team" class="battle-team" :class="team"><header><Flag :size="38"/><div><h2>{{team==='red'?'红方':'蓝方'}}</h2><p>{{team==='red'?'团结打字 · 扩大领地':'全力以赴 · 守护领地'}}</p></div></header><dl><div><dt>队伍人数</dt><dd>{{teams[team].count}} <small>人</small></dd></div><div><dt>平均速度</dt><dd>{{teams[team].speed}} <small>字/分</small></dd></div><div><dt>提交准确率</dt><dd>{{teams[team].accuracy}}%</dd></div><div><dt>攻击次数</dt><dd>{{teams[team].attacks}}</dd></div><div class="area"><dt>当前占领</dt><dd>{{teams[team].area}}%</dd></div></dl><progress :value="teams[team].area" max="100"/><section class="battle-roster"><header><strong>实时排名</strong><small>{{teamPlayers(team).length}} 人在线</small></header><div v-if="teamPlayers(team).length" v-for="(player,index) in teamPlayers(team)" :key="player.id" class="battle-roster-row"><span class="roster-rank">{{index+1}}</span><span class="roster-avatar"><img v-if="player.avatarUrl" :src="player.avatarUrl" :alt="`${player.name}的头像`"/><b v-else>{{player.name?.slice(0,1)}}</b></span><span class="roster-copy"><strong>{{player.name}}<em v-if="(player.multiplier||1)>1" class="roster-power">×{{player.multiplier}}</em></strong><small>{{player.speed}} 字/分 · 第 {{player.sequence || 1}} 段{{(player.combo||0)>0?` · ${player.combo} 连击`:''}}</small></span></div><div v-else class="battle-roster-empty">等待队员加入</div></section><button :disabled="busy||state?.phase==='running'&&!!state?.me" @click="join(team)">{{state?.me?.team===team?'你在'+(team==='red'?'红方':'蓝方'):'加入'+(team==='red'?'红方':'蓝方')}}</button></aside>
     <main class="battle-center">

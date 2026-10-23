@@ -1,8 +1,22 @@
 <script setup>
+import { computed } from 'vue';
 import { ArrowRight, BarChart3, Bug, CarFront, CircleCheck, Flag, Footprints, Gamepad2, Info, Keyboard, Music2, Play, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
+import AppHeader from './AppHeader.vue';
 
 const props = defineProps({ user: { type: Object, default: null } });
 const emit = defineEmits(['select', 'back', 'growth', 'leaderboard', 'account', 'bug-report']);
+
+// 品牌位已经写着「游戏大厅」，导航里不再重复一项；各游戏页精简为只留「排行榜」
+const navItems = computed(() => [
+  { key: 'growth', label: '我的战绩', icon: Trophy },
+  { key: 'leaderboard', label: '排行榜', icon: BarChart3 },
+  { key: 'achievements', label: '成就任务', icon: CircleCheck }
+]);
+
+function handleNav(key) {
+  if (key === 'leaderboard') emit('leaderboard');
+  else if (key === 'growth' || key === 'achievements') emit('growth');
+}
 
 function joinAction() {
   // 已登录直接进第一个玩法，未登录先去登录/注册
@@ -22,39 +36,22 @@ function trackGlow(event) {
 </script>
 <template>
   <section class="game-lobby">
-    <header class="lobby-topbar">
-      <div class="lobby-topbar-inner">
-        <button class="lobby-brand" type="button" title="返回首页" @click="$emit('back')">
-          <span class="lobby-logo" aria-hidden="true">
-            <svg viewBox="0 0 40 40">
-              <defs>
-                <linearGradient id="lgLobbyLogo" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#58a6f7"/><stop offset="1" stop-color="#2d74d4"/>
-                </linearGradient>
-              </defs>
-              <rect width="40" height="40" rx="11" fill="url(#lgLobbyLogo)"/>
-              <path d="M17.8 27.4V13.4l12.4-2.5v13.7" fill="none" stroke="#fff" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="15" cy="27.6" r="3.5" fill="#fff"/><circle cx="27.4" cy="24.8" r="3.5" fill="#fff"/>
-            </svg>
-          </span>
-          <span class="lobby-brand-copy"><b>字母音游</b><small>TYPE THE LETTERS</small></span>
-        </button>
-        <nav class="lobby-nav" aria-label="页面导航">
-          <button class="is-active" type="button" aria-current="page"><Gamepad2 :size="16"/>游戏大厅</button>
-          <button type="button" @click="$emit('growth')"><Trophy :size="16"/>我的战绩</button>
-          <button type="button" @click="$emit('leaderboard')"><BarChart3 :size="16"/>排行榜</button>
-          <button type="button" @click="$emit('growth')"><CircleCheck :size="16"/>成就任务</button>
-        </nav>
-        <div class="lobby-actions">
-          <button class="lobby-bug-link" type="button" aria-label="Bug反馈" @click="$emit('bug-report')"><Bug :size="15"/><span>Bug反馈</span></button>
-          <button class="lobby-account" type="button" @click="$emit('account')">
-            <span class="lobby-avatar"><img v-if="user?.avatarUrl" :src="user.avatarUrl" :alt="`${user.displayName}的头像`"/><UsersRound v-else :size="14"/></span>
-            <b>{{ user?.displayName || '登录 / 注册' }}</b>
-          </button>
-          <button class="lobby-cta" type="button" aria-label="一起打字，一起上场" @click="joinAction"><Play :size="14"/><span class="cta-txt">一起打字，一起上场</span></button>
-        </div>
-      </div>
-    </header>
+    <AppHeader
+      title="游戏大厅"
+      subtitle="GAME LOBBY"
+      :icon="Gamepad2"
+      back-label="首页"
+      :nav="navItems"
+      :user="props.user"
+      @back="$emit('back')"
+      @nav="handleNav"
+      @account="emit('account')"
+    >
+      <template #actions>
+        <button class="ah-link" type="button" @click="emit('bug-report')"><Bug :size="15" />Bug 反馈</button>
+        <button class="ah-cta" type="button" @click="joinAction"><Play :size="14" />一起打字，一起上场</button>
+      </template>
+    </AppHeader>
 
     <div class="lobby-scroll">
       <div class="lobby-inner">
@@ -244,26 +241,6 @@ function trackGlow(event) {
 
 /* ---- 顶栏：白色品牌区 + 导航胶囊 + 账号/CTA，固定不随内容滚动 ---- */
 .lobby-topbar{flex:none;position:relative;z-index:20;background:#fff;border-bottom:1px solid #e8eef7;box-shadow:0 4px 16px #2b5b8f0a}
-.lobby-topbar-inner{display:flex;align-items:center;gap:34px;width:min(1280px,calc(100% - 48px));margin:auto;height:62px}
-.lobby-brand{display:flex;align-items:center;gap:11px;border:0;background:transparent;padding:0;cursor:pointer;text-align:left}
-.lobby-logo{width:36px;height:36px;display:block;filter:drop-shadow(0 3px 8px #2d74d44d)}
-.lobby-logo svg{width:100%;height:100%;display:block}
-.lobby-brand-copy b{display:block;font-size:17px;font-weight:800;color:#1c2b3a;letter-spacing:.02em}
-.lobby-brand-copy small{display:block;margin-top:1px;font-size:9px;font-weight:700;letter-spacing:2.4px;color:#97a9bf;white-space:nowrap}
-.lobby-nav{display:flex;align-items:center;gap:6px}
-.lobby-bug-link{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #dce8f5;border-radius:999px;background:#fff;color:#587895;font-size:11px;cursor:pointer}
-.lobby-bug-link:hover{border-color:#9ec3f0;background:#f4f9ff;color:#347bd0}
-.lobby-nav button{display:flex;align-items:center;gap:7px;padding:8px 15px;border:0;border-radius:999px;background:transparent;color:#5c7691;font-size:13px;font-weight:600;cursor:pointer;transition:background .18s,color .18s}
-.lobby-nav button:hover{background:#f0f6fd;color:#2f6bb5}
-.lobby-nav button.is-active{background:#e8f1fe;color:#2f7bd9}
-.lobby-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
-.lobby-account{display:flex;align-items:center;gap:8px;padding:6px 13px 6px 7px;border:1px solid #e2ebf6;border-radius:999px;background:#fff;color:#274a6e;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .18s,box-shadow .18s}
-.lobby-account:hover{border-color:#bcd4ef;box-shadow:0 3px 10px #2b5b8f14}
-.lobby-avatar{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#eaf2fd;color:#4a86d8;overflow:hidden}
-.lobby-avatar img{width:100%;height:100%;object-fit:cover}
-.lobby-cta{display:flex;align-items:center;gap:8px;padding:9px 17px;border:0;border-radius:999px;background:linear-gradient(120deg,#3f8ae4,#2c6fd0);color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 14px #2c6fd038;transition:transform .18s,box-shadow .18s,filter .18s}
-.lobby-cta:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 9px 20px #2c6fd04d}
-.lobby-cta:active{transform:translateY(0) scale(.98)}
 
 /* ---- 内容区：卡片列表超出可视区域时在此滚动 ---- */
 .lobby-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c8d9ee transparent}
@@ -358,8 +335,8 @@ function trackGlow(event) {
 .lobby-foot>span i{width:1px;height:11px;background:#d4e0ef}
 
 /* ---- 响应式 ---- */
-@media(max-width:1200px){.cta-txt{display:none}.lobby-topbar-inner{gap:16px}.lobby-nav button{white-space:nowrap;padding:8px 10px}}
-@media(max-width:960px){.lobby-nav{display:none}.lobby-hero h1{font-size:32px}}
+@media(max-width:1200px){}
+@media(max-width:960px){.lobby-hero h1{font-size:32px}}
 @media(max-width:680px){
   .game-choices{grid-template-columns:1fr}
   .lobby-hero h1{font-size:28px}
@@ -369,10 +346,9 @@ function trackGlow(event) {
   .game-choice footer{flex-wrap:wrap;gap:12px}
   .choice-meta{flex-wrap:wrap}
   .choice-meta i,.game-choice footer strong{white-space:nowrap}
-  .lobby-topbar-inner{gap:12px;width:calc(100% - 32px)}
   .lobby-foot{flex-direction:column;align-items:flex-start;gap:8px}
 }
-@media(max-width:560px){.lobby-brand-copy small,.lobby-bug-link span{display:none}.lobby-actions{gap:6px}.lobby-account b{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lobby-cta{padding:9px 12px}}
+@media(max-width:560px){}
 @media(prefers-reduced-motion:reduce){
   .game-choice,.game-choice footer strong,.lobby-cta,.lobby-account{transition:none}
   .game-choice:hover{transform:none}

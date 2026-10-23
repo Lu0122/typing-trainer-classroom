@@ -1,8 +1,10 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, Crosshair, Swords, Timer, Trophy, Users, Zap } from 'lucide-vue-next';
+import AppHeader from './AppHeader.vue';
 const props = defineProps({ user: Object });
-const emit = defineEmits(['back', 'login']);
+const emit = defineEmits(['back', 'login', 'leaderboard']);
+const gameNav = computed(() => [{ key: 'leaderboard', label: '排行榜', icon: Trophy }]);
 const state = ref(null), draft = ref(''), message = ref(''), connected = ref(true), busy = ref(false);
 const editor = ref(null), leaveDialog = ref(null), returnButton = ref(null), hit = ref(false), clock = ref(Date.now());
 let poll, clockTimer, sendTimer, hitTimer, reading = null, stopped = false, composing = false, advanceRequested = false, cleanLeave = false;
@@ -127,11 +129,24 @@ onBeforeUnmount(() => { stopped = true; clearInterval(poll); clearInterval(clock
 
 <template>
   <div class="boss-game">
-    <header class="boss-header">
-      <button ref="returnButton" class="boss-back" @click="requestLeave"><ArrowLeft :size="17"/>返回游戏大厅</button>
-      <div class="boss-brand"><Swords :size="23"/><strong>极速淘汰赛</strong></div>
-      <div class="boss-session"><span class="boss-phase"><i class="boss-status-dot"></i>{{ phaseLabel }}</span><span><Users :size="16"/>幸存 {{ activeCount }}/{{ state?.players.length || 0 }}</span><b><Timer :size="16"/>{{ timeLabel }}</b></div>
-    </header>
+    <AppHeader
+      ref="returnButton"
+      title="极速淘汰赛"
+      subtitle="SURVIVAL"
+      :icon="Swords"
+      back-label="返回大厅"
+      :nav="gameNav"
+      :user="props.user"
+      @back="requestLeave"
+      @nav="emit('leaderboard')"
+      @account="emit('login')"
+    >
+      <template #status>
+        <span>{{ phaseLabel }}</span>
+        <span><Users :size="15" />幸存 {{ activeCount }}/{{ state?.players.length || 0 }}</span>
+        <b>{{ timeLabel }}</b>
+      </template>
+    </AppHeader>
 
     <main class="boss-layout">
       <section class="boss-arena elimination-arena" :class="{ 'is-hit': hit, 'is-victory': state?.result?.outcome === 'survivor' }">
