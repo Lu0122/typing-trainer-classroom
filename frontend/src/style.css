@@ -493,3 +493,12 @@
   .is-beginner-page .lesson-nav .course-select{flex:0 0 100%;justify-content:flex-end;margin-left:0;white-space:nowrap}
   .is-beginner-page .lesson-nav .course-select select{min-width:0;max-width:210px}
 }
+
+/* 挑战模式：点「开始挑战」后的全屏倒计时。
+   半透明遮罩，底下的文章能提前扫一眼；归零后自动把焦点交回输入行。 */
+.challenge-countdown{position:fixed;inset:0;z-index:90;display:grid;place-content:center;justify-items:center;gap:6px;background:rgba(9,28,50,.52);animation:challenge-countdown-in .18s ease both}
+.challenge-countdown strong{color:#fff;font:800 clamp(104px,17vw,220px)/1 Consolas,monospace;text-shadow:0 10px 44px rgba(4,18,36,.45);animation:challenge-countdown-pop .95s ease both}
+.challenge-countdown small{color:#ffffffd9;font-size:14px;letter-spacing:6px;text-indent:6px}
+@keyframes challenge-countdown-in{from{opacity:0}to{opacity:1}}
+@keyframes challenge-countdown-pop{0%{transform:scale(.62);opacity:.25}28%{transform:scale(1);opacity:1}100%{transform:scale(1.06);opacity:.92}}
+@media (prefers-reduced-motion:reduce){.challenge-countdown,.challenge-countdown strong{animation:none}}

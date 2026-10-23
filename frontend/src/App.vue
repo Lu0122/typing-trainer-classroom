@@ -35,6 +35,10 @@ const challengeInputEl = ref(null);
 const challengeAnchorEl = ref(null);
 const challengeResult = ref(null);
 const challengeSubmitting = ref(false);
+// 点「开始挑战」后先走一段全屏倒计时，服务端也把 startedAt 顺延同样的时长
+const challengeCountdown = ref(0);
+const challengeCountdownMs = 3000;
+let challengeCountdownTimer = null;
 const leaderboardOpen = ref(false);
 const leaderboardRows = ref([]);
 const leaderboardTotals = reactive({ topScore: 0, participants: 0 });
@@ -224,7 +228,13 @@ const englishCurrentCode = computed(() => {
   if (/[0-9]/.test(char)) return 'Digit' + char;
   return { ' ': 'Space', ',': 'Comma', '.': 'Period', '?': 'Slash', "'": 'Quote', ';': 'Semicolon' }[char] || '';
 });
-const challengeRemaining = computed(() => challenge.value ? Math.max(0, Math.ceil((challenge.value.expiresAt - now.value) / 1000)) : 60);
+// 倒计时阶段 startedAt 还在未来，用 startedAt 当前沿，剩余时间固定显示 60
+const challengeRemaining = computed(() => {
+  if (!challenge.value) return 60;
+  const from = Math.max(now.value, challenge.value.startedAt);
+  return Math.max(0, Math.min(60, Math.ceil((challenge.value.expiresAt - from) / 1000)));
+});
+const countingDown = computed(() => challengeCountdown.value > 0);
 const activeChallengeMode = computed(() => challenge.value?.mode || (page.value === 'challenge-english' ? 'english' : 'pinyin'));
 const activeChallengeLabel = computed(() => activeChallengeMode.value === 'english' ? '英文挑战' : '拼音挑战');
 const challengeTargetCharacters = computed(() => Array.from(challenge.value?.passage?.content || ''));
@@ -528,18 +538,49 @@ function restoreChallenge() {
     nextTick(() => challengeInputEl.value?.focus());
   } catch { localStorage.removeItem(challengeStorageKey); }
 }
+// 首页/挑战首页点卡片：只切到挑战页，先给用户看介绍和「开始挑战」按钮，不建会话
+function openChallengeMode(nextMode = 'pinyin') {
+  challengeMode.value = nextMode === 'english' ? 'english' : 'pinyin';
+  challengeResult.value = null;
+  stopChallengeCountdown();
+  setPage(`challenge-${challengeMode.value}`);
+}
+
+function stopChallengeCountdown() {
+  if (challengeCountdownTimer) clearInterval(challengeCountdownTimer);
+  challengeCountdownTimer = null;
+  challengeCountdown.value = 0;
+}
+
+// 倒计时长度直接取服务端 startedAt 与本地时间的差，自动扣掉请求往返延迟
+function runChallengeCountdown(milliseconds) {
+  stopChallengeCountdown();
+  const total = Math.max(0, milliseconds);
+  if (!total) { focusChallengeInput(); return; }
+  challengeCountdown.value = Math.ceil(total / 1000);
+  const startedAt = Date.now();
+  challengeCountdownTimer = setInterval(() => {
+    const left = total - (Date.now() - startedAt);
+    challengeCountdown.value = Math.max(0, Math.ceil(left / 1000));
+    if (left <= 0) {
+      stopChallengeCountdown();
+      focusChallengeInput();
+    }
+  }, 80);
+}
+
 async function startChallenge(nextMode = challengeMode.value) {
   challengeMode.value = nextMode === 'english' ? 'english' : 'pinyin';
   challengeResult.value = null;
   if (!user.value) { authView.value = 'login'; authOpen.value = true; authMessage.value = '请先登录，成绩才能计入排行榜。'; return; }
   challengeSubmitting.value = true;
   try {
-    const data = await requestJSON('/api/challenges', { method: 'POST', body: JSON.stringify({ mode: challengeMode.value }) });
+    const data = await requestJSON('/api/challenges', { method: 'POST', body: JSON.stringify({ mode: challengeMode.value, startInMs: challengeCountdownMs }) });
     challenge.value = { ...data, mode: data.mode || challengeMode.value, userId: user.value.id };
     challengeInput.value = '';
     setPage(`challenge-${challenge.value.mode}`);
-    nextTick(() => challengeInputEl.value?.focus());
     persistChallenge();
+    runChallengeCountdown(challenge.value.startedAt - Date.now());
   } catch (error) { authMessage.value = error.message; }
   finally { challengeSubmitting.value = false; }
 }
@@ -581,7 +622,7 @@ async function loadChallengeLeaderboards() {
   challengeLeaderboardLoading.value = false;
 }
 async function openLeaderboard() { await loadLeaderboard(); leaderboardOpen.value = true; }
-function openChallengePage() { challengeResult.value = null; challengeMode.value = 'pinyin'; setPage('challenge-home'); loadChallengeLeaderboards(); }
+function openChallengePage() { challengeResult.value = null; challengeMode.value = 'pinyin'; stopChallengeCountdown(); setPage('challenge-home'); loadChallengeLeaderboards(); }
 function focusChallengeInput() { nextTick(() => { positionChallengeCapture(); challengeInputEl.value?.focus(); }); }
 function challengeTypedLine(segment) { return challengeTypedCharacters.value.slice(segment.offset, segment.offset + segment.line.length); }
 function challengeCaretVisible(segment) { return challengeTypedCharacters.value.length >= segment.offset && challengeTypedCharacters.value.length <= segment.offset + segment.line.length; }
@@ -748,7 +789,7 @@ onMounted(async () => {
     if (challenge.value && !challengeSubmitting.value && now.value >= challenge.value.expiresAt) submitChallenge();
   },250);
 });
-onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.clearInterval(timer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); });
+onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.clearInterval(timer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); stopChallengeCountdown(); });
 </script>
 <template>
 <BattleGame v-if="page === 'battle'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
@@ -873,8 +914,8 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
     <div class="challenge-home-main">
       <div class="challenge-welcome"><div class="challenge-number"><strong>60</strong><small>SECONDS</small></div><div class="challenge-welcome-copy"><p class="eyebrow">挑战模式 · 文章竞速</p><h1>一分钟，挑战新纪录</h1><p>选择英文或拼音文章，在 60 秒内持续输入。时间结束后自动结算，并将最佳成绩提交到对应排行榜。</p><div class="challenge-hero-meta"><span><Timer :size="14"/>固定 60 秒</span><span><ArrowUpRight :size="14"/>按正确字数排名</span></div></div></div>
       <div class="challenge-mode-list">
-        <button type="button" class="challenge-mode-card english" @click="startChallenge('english')"><span class="challenge-mode-icon">EN</span><span class="challenge-mode-copy"><strong>英文挑战</strong><small>输入英文文章，挑战速度与准确率</small></span><span class="challenge-mode-arrow">开始 →</span></button>
-        <button type="button" class="challenge-mode-card pinyin" @click="startChallenge('pinyin')"><span class="challenge-mode-icon">拼</span><span class="challenge-mode-copy"><strong>中文挑战</strong><small>输入中文文章，争取更高正确字数</small></span><span class="challenge-mode-arrow">开始 →</span></button>
+        <button type="button" class="challenge-mode-card english" @click="openChallengeMode('english')"><span class="challenge-mode-icon">EN</span><span class="challenge-mode-copy"><strong>英文挑战</strong><small>输入英文文章，挑战速度与准确率</small></span><span class="challenge-mode-arrow">开始 →</span></button>
+        <button type="button" class="challenge-mode-card pinyin" @click="openChallengeMode('pinyin')"><span class="challenge-mode-icon">拼</span><span class="challenge-mode-copy"><strong>中文挑战</strong><small>输入中文文章，争取更高正确字数</small></span><span class="challenge-mode-arrow">开始 →</span></button>
       </div>
     </div>
     <aside class="challenge-rankings" aria-label="挑战排行榜">
@@ -902,9 +943,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
         <div class="challenge-typed-line" aria-label="实际输入" @mousedown.prevent="focusChallengeInput"><span v-for="(char,index) in challengeTypedLine(segment)" :key="index" :class="{correct:char===challengeTargetCharacters[segment.offset+index],wrong:char!==challengeTargetCharacters[segment.offset+index]}">{{ char }}</span><span v-if="challengeCaretVisible(segment)" class="english-caret" aria-hidden="true"></span></div>
       </div>
     </div>
-    <textarea ref="challengeInputEl" v-model="challengeInput" class="challenge-input-capture" aria-label="挑战实际输入" autofocus :disabled="challengeRemaining<=0" :placeholder="activeChallengeMode === 'english' ? '输入英文文章' : '输入中文文章'" @input="persistChallenge" @paste.prevent/>
+    <textarea ref="challengeInputEl" v-model="challengeInput" class="challenge-input-capture" aria-label="挑战实际输入" autofocus :disabled="challengeRemaining<=0 || countingDown" :placeholder="activeChallengeMode === 'english' ? '输入英文文章' : '输入中文文章'" @input="persistChallenge" @paste.prevent/>
     </div>
     <StatsBar :seconds="Math.max(0, 60 - challengeRemaining)" :speed="challengeSpeed" :progress="Math.min(100, Math.round(challengeTypedCharacters.length / Math.max(1, challengeTargetCharacters.length) * 100))" :accuracy="challengeAccuracy"/>
+    <div v-if="countingDown" class="challenge-countdown" role="status" aria-live="assertive">
+      <strong>{{ challengeCountdown }}</strong>
+      <small>准备开始</small>
+    </div>
   </section>
   <section v-else class="challenge-result"><Trophy :size="46"/><h2>{{ challengeResult.error ? '提交失败' : '挑战完成' }}</h2><p v-if="challengeResult.error">{{ challengeResult.error }}</p><template v-else><strong>{{ challengeResult.score }}</strong><span>正确字数 · 正确率 {{ Math.round(challengeResult.accuracy) }}%</span><p>个人最好 {{ challengeResult.personalBest }} 字 · 排名 {{ challengeResult.rank || '-' }}</p></template><button type="button" @click="startChallenge(activeChallengeMode)">再来一次</button></section>
 </section>

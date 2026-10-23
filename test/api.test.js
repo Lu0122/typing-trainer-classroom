@@ -140,6 +140,37 @@ test('starts and submits a server-timed challenge for the authenticated student'
   context.db.close();
 });
 
+test('delays the challenge clock when the client asks for a countdown', async () => {
+  const context = setup();
+  const { agent } = await registerStudent(context.app);
+  const start = await agent.post('/api/challenges').send({ startInMs: 3000 }).expect(201);
+  assert.equal(start.body.startInMs, 3000);
+  assert.equal(start.body.startedAt, context.now() + 3000);
+  assert.equal(start.body.expiresAt, context.now() + 3000 + 60_000);
+
+  // 倒计时还没走完就想提交，应当被拒绝
+  await agent.post(`/api/challenges/${start.body.sessionId}/submit`)
+    .send({ typedText: start.body.passage.content.slice(0, 5) })
+    .expect(400);
+
+  // 3 秒倒计时 + 60 秒作答之后可以正常结算
+  context.advance(63_000);
+  const submit = await agent.post(`/api/challenges/${start.body.sessionId}/submit`)
+    .send({ typedText: start.body.passage.content.slice(0, 8) }).expect(201);
+  assert.equal(submit.body.score, 8);
+  context.db.close();
+});
+
+test('clamps startInMs to the supported range', async () => {
+  const context = setup();
+  const { agent } = await registerStudent(context.app);
+  const tooBig = await agent.post('/api/challenges').send({ startInMs: 999_999 }).expect(201);
+  assert.equal(tooBig.body.startInMs, 5000);
+  const negative = await agent.post('/api/challenges').send({ startInMs: -2000 }).expect(201);
+  assert.equal(negative.body.startInMs, 0);
+  context.db.close();
+});
+
 test('supports separate English and pinyin challenge modes and leaderboards', async () => {
   const context = setup();
   const { agent } = await registerStudent(context.app);

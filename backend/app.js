@@ -714,12 +714,14 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     if (!passage) return response.status(503).json({ message: '暂无可用的竞速文章' });
 
     const id = crypto.randomUUID();
-    const startedAt = now();
+    // startInMs 让前端可以先放 3 秒倒计时再开始计时；默认 0 = 与旧行为完全一致。
+    const startInMs = Math.min(5_000, Math.max(0, Number.parseInt(request.body?.startInMs, 10) || 0));
+    const startedAt = now() + startInMs;
     const expiresAt = startedAt + CHALLENGE_DURATION_MS;
     db.prepare('INSERT INTO challenge_sessions (id, passage_id, user_id, started_at, expires_at) VALUES (?, ?, ?, ?, ?)')
       .run(id, passage.id, request.user.id, startedAt, expiresAt);
     db.prepare('DELETE FROM challenge_sessions WHERE started_at < ?').run(startedAt - 24 * 60 * 60 * 1000);
-    return response.status(201).json({ sessionId: id, startedAt, expiresAt, durationSeconds: 60, mode, passage });
+    return response.status(201).json({ sessionId: id, startedAt, expiresAt, startInMs, durationSeconds: 60, mode, passage });
   });
 
   app.post('/api/challenges/:id/submit', requireUser, (request, response) => {
