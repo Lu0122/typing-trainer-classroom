@@ -538,3 +538,9 @@
 @media(max-width:620px){.diagnostic-drill-panel>header{align-items:flex-start;flex-direction:column;min-height:0;padding:24px 20px}.diagnostic-drill-panel .drill-header-main h1{font-size:26px}.diagnostic-drill-panel .drill-progress{align-self:flex-end}.drill-key-tags{margin-top:14px}.diagnostic-section-label{margin-left:0;margin-right:0}.diagnostic-target{min-height:130px;padding:17px;font-size:18px;line-height:1.8}.diagnostic-drill-footer{grid-template-columns:1fr 1fr}.diagnostic-drill-footer>span:nth-child(3){grid-column:1 / -1}.diagnostic-drill-footer .diagnostic-primary{grid-column:1 / -1;width:100%}}
 .diagnostic-target span:not(.correct):not(.wrong):not(.current){color:#718695;background:#f6f9fb}
 .diagnostic-target span.current{color:#fff;border-bottom:0;background:#1689bd;box-shadow:0 0 0 3px #1689bd2b,0 4px 10px #1689bd35;font-weight:800}
+@media(max-width:720px){
+  .is-beginner-page .lesson-nav{display:flex;flex-wrap:wrap;align-items:center;min-height:0;row-gap:8px;margin-bottom:12px}
+  .is-beginner-page .lesson-nav>button,.is-beginner-page .lesson-nav>span,.is-beginner-page .lesson-nav>b,.is-beginner-page .lesson-nav>strong{flex:none;white-space:nowrap}
+  .is-beginner-page .lesson-nav .course-select{flex:0 0 100%;justify-content:flex-end;margin-left:0;white-space:nowrap}
+  .is-beginner-page .lesson-nav .course-select select{min-width:0;max-width:210px}
+}

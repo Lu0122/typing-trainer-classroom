@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { scoreTyping, visibleCharacters } = require('../src/scoring');
+const { scoreTyping, visibleCharacters } = require('../backend/scoring');
 
 test('ignores whitespace when counting Chinese typing characters', () => {
   assert.deepEqual(visibleCharacters('你 好\n中国'), ['你', '好', '中', '国']);

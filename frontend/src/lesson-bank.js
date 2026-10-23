@@ -71,12 +71,20 @@ export const extraEnglishCopy = {
   ]
 };
 
-const syllableSet=(selector,pairs,target)=>({level:'第二关',title:'音节练习',selector,syllables:pairs.map(([pinyin,hanzi])=>({pinyin,hanzi})),target});
+const syllableSet=(selector,pairs,target=pairs.map(([pinyin])=>pinyin).join(''))=>({level:'第二关',title:'音节练习',selector,syllables:pairs.map(([pinyin,hanzi])=>({pinyin,hanzi})),target});
 export const extraPinyinCopy = {
   'pinyin-syllable': [
     syllableSet('声母巩固一',[['q','七'],['w','我'],['e','鹅'],['r','日'],['t','特'],['y','一'],['u','乌'],['i','衣'],['o','喔'],['p','坡']],'qwertyuiop'),
     syllableSet('声母巩固二',[['a','啊'],['s','思'],['d','得'],['f','佛'],['g','哥'],['h','喝'],['j','家'],['k','科'],['l','了'],['m','摸']],'asdfghjklm'),
-    syllableSet('下排巩固',[['z','字'],['x','西'],['c','次'],['v','鱼'],['b','玻'],['n','呢'],['m','摸'],['a','啊'],['s','思'],['d','得']],'zxcvbnmasd')
+    syllableSet('下排巩固',[['z','字'],['x','西'],['c','次'],['v','鱼'],['b','玻'],['n','呢'],['m','摸'],['a','啊'],['s','思'],['d','得']],'zxcvbnmasd'),
+    syllableSet('b p m f 拼读',[['ba','八'],['bo','波'],['bai','百'],['ban','班'],['pa','怕'],['po','破'],['pai','拍'],['pan','盼'],['ma','马'],['mo','摸'],['mai','买'],['man','满'],['fa','发'],['fo','佛'],['fan','饭']]),
+    syllableSet('d t n l 拼读',[['da','大'],['de','得'],['dai','带'],['dan','单'],['ta','他'],['te','特'],['tai','太'],['tan','谈'],['na','那'],['ne','呢'],['nai','奶'],['nan','南'],['la','拉'],['le','乐'],['lan','蓝']]),
+    syllableSet('g k h 拼读',[['ga','嘎'],['ge','哥'],['gai','该'],['gan','干'],['ka','卡'],['ke','科'],['kai','开'],['kan','看'],['ha','哈'],['he','河'],['hai','海'],['han','汉']]),
+    syllableSet('j q x 拼读',[['ji','机'],['jia','家'],['jian','见'],['jing','京'],['qi','七'],['qia','恰'],['qian','前'],['qing','请'],['xi','西'],['xia','下'],['xian','先'],['xing','星']]),
+    syllableSet('zh ch sh r 拼读',[['zhi','知'],['zhang','张'],['zhen','真'],['zhou','周'],['chi','吃'],['chang','长'],['chen','晨'],['chuan','船'],['shi','是'],['shang','上'],['shen','深'],['shui','水'],['ri','日'],['ren','人'],['rang','让']]),
+    syllableSet('z c s 拼读',[['zi','字'],['zan','赞'],['zong','总'],['zou','走'],['ci','词'],['cai','菜'],['cong','从'],['cou','凑'],['si','四'],['san','三'],['song','松'],['sou','搜']]),
+    syllableSet('复韵母与整体认读',[['ai','爱'],['ei','诶'],['ao','奥'],['ou','欧'],['an','安'],['en','恩'],['ang','昂'],['er','儿'],['yi','一'],['wu','五'],['yu','鱼'],['ye','夜']]),
+    syllableSet('综合长音节',[['chuang','窗'],['guang','光'],['shuang','双'],['xiong','熊'],['qiao','桥'],['lian','连'],['yuan','圆'],['yue','月'],['nv','女'],['lv','绿'],['yun','云'],['qiu','秋']])
   ],
   'pinyin-word': [
     {level:'第三关',title:'词组练习',selector:'校园词组',lines:['校园 教室 老师 学生 课程 作业 实训 课堂 课间 书本 黑板','电脑 键盘 鼠标 屏幕 文件 程序 网络 数据 项目 小组 作品','认真 听讲 思考 练习 复习 预习 提问 回答 讨论 展示 总结','按时 完成 检查 修改 保存 提交 记录 整理 计划 目标 进步','同学 伙伴 合作 交流 帮助 分享 负责 耐心 专注 自信 成长']},

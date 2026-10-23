@@ -11,8 +11,10 @@ const GameLobby = defineAsyncComponent(() => import('./GameLobby.vue'));
 const ChaseGame = defineAsyncComponent(() => import('./ChaseGame.vue'));
 const RunnerGame = defineAsyncComponent(() => import('./RunnerGame.vue'));
 const BugFeedback = defineAsyncComponent(() => import('./BugFeedback.vue'));
+const CompetitionGame = defineAsyncComponent(() => import('./CompetitionGame.vue'));
 import { beginnerLessons, extraEnglishCopy, extraPinyinCopy, fingerKeyByCode } from './lesson-bank';
 import { expandPracticeBank } from './lesson-expansion';
+import { readPracticeIndex, savePracticeIndex } from './practice-progress.mjs';
 import { AlertTriangle, ArrowLeft, ArrowUpRight, BarChart3, ChevronRight, Flame, Keyboard as KeyboardIcon, ListChecks, LogOut, ShieldCheck, Target, Timer, Trophy, UserRound } from 'lucide-vue-next';
 const page = ref('home'); const category = ref('英文打字'); const passage = ref(null); const typed = ref(''); const pressedCode = ref(null); const wrongCode = ref(null); const wrongNotice = ref(''); const lastCode = ref('KeyboardEvent.code'); const beginnerSequence = ref([]); const beginnerIndex = ref(0); const beginnerCorrect = ref(0); const beginnerWrong = ref(0); const beginnerStartedAt = ref(null); const practiceStartedAt = ref(null); const now = ref(Date.now()); let timer; let wrongFeedbackTimer;
 const user = ref(null);
@@ -51,9 +53,9 @@ const diagnosticDrill = reactive({ title: '', target: '', startedAt: null, compl
 const diagnosticLastTrackedLength = ref(0);
 const pinyinInput = ref('');
 const pinyinInputEl = ref(null);
-const englishLessonIndex = reactive({ 'english-word': 0, 'english-phrase': 0, 'english-article': 0 });
-const pinyinLessonIndex = reactive({ 'pinyin-syllable': 0, 'pinyin-word': 0, 'pinyin-article': 0 });
-const beginnerLessonIndex = ref(0);
+const englishLessonIndex = reactive(Object.fromEntries(['english-word', 'english-phrase', 'english-article'].map((mode) => [mode, readPracticeIndex(mode)])));
+const pinyinLessonIndex = reactive(Object.fromEntries(['pinyin-syllable', 'pinyin-word', 'pinyin-article'].map((mode) => [mode, readPracticeIndex(mode)])));
+const beginnerLessonIndex = ref(readPracticeIndex('beginner'));
 const beginnerCompleted = ref(false);
 const practiceCompleteNotice = ref('');
 let practiceAdvanceTimer;
@@ -77,7 +79,7 @@ const handGuides = {
   thumbs: { label: '双手拇指', home: '空格', points: [{ x: 163, y: 119 }, { x: 344, y: 119 }], action: '使用任一拇指击打空格，手腕保持放松' }
 };
 const beginnerTarget = computed(() => beginnerSequence.value[beginnerIndex.value] || { label: 'A', code: 'KeyA', finger: '左手小指' });
-const beginnerLesson = computed(() => beginnerLessons[beginnerLessonIndex.value]);
+const beginnerLesson = computed(() => beginnerLessons[beginnerLessonIndex.value % beginnerLessons.length]);
 const handTargetMeta = computed(() => handGuides[beginnerTarget.value.fingerKey || fingerKeyByCode[beginnerTarget.value.code] || 'left-pinky'] || handGuides['left-pinky']);
 const handTargetPoints = computed(() => handTargetMeta.value.points || [{ x: handTargetMeta.value.x, y: handTargetMeta.value.y }]);
 const beginnerAccuracy = computed(() => { const total = beginnerCorrect.value + beginnerWrong.value; return total ? Math.round((beginnerCorrect.value / total) * 100) : 100; });
@@ -181,17 +183,35 @@ const pinyinLines = computed(() => {
     return segment;
   });
 });
+const pinyinSyllableItems = computed(() => {
+  let offset = 0;
+  return (pinyinLesson.value?.syllables || []).map((item, absoluteIndex) => {
+    const result = { ...item, absoluteIndex, offset };
+    offset += item.pinyin.length;
+    return result;
+  });
+});
 const pinyinInputSegments = computed(() => {
   if (page.value !== 'pinyin-syllable') return pinyinLines.value;
-  return Array.from({ length: Math.ceil(pinyinTarget.value.length / 5) }, (_, index) => ({
-    offset: index * 5, line: pinyinTarget.value.slice(index * 5, index * 5 + 5)
-  }));
+  return Array.from({ length: Math.ceil(pinyinSyllableItems.value.length / 5) }, (_, index) => {
+    const group = pinyinSyllableItems.value.slice(index * 5, index * 5 + 5);
+    return { offset: group[0].offset, line: group.map((item) => item.pinyin).join('') };
+  });
+});
+const pinyinCurrentSyllableIndex = computed(() => {
+  const index = pinyinSyllableItems.value.findIndex((item) => pinyinTypedCharacters.value.length < item.offset + item.pinyin.length);
+  return index < 0 ? Math.max(0, pinyinSyllableItems.value.length - 1) : index;
 });
 const pinyinSyllableStart = computed(() => {
-  const items = pinyinLesson.value?.syllables || [];
-  return Math.min(Math.floor(pinyinTypedCharacters.value.length / 5) * 5, Math.max(0, items.length - 5));
+  const items = pinyinSyllableItems.value;
+  return Math.min(Math.floor(pinyinCurrentSyllableIndex.value / 5) * 5, Math.max(0, items.length - 5));
 });
-const pinyinVisibleSyllables = computed(() => (pinyinLesson.value?.syllables || []).slice(pinyinSyllableStart.value, pinyinSyllableStart.value + 5).map((item, index) => ({ ...item, absoluteIndex: pinyinSyllableStart.value + index })));
+const pinyinVisibleSyllables = computed(() => pinyinSyllableItems.value.slice(pinyinSyllableStart.value, pinyinSyllableStart.value + 5));
+function pinyinSyllableClass(item) {
+  const entered = pinyinTypedCharacters.value.slice(item.offset, item.offset + item.pinyin.length);
+  const wrong = entered.some((char, index) => char !== item.pinyin[index]);
+  return { wrong, correct: entered.length === item.pinyin.length && !wrong, current: pinyinTypedCharacters.value.length >= item.offset && pinyinTypedCharacters.value.length < item.offset + item.pinyin.length };
+}
 const pinyinCurrentCode = computed(() => {
   if (page.value !== 'pinyin-syllable') return '';
   const char = pinyinTarget.value[pinyinTypedCharacters.value.length] || '';
@@ -343,9 +363,16 @@ function clearPracticeAdvance() { window.clearTimeout(practiceAdvanceTimer); pra
 function makeBeginnerSequence(advance = false) {
   clearPracticeAdvance();
   if (advance) beginnerLessonIndex.value = (beginnerLessonIndex.value + 1) % beginnerLessons.length;
-  beginnerSequence.value = [...beginnerLesson.value.items]; beginnerIndex.value=0; beginnerCorrect.value=0; beginnerWrong.value=0;
+  savePracticeIndex('beginner', beginnerLessonIndex.value);
+  const items = [...beginnerLesson.value.items];
+  for (let index = items.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
+  beginnerSequence.value = items; beginnerIndex.value=0; beginnerCorrect.value=0; beginnerWrong.value=0;
   beginnerStartedAt.value=null; beginnerCompleted.value=false; now.value=Date.now(); resetKeyStats(); clearBeginnerFeedback();
 }
+function selectBeginnerLesson(index) { beginnerLessonIndex.value = Number(index); makeBeginnerSequence(false); }
 function schedulePracticeAdvance(kind) {
   if (practiceCompleteNotice.value) return;
   const lessonPage = page.value;
@@ -593,11 +620,11 @@ function handleDiagnosticInput(event) {
 }
 function goEnglishHome() { setPage('english-home'); resetEnglishLesson(); }
 function openPractice(next) { category.value=next; if (next === '英文打字') { setPage('english-home'); } else if (next === '拼音打字') { setPage('pinyin-home'); } else { setPage('practice'); loadPassage(); } }
-function openBeginner() { beginnerLessonIndex.value=0; setPage('beginner'); makeBeginnerSequence(false); }
-function advanceLesson(indexes, catalog, lessonPage) { const lessons = catalog[lessonPage] || []; if (lessons.length > 1) indexes[lessonPage] = (indexes[lessonPage] + 1) % lessons.length; }
-function openEnglishLesson(nextPage) { englishLessonIndex[nextPage] = 0; setPage(nextPage); resetEnglishLesson(nextPage, false); }
+function openBeginner() { setPage('beginner'); makeBeginnerSequence(false); }
+function advanceLesson(indexes, catalog, lessonPage) { const lessons = catalog[lessonPage] || []; if (lessons.length > 1) { indexes[lessonPage] = (indexes[lessonPage] + 1) % lessons.length; savePracticeIndex(lessonPage, indexes[lessonPage]); } }
+function openEnglishLesson(nextPage) { setPage(nextPage); resetEnglishLesson(nextPage, false); }
 function resetEnglishLesson(nextPage = page.value, advance = true) { clearPracticeAdvance(); if (advance) advanceLesson(englishLessonIndex, englishCopy, nextPage); typed.value=''; practiceStartedAt.value=null; now.value=Date.now(); resetKeyStats(); }
-function selectEnglishLesson(index) { englishLessonIndex[page.value]=Number(index); resetEnglishLesson(page.value,false); }
+function selectEnglishLesson(index) { englishLessonIndex[page.value]=Number(index); savePracticeIndex(page.value, englishLessonIndex[page.value]); resetEnglishLesson(page.value,false); }
 function englishCharClass(index, char) {
   const typedChar = englishTypedCharacters.value[index];
   return { correct: index < typed.value.length && typedChar === char, wrong: index < typed.value.length && typedChar !== char, current: index === typed.value.length };
@@ -623,8 +650,8 @@ function startPinyinPractice() { if (!practiceStartedAt.value) practiceStartedAt
   }
 }); }
 function resetPinyinLesson(nextPage = page.value, advance = true) { clearPracticeAdvance(); if (advance) advanceLesson(pinyinLessonIndex, pinyinCopy, nextPage); pinyinInput.value = ''; practiceStartedAt.value = null; now.value = Date.now(); resetKeyStats(); if (nextPage.startsWith('pinyin-')) focusPinyinInput(); }
-function selectPinyinLesson(index) { pinyinLessonIndex[page.value]=Number(index); resetPinyinLesson(page.value,false); }
-function openPinyinLesson(nextPage) { pinyinLessonIndex[nextPage] = 0; page.value = nextPage; window.location.hash = nextPage; resetPinyinLesson(nextPage, false); }
+function selectPinyinLesson(index) { pinyinLessonIndex[page.value]=Number(index); savePracticeIndex(page.value, pinyinLessonIndex[page.value]); resetPinyinLesson(page.value,false); }
+function openPinyinLesson(nextPage) { page.value = nextPage; window.location.hash = nextPage; resetPinyinLesson(nextPage, false); }
 function handlePinyinKey(event) {
   if (!page.value.startsWith('pinyin-') || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
   if (isImeComposing(event)) return;
@@ -698,7 +725,7 @@ function updateInput(event) { typed.value=event.target.value; }
 onMounted(async () => {
   makeBeginnerSequence();
   const savedPage = window.location.hash.slice(1);
-  const allowedPages = ['games', 'bug-feedback', 'boss', 'race', 'rhythm', 'chase', 'battle', 'runner', 'beginner', 'english-home', 'english-word', 'english-phrase', 'english-article', 'pinyin-home', 'pinyin-syllable', 'pinyin-word', 'pinyin-article', 'challenge-home', 'challenge-english', 'challenge-pinyin', 'practice', 'growth', 'diagnostics', 'diagnostic-drill'];
+  const allowedPages = ['games', 'competition', 'bug-feedback', 'boss', 'race', 'rhythm', 'chase', 'battle', 'runner', 'beginner', 'english-home', 'english-word', 'english-phrase', 'english-article', 'pinyin-home', 'pinyin-syllable', 'pinyin-word', 'pinyin-article', 'challenge-home', 'challenge-english', 'challenge-pinyin', 'practice', 'growth', 'diagnostics', 'diagnostic-drill'];
   if (savedPage === 'challenge') page.value = 'challenge-home';
   else if (allowedPages.includes(savedPage)) page.value = savedPage;
   if (['race', 'rhythm', 'chase', 'boss', 'battle'].includes(savedPage)) {
@@ -729,6 +756,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 <ChaseGame v-else-if="page === 'chase'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
 <RunnerGame v-else-if="page === 'runner'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
 <BugFeedback v-else-if="page === 'bug-feedback'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
+<CompetitionGame v-else-if="page === 'competition'" :user="user" @back="setPage('games')" @login="setPage('competition'); openAccount()"/>
 <div v-else class="app-shell" :class="{ 'is-home-page': page === 'home', 'is-reference-page': page === 'beginner' || page === 'growth' || page === 'diagnostics' || page === 'diagnostic-drill' || page.startsWith('challenge-') || page.startsWith('english-') || page.startsWith('pinyin-'), 'is-beginner-page': page === 'beginner', 'is-english-home': page === 'english-home', 'is-english-practice': page.startsWith('english-') && page !== 'english-home', 'is-pinyin-practice': page.startsWith('pinyin-') && page !== 'pinyin-home', 'is-pinyin-home': page === 'pinyin-home', 'is-challenge-running': page.startsWith('challenge-') && !!challenge }"><header class="topbar"><button class="brand" @click="goHome"><span class="brand-mark"><span></span><span></span><span></span><span></span></span><span><b>字练场 <em>2026</em></b><small>中文与英文键盘训练</small></span></button><div class="topbar-decoration" aria-hidden="true"><span>A</span><span>B</span><span>C</span></div><div class="top-actions"><button class="account-pill" type="button" @click="openAccount"><span class="account-avatar-mini"><img v-if="user?.avatarUrl" :src="user.avatarUrl" :alt="`${user.displayName}的头像`"/><UserRound v-else :size="17"/></span><span class="account-pill-copy"><strong>{{ user?.displayName || '登录 / 注册' }}</strong><small>{{ user ? '个人中心' : '进入账号' }}</small></span></button></div></header>
   <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择打字课程</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="setPage('games')"><span class="home-challenge-icon">VS</span><strong>游戏模式</strong><small>六种游戏玩法，和同学一起挑战</small></button></div><p class="footnote">四种练习均可直接开始，登录后可保存一分钟挑战成绩并参与排行榜。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
 <GameLobby v-else-if="page === 'games'" :user="user" @select="setPage" @back="goHome" @growth="openGrowth" @leaderboard="openLeaderboard" @account="openAccount" @bug-report="setPage('bug-feedback')"/>
@@ -762,7 +790,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 <section v-else-if="page === 'beginner'" class="lesson-view">
   <div class="lesson-nav">
     <button @click="goHome">返回</button><span>首页</span><b>›</b><span>新手入门</span><b>›</b><strong>第{{ beginnerLessonIndex+1 }}关：{{ beginnerLesson.title }}</strong>
-    <div class="course-dots"><template v-for="(_,index) in beginnerLessons" :key="index"><b :class="{active:index===beginnerLessonIndex}">{{index+1}}</b><i v-if="index<beginnerLessons.length-1"></i></template></div>
+    <label class="course-select">选择键位课程：<select :value="beginnerLessonIndex" @change="selectBeginnerLesson($event.target.value)"><option v-for="(lesson,index) in beginnerLessons" :key="lesson.title" :value="index">第{{ index+1 }}关 · {{ lesson.title }}</option></select></label>
   </div>
   <section class="beginner-stage">
     <div class="subtitle-sequence">
@@ -829,7 +857,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
   <label class="time-limit"><input type="checkbox"/>限时 <input type="number" min="1"/> 分钟</label>
   <p v-if="practiceCompleteNotice" class="lesson-complete-notice" role="status">{{practiceCompleteNotice}}</p>
   <div v-if="page === 'pinyin-syllable'" class="pinyin-syllable-board" aria-label="声母和汉字对照">
-    <div v-for="item in pinyinVisibleSyllables" :key="item.absoluteIndex" class="pinyin-syllable-item"><span :class="pinyinCharClass(item.absoluteIndex,item.pinyin)">{{ item.pinyin }}</span><strong>{{ item.hanzi }}</strong></div>
+    <div v-for="item in pinyinVisibleSyllables" :key="item.absoluteIndex" class="pinyin-syllable-item"><span :class="pinyinSyllableClass(item)">{{ item.pinyin }}</span><strong>{{ item.hanzi }}</strong></div>
   </div>
   <PinyinLineInput :key="`${page}-${pinyinLessonIndex[page]}`" ref="pinyinInputEl" v-model="pinyinInput"
     :segments="pinyinInputSegments" :show-targets="page !== 'pinyin-syllable'" :lowercase="page === 'pinyin-syllable'"

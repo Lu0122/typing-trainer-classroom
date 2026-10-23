@@ -1324,6 +1324,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   const publicPath = path.join(__dirname, '..', 'public');
   require('./battle').installBattle(app, { db, requireUser, now });
   require('./boss').installBoss(app, { db, requireUser, now });
+  require('./competition').installCompetition(app, { db, requireUser, now });
   require('./arena').installArena(app, { db, requireUser, now });
   require('./chase').installChase(app, { db, requireUser, now });
   require('./runner').installRunner(app, { db, requireUser, now });

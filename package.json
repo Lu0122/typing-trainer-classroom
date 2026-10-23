@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "description": "面向中文输入练习的 60 秒打字训练与排行榜应用",
-  "main": "src/server.js",
+  "main": "backend/server.js",
   "scripts": {
     "build": "vite build --config vite.config.js",
-    "start": "npm run build && node src/server.js",
-    "dev": "npm run build && node src/server.js",
+    "start": "npm run build && node backend/server.js",
+    "dev": "npm run build && node backend/server.js",
     "test": "node --test"
   },
   "dependencies": {

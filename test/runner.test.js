@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { RunnerRun, challengeFor, COUNTDOWN_MS, GRACE_MS, RECOVERY_MS } = require('../src/runner');
-const { createDatabase } = require('../src/database');
-const { createApp } = require('../src/app');
-const { hashSessionToken } = require('../src/auth');
+const { RunnerRun, challengeFor, COUNTDOWN_MS, GRACE_MS, RECOVERY_MS } = require('../backend/runner');
+const { createDatabase } = require('../backend/database');
+const { createApp } = require('../backend/app');
+const { hashSessionToken } = require('../backend/auth');
 
 function setup(language = 'english') {
   let time = 1000000, saves = 0;

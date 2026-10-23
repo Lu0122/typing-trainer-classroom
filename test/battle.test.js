@@ -1,6 +1,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {Battle}=require('../src/battle');
+const {Battle}=require('../backend/battle');
 function setup(){let time=100000;const saved=[];const b=new Battle({now:()=>time,save:r=>saved.push(r)});return {b,saved,advance:n=>{time+=n;},join:(id,team)=>b.join({id,displayName:'同学'+id},team)};}
 test('single room starts automatically with two players even on same side',()=>{
  const {b,join}=setup();assert.equal(join(1,'red').phase,'waiting');const s=join(2,'red');assert.equal(s.phase,'running');assert.equal(s.teams.red.count,1);assert.equal(s.teams.blue.count,1);

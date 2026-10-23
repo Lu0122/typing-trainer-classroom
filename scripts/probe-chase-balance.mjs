@@ -1,7 +1,7 @@
 // 复现「生死时速」判定与平衡：用假时钟跑完整局，打印双方位置与视觉角度。
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { ChaseRoom, ROUND_MS, TRACK_METERS, THIEF_HEADSTART, STEP_METERS } = require('../src/chase.js');
+const { ChaseRoom, ROUND_MS, TRACK_METERS, THIEF_HEADSTART, STEP_METERS } = require('../backend/chase.js');
 
 const BASE_ANGLE = { police: 145, thief: 270 };
 function visualAngle(room, player) {

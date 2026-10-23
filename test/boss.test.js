@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { BossRoom, ROUND_MS, GATHER_MS, RESULT_MS, LESSONS, TEAM_COMBO_GRACE_MS } = require('../src/boss');
-const { createDatabase } = require('../src/database');
-const { createApp } = require('../src/app');
-const { hashSessionToken } = require('../src/auth');
+const { BossRoom, ROUND_MS, GATHER_MS, RESULT_MS, LESSONS, TEAM_COMBO_GRACE_MS } = require('../backend/boss');
+const { createDatabase } = require('../backend/database');
+const { createApp } = require('../backend/app');
+const { hashSessionToken } = require('../backend/auth');
 function setup() {
   let time = 100000;
   const saved = [], records = [];

@@ -7,8 +7,8 @@
 
 | 文件 | 改动 |
 |---|---|
-| `src/race-speed.js` | **新增**。车速/档位/滑块窗口的纯函数模型，可独立单测 |
-| `src/arena.js` | 赛车子系统重写：去掉氮气，接入速度积分、打错惩罚、自动衔接、按距离排名 |
+| `backend/race-speed.js` | **新增**。车速/档位/滑块窗口的纯函数模型，可独立单测 |
+| `backend/arena.js` | 赛车子系统重写：去掉氮气，接入速度积分、打错惩罚、自动衔接、按距离排名 |
 | `frontend/src/RaceBoard.vue` | **新增**。速度表（SVG 240° 弧 + 指针）、六档变速箱、赛道与对手车影 |
 | `frontend/src/ArenaGame.vue` | 接入 RaceBoard；排行榜/个人面板/结算改为车速与档位口径 |
 | `frontend/src/arena.css` | 清掉旧赛道与氮气的死代码（约 1578 字符），补档位标签样式 |
@@ -16,7 +16,7 @@
 | `scripts/verify-race-speed.mjs` | **新增**。走真实 HTTP API 打完整局，校验档位/距离/胜负一致 |
 | `scripts/shot-race.mjs` | **新增**。多分辨率截图 + 溢出检查 + 真实按键提速 |
 
-## 速度模型（`src/race-speed.js`）
+## 速度模型（`backend/race-speed.js`）
 
 ```
 目标车速 = 打字速度(字/秒) × CPS_TO_KMH(130) + IDLE_KMH(40)

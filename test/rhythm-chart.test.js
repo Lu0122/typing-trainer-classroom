@@ -4,7 +4,7 @@ const {
   buildChart, judgeKey, expireNotes, accuracyOf, comboMultiplier, GRADES, GRADE_KEYS,
   JUDGE_PERFECT_MS, JUDGE_GREAT_MS, JUDGE_GOOD_MS, JUDGE_MISS_MS, LANE_COUNT, LANE_LAYOUT, LETTER_LANE,
   BEAT_MS, BPM, BEATS_PER_BAR, OPENING_AT_MS,
-} = require('../src/rhythm-chart');
+} = require('../backend/rhythm-chart');
 
 test('chart: deterministic, sorted, no adjacent repeats, lanes come from the four-lane split', () => {
   const a = buildChart('seed-1', 90000);

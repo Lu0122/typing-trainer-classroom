@@ -15,8 +15,8 @@ echo.
 echo   Typing game server  ^-^>  http://localhost:3000
 echo   Keep this window open while you play. Closing it stops the server.
 echo.
-"%NODE_EXE%" src\server.js
+"%NODE_EXE%" backend\server.js
 echo.
 echo   Server stopped. Exit code = %ERRORLEVEL%
-echo   (See server-events.log for the reason and the last heartbeat time.)
+echo   (See data\runlogs\server-events.log for the reason and the last heartbeat time.)
 pause

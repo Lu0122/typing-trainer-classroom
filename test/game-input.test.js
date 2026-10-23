@@ -16,7 +16,7 @@ function load(component, names, fetch, props = {}, lifecycle = {}) {
   const context = {
     ...vue, ...timingContext.timing, onMounted() {}, onBeforeUnmount() {}, watch() {}, defineExpose() {},
     defineProps: () => ({ user: { id: 1 }, mode: 'rhythm', ...props }), defineEmits: () => () => {},
-    fetch, AbortSignal, Date, LANE_COUNT: require('../src/rhythm-chart').LANE_COUNT, performance: { now: () => Date.now() },
+    fetch, AbortSignal, Date, LANE_COUNT: require('../backend/rhythm-chart').LANE_COUNT, performance: { now: () => Date.now() },
     setTimeout: (fn, delay) => { const id = ++nextTimer; timers.set(id, fn); timerDelays.set(id, delay); return id; },
     clearTimeout: id => { timers.delete(id); timerDelays.delete(id); },
     ...lifecycle,

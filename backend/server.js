@@ -36,18 +36,21 @@ function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-// 运行事件日志：启动 / 心跳 / 退出 / 未捕获异常 / 端口占用 全部带时间戳落到 server-events.log。
+// 运行事件日志：启动 / 心跳 / 退出 / 未捕获异常 / 端口占用 全部带时间戳落到 data/runlogs/server-events.log。
 // 服务「跑着跑着没了」时，先看这个文件：有「退出」行说明是正常信号退出；没有退出行、
 // 心跳也停在某个时刻，说明进程是被外部强杀的（终端/会话关闭、任务管理器结束进程等）。
 const fs = require('node:fs');
-const eventLogPath = path.join(__dirname, '..', 'server-events.log');
+const eventLogPath = path.join(__dirname, '..', 'data', 'runlogs', 'server-events.log');
 const lastLogged = new Map();
 function logEvent(kind, detail = '') {
   const now = Date.now();
   if (now - (lastLogged.get(kind) || 0) < 5000) return; // 同类事件 5 秒内只记一次，避免异常刷屏
   lastLogged.set(kind, now);
   const line = `[${new Date().toISOString()}] ${kind}${detail ? ' ' + detail : ''}`;
-  try { fs.appendFileSync(eventLogPath, line + '\n'); } catch { /* 日志写不进去不能影响服务 */ }
+  try {
+    fs.mkdirSync(path.dirname(eventLogPath), { recursive: true });
+    fs.appendFileSync(eventLogPath, line + '\n');
+  } catch { /* 日志写不进去不能影响服务 */ }
   console.log(line);
 }
 logEvent('启动', `pid=${process.pid} port=${port} database=${databasePath}`);

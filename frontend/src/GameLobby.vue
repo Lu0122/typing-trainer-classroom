@@ -67,6 +67,11 @@ function trackGlow(event) {
         </header>
 
         <div class="game-choices">
+          <button class="game-choice competition-choice" type="button" @click="$emit('select', 'competition')" @pointermove="trackGlow">
+            <div class="choice-head"><div class="choice-titles"><div class="choice-name"><Trophy class="name-ico" :size="19"/>比赛模式 <span class="runner-new">MVP</span></div><small>个人赛 · 团队赛 · 同题竞技</small></div><span class="choice-art" aria-hidden="true"><svg viewBox="0 0 168 104"><circle cx="84" cy="48" r="34" fill="#e8f4ff" stroke="#5e9ddd" stroke-width="2"/><path d="M68 34h32v20c0 10-7 17-16 17s-16-7-16-17z" fill="#f6bb4f" stroke="#d38a20" stroke-width="2"/><path d="M68 39H56c0 10 5 16 14 16M100 39h12c0 10-5 16-14 16" fill="none" stroke="#d38a20" stroke-width="4" stroke-linecap="round"/><path d="M84 71v13M68 88h32" stroke="#5e9ddd" stroke-width="4" stroke-linecap="round"/><path d="M77 45h14M77 52h14" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></span></div>
+            <p>60 秒同题比赛，个人赛看个人排名，团队赛看红蓝两队总分。<br/>统一计时、实时榜单，先完成第一版比赛闭环。</p>
+            <footer><span class="choice-meta"><i><Users :size="14"/>1—40 人</i><i><Timer :size="14"/>60 秒一局</i></span><strong>进入比赛<ArrowRight :size="16"/></strong></footer>
+          </button>
           <button class="game-choice runner-choice" type="button" @click="$emit('select', 'runner')" @pointermove="trackGlow">
             <div class="choice-head"><div class="choice-titles"><div class="choice-name"><Footprints class="name-ico" :size="19"/>遗迹逃亡 <span class="runner-new">NEW</span></div><small>无限路线 · 打字冒险</small></div>
               <span class="choice-art" aria-hidden="true"><svg viewBox="0 0 168 104"><path d="M47 101L76 22h20l29 79" fill="#c5d1ae" stroke="#749967" stroke-width="2"/><path d="M56 91h59M62 74h47M69 54h33" stroke="#94a983" stroke-width="2"/><path d="M48 23V7h70v16M59 7v44M108 7v44" fill="none" stroke="#799877" stroke-width="9"/><path d="M70 6h26" stroke="#eec879" stroke-width="6"/><circle cx="83" cy="53" r="7" fill="#d99a5c"/><path d="M83 61l-3 17m2-13l-13 8m14-9l12 6m-15 7l-11 17m11-17l13 12" fill="none" stroke="#267f74" stroke-width="7" stroke-linecap="round"/><path d="M28 50l-13-4 10-7M136 34l14-4-9-9" stroke="#dab46b" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="127" cy="72" r="7" fill="#ffd98b" stroke="#dcb55c" stroke-width="2"/></svg></span>
@@ -306,6 +311,7 @@ function trackGlow(event) {
 .chase-choice{--accent:#477fe0;--accent-soft:#e5edff;--accent-ink:#607fac;--body-ink:#617891;--meta-ink:#8195ac;--card-line:#d5e0f7;--btn-from:#477fe0;--btn-to:#285dbb;--btn-glow:#477fe059;background:linear-gradient(180deg,#f3f7ff,#eaf0ff)}
 .chase-choice{--accent:#267bc7;--accent-soft:#dff2ff;--accent-ink:#47789c;--body-ink:#506f8a;--meta-ink:#758da4;--card-line:#bddcf0;--btn-from:#168cd6;--btn-to:#1763b5;--btn-glow:#328fe659;background:linear-gradient(180deg,#f0f9ff,#e1f2fb)}
 .territory-choice{--accent:#e05252;--accent-soft:#fdeaea;--accent-ink:#a05560;--body-ink:#8a6068;--meta-ink:#a87e88;--card-line:#f2d7da;--btn-from:#e75f52;--btn-to:#d64545;--btn-glow:#e0525259;background:linear-gradient(180deg,#fdf3f3,#fcecec)}
+.competition-choice{--accent:#7b62d8;--accent-soft:#eeeaff;--accent-ink:#75699e;--body-ink:#6b6687;--meta-ink:#8c83aa;--card-line:#ddd6f5;--btn-from:#856de0;--btn-to:#6249bf;--btn-glow:#8067d459;background:linear-gradient(180deg,#faf8ff,#f0ecff)}
 
 /* ---- 卡片插画 ---- */
 .ra-speed{font:italic 800 17px/1 Georgia,serif;letter-spacing:3px;fill:#f3c98b}

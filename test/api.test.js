@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { createDatabase } = require('../src/database');
-const { createApp } = require('../src/app');
+const { createDatabase } = require('../backend/database');
+const { createApp } = require('../backend/app');
 
 function setup() {
   let currentTime = 1_700_000_000_000;

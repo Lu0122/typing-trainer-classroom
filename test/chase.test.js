@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { createDatabase } = require('../src/database');
-const { createApp } = require('../src/app');
-const { hashSessionToken } = require('../src/auth');
-const { ChaseRoom, ROUND_MS, START_COUNTDOWN_MS, THIEF_HEADSTART, STEP_METERS } = require('../src/chase');
+const { createDatabase } = require('../backend/database');
+const { createApp } = require('../backend/app');
+const { hashSessionToken } = require('../backend/auth');
+const { ChaseRoom, ROUND_MS, START_COUNTDOWN_MS, THIEF_HEADSTART, STEP_METERS } = require('../backend/chase');
 
 function setup() {
   let time = 1_000_000;

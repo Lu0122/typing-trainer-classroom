@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { EliminationRoom, ELIMINATION_INTERVAL_MS, ROUND_MS } = require('../src/boss');
+const { EliminationRoom, ELIMINATION_INTERVAL_MS, ROUND_MS } = require('../backend/boss');
 
 function setup(count) {
   let time = 100000;

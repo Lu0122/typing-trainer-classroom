@@ -6,10 +6,10 @@
 
 | 模式 | 新机制 | 服务端位置 | 前端位置 |
 |---|---|---|---|
-| 节奏连击 | 120 BPM 节拍判定：Perfect ×2（±110ms）、Good ×1.3（±220ms），与连击倍率相乘 | `src/arena.js` | `ArenaGame.vue` 节拍条 |
-| 打字赛车 | 氮气冲刺：连对 20 字触发 3 秒冲刺，冲刺内每字额外前进 0.5 格；打错收回额外距离 | `src/arena.js` | `ArenaGame.vue` 氮气条 |
-| 红蓝占领战 | 连击威力放大：连击 5/15/30 → 1.5/2.5/4 倍占领效率，打错清空连击 | `src/battle.js` | `BattleGame.vue` 威力条 |
-| 全班打 Boss | 三人合击：≥3 人同时保持 5 连击时全队伤害 ×1.5，停止输入 3 秒后解除 | `src/boss.js` | `BossGame.vue` 合击条 |
+| 节奏连击 | 120 BPM 节拍判定：Perfect ×2（±110ms）、Good ×1.3（±220ms），与连击倍率相乘 | `backend/arena.js` | `ArenaGame.vue` 节拍条 |
+| 打字赛车 | 氮气冲刺：连对 20 字触发 3 秒冲刺，冲刺内每字额外前进 0.5 格；打错收回额外距离 | `backend/arena.js` | `ArenaGame.vue` 氮气条 |
+| 红蓝占领战 | 连击威力放大：连击 5/15/30 → 1.5/2.5/4 倍占领效率，打错清空连击 | `backend/battle.js` | `BattleGame.vue` 威力条 |
+| 全班打 Boss | 三人合击：≥3 人同时保持 5 连击时全队伤害 ×1.5，停止输入 3 秒后解除 | `backend/boss.js` | `BossGame.vue` 合击条 |
 
 ## 关键设计决策
 

@@ -1,11 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { ArenaRoom, GATHER_MS, RESULT_MS, MODES, RACE_WRONG_SPEED_FACTOR, RACE_LAUNCH_MS } = require('../src/arena');
+const { ArenaRoom, GATHER_MS, RESULT_MS, MODES, RACE_WRONG_SPEED_FACTOR, RACE_LAUNCH_MS } = require('../backend/arena');
 const { SPEED_MAX, GEARS, gearOf, gearMultiplier, typingSpeed, approachSpeed, targetSpeed,
-  advanceDistance, WINDOW_MS, KMH_TO_CELLS_PER_S } = require('../src/race-speed');
+  advanceDistance, WINDOW_MS, KMH_TO_CELLS_PER_S } = require('../backend/race-speed');
 const { buildChart, judgeKey, accuracyOf, comboMultiplier,
-  JUDGE_PERFECT_MS, JUDGE_GREAT_MS, JUDGE_GOOD_MS, JUDGE_MISS_MS, LANE_COUNT, LETTER_LANE } = require('../src/rhythm-chart');
+  JUDGE_PERFECT_MS, JUDGE_GREAT_MS, JUDGE_GOOD_MS, JUDGE_MISS_MS, LANE_COUNT, LETTER_LANE } = require('../backend/rhythm-chart');
 
 test('rhythm start countdown keeps the chart empty until it ends and gives each difficulty a complete fall', () => {
   for (const difficulty of ['easy', 'normal', 'hard']) {
@@ -35,9 +35,9 @@ test('rhythm judges both keys of a chord at the same timestamp and protects retr
   assert.deepEqual(hit.me.keys.map(key => key.noteId), [0, 1]);
   assert.equal(room.press(1, packet).me.combo, 2);
 });
-const { createDatabase } = require('../src/database');
-const { createApp } = require('../src/app');
-const { hashSessionToken } = require('../src/auth');
+const { createDatabase } = require('../backend/database');
+const { createApp } = require('../backend/app');
+const { hashSessionToken } = require('../backend/auth');
 function setup(mode, difficulty = 'normal') {
   let time = 100000; const saved = [], records = [];
   const room = new ArenaRoom(mode, { now: () => time, record: row => records.push(row), save: row => saved.push(row) });

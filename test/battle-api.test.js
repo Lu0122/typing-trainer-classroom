@@ -1,9 +1,9 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const request=require('supertest');
-const {createDatabase}=require('../src/database');
-const {createApp}=require('../src/app');
-const {hashSessionToken}=require('../src/auth');
+const {createDatabase}=require('../backend/database');
+const {createApp}=require('../backend/app');
+const {hashSessionToken}=require('../backend/auth');
 test('60 authenticated clients share one match; attack and result persist through real routes',async()=>{
  const db=createDatabase(':memory:');let time=100000;
  const app=createApp({db,now:()=>time});
