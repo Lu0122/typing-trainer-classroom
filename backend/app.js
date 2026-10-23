@@ -1331,6 +1331,8 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   app.use('/vendor/lucide', express.static(path.join(__dirname, '..', 'node_modules', 'lucide', 'dist', 'umd')));
   app.use(express.static(publicPath));
   app.get('/admin', (request, response) => response.sendFile(path.join(publicPath, 'admin.html')));
+  // 比赛大屏：投影机直接开这个地址，不需要登录。数据接口只返回公开字段。
+  app.get('/board', (request, response) => response.sendFile(path.join(publicPath, 'board.html')));
 
   app.use('/api', (request, response) => response.status(404).json({ message: '接口不存在' }));
   app.use((error, request, response, next) => {

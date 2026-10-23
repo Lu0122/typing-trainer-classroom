@@ -24,5 +24,6 @@ env-example-dump.txt
 
 # Vite-generated bundles; rebuild with `npm run build`
 public/index.html
+public/board.html
 public/assets/*.js
 public/assets/*.css
