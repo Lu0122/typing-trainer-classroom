@@ -1,7 +1,36 @@
 # Header 统一改造计划
 
-> 状态：**待确认，未动代码**
+> 状态：**已执行完成**（commit `9e2681f` / `036e90b`）
 > 目标：把全站 9 个各自重画的 header 收敛成 1 个组件，消除页面切换时的视觉跳变。
+
+## 执行结果（收尾记录）
+
+| 项 | 结果 |
+| --- | --- |
+| 组件 | `frontend/src/AppHeader.vue`，四槽位 + `hero 104px` / `compact 56px` |
+| 迁移页面 | 首页、游戏大厅、音游、赛车、占领战、淘汰赛、追逐、逃亡、比赛、问题反馈（共 10 个） |
+| 高度收敛 | 改造前 52–104px 共 8 种 → 改造后只有 104（首页）与 56（其余） |
+| 死样式 | 删除 226 条规则（`style.css` 67 + 大厅 29 + arena 30 + boss 18 + chase 32 + runner 26 + battle 24） |
+| 回归 | `node --test` 191/191；`vite build` 成功 |
+| 布局 | 4 个视口 × 10 个页面全部 `scrollHeight === innerHeight`，无控制台错误 |
+| 截图 | `output/header/after-<页面>-<宽度>.png` |
+
+### 过程中发现的两个真问题
+
+1. **游戏大厅一直是两层 header 叠着**。`GameLobby` 渲染在 `app-shell` 内部，而 `app-shell` 自带全局 topbar。
+   原作者用 `:global(.app-shell:has(.game-lobby)>.topbar){display:none}` 把全局顶栏藏掉绕过去了；
+   一旦 `.topbar` 换成 `.app-header`，这条选择器失效，两层就同时露出来。
+   真正的修法是把 `GameLobby` 提到和别的游戏页同级，不再放进 `app-shell`。
+2. **`<script setup>` 里模块顶层引用图标会让输入测试崩**。`test/game-input.test.js` 用 VM 直接执行
+   剥掉 import 后的脚本体，顶层 `const nav = [{ icon: BarChart3 }]` 会抛 `BarChart3 is not defined`。
+   改成 `computed(() => [...])` 惰性求值即可，测试不会触发。
+
+### 两个不算 bug 的现象（避免误判）
+
+- **问题反馈页 `scrollHeight > innerHeight`**：表单页内容天然比一屏长，滚动是正确行为，不是溢出。
+- **游戏大厅底部卡片被"截断"**：`.lobby-scroll` 是内部滚动容器（实测 1302 / 1024），
+  header 固定、卡片区滚动，滚到底末张卡片完整可见。
+
 
 ## 一、现状
 
