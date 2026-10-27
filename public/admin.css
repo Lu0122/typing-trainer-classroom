@@ -108,6 +108,11 @@ tbody tr:hover { background: #f8faf6; }
 .passage-dialog header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
 .passage-dialog h2 { margin: 0; font-family: SimSun, serif; font-size: 27px; letter-spacing: 0; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.competition-referee-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 18px; }
+.competition-referee-controls label { display: grid; gap: 6px; color: var(--ink-soft); font-size: 12px; }
+.competition-referee-controls select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.competition-referee-controls > span { flex-basis: 100%; color: var(--ink-soft); font-size: 12px; }
+.competition-referee-controls button:disabled { opacity: .5; cursor: not-allowed; }
 .passage-dialog label > span:not(.switch-control) { display: block; margin-bottom: 7px; color: var(--ink-soft); font-size: 11px; font-weight: 800; }
 .passage-dialog input[type="text"], .passage-dialog textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--paper); font-size: 13px; }
 .passage-dialog input[type="text"] { height: 43px; }
@@ -253,3 +258,57 @@ tbody tr:hover { background: #f8faf6; }
   .progress-recent-list div { grid-template-columns: 1fr auto; gap: 6px; }
   .progress-recent-list small { grid-column: 1 / -1; }
 }
+/* Competition desk: distinct setup and referee workflows. */
+#view-competitions { --competition-muted: #65746c; }
+#view-competitions .view-heading h1 { font-family: "Microsoft YaHei", system-ui, sans-serif; font-size: 30px; font-weight: 750; letter-spacing: -.8px; }
+#view-competitions .view-heading > div > p:last-child { font-size: 13px; line-height: 1.7; }
+.competition-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); gap: 22px; margin-bottom: 26px; }
+.competition-workspace > .admin-section { margin: 0; min-width: 0; box-shadow: 0 6px 22px #19372906; border-radius: 12px; }
+.competition-panel-heading { display: flex; align-items: center; gap: 12px; min-height: 96px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
+.competition-panel-icon { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px; background: #edf5ef; color: #167149; }
+.competition-panel-icon svg { width: 22px; height: 22px; }
+.competition-panel-heading h2 { margin: 0 0 5px; font-size: 18px; line-height: 1.3; }
+.competition-panel-heading p { margin: 0; color: var(--competition-muted); font-size: 12px; line-height: 1.6; }
+.competition-steps { display: flex; align-items: center; justify-content: space-between; list-style: none; margin: 22px 24px 0; padding: 12px; border-radius: 8px; background: #f4f7f3; }
+.competition-steps li { display: flex; align-items: center; gap: 7px; color: #51635a; font-size: 12px; }
+.competition-steps b { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #d8e4d9; border-radius: 50%; color: #24744e; background: #fff; font-size: 11px; }
+#competition-form { padding: 22px 24px 24px; gap: 18px 16px; }
+#competition-form label { display: grid; gap: 8px; min-width: 0; }
+#competition-form label[hidden] { display: none; }
+#competition-form label > span { font-size: 12px; color: #46594e; font-weight: 650; }
+#competition-form input, #competition-form select { width: 100%; min-width: 0; height: 43px; padding: 0 12px; color: var(--ink); border: 1px solid #d3ddd5; border-radius: 7px; background: #fbfcfa; font: inherit; font-size: 13px; }
+#competition-form input::placeholder { color: #98a29b; }
+#competition-form :is(input, select):focus-visible, .competition-referee-controls select:focus-visible { outline: 3px solid #1b8a5530; outline-offset: 1px; border-color: #278354; }
+#competition-form .competition-name-field, #competition-form .form-actions { grid-column: 1 / -1; }
+#competition-form .form-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding-top: 6px; }
+#competition-form .form-actions p { flex: 1 1 160px; margin: 0; color: var(--competition-muted); font-size: 12px; line-height: 1.7; }
+#view-competitions :is(.primary-button, .secondary-button) { border-radius: 7px; font-size: 13px; text-decoration: none; }
+#view-competitions :is(.primary-button, .secondary-button) svg { width: 16px; height: 16px; }
+.competition-room-status { margin-left: auto; flex-shrink: 0; padding: 6px 9px; border-radius: 20px; color: #65746c; background: #f0f3ee; font-size: 11px; font-weight: 650; }
+.competition-room-status[data-phase="running"], .competition-room-status[data-phase="countdown"] { color: #13633e; background: #e2f4e8; }
+.competition-referee-controls { display: grid; gap: 16px; padding: 22px 24px 24px; }
+.competition-room-config { display: flex; align-items: end; gap: 12px; }
+.competition-room-config label { flex: 1; }
+.competition-room-config select { width: 100%; height: 43px; background: #fbfcfa; font-size: 13px; }
+.competition-team-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.competition-side { min-width: 0; padding: 16px; border: 1px solid #f0dbd6; border-radius: 8px; background: #fff8f5; }
+.competition-side > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #a3493b; font-size: 13px; }
+.competition-side b { font-family: Consolas, monospace; font-size: 18px; white-space: nowrap; }
+.competition-side p { margin: 12px 0 0; color: #796861; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.competition-side.is-blue { border-color: #d5e3ee; background: #f4f9fd; }
+.competition-side.is-blue > div { color: #376d9a; }
+.competition-side.is-blue p { color: #63788b; }
+.competition-room-summary { margin: -2px 0 0; color: #46594e; font-size: 12px; line-height: 1.7; }
+.competition-room-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 2px; }
+.competition-room-actions .primary-button { flex: 1; }
+.competition-room-help { margin: 0; color: var(--competition-muted); font-size: 11px; line-height: 1.7; }
+#view-competitions .table-section { border-radius: 12px; box-shadow: 0 6px 22px #19372906; }
+#view-competitions .table-toolbar { padding: 20px 24px; }
+.competition-list-hint { margin: 6px 0 0; color: var(--competition-muted); font-size: 12px; }
+#competition-table .table-actions { display: table-cell; text-align: right; }
+#competition-table .table-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; min-height: 34px; height: auto; margin: 3px 0 3px 6px; padding: 7px 10px; color: #3b5d49; font-size: 12px; text-decoration: none; }
+#competition-table .article-cell strong { font-size: 13px; }
+.competition-actions-heading { text-align: right; }
+@media (max-width: 1200px) { .competition-workspace { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { #view-competitions .view-heading h1 { font-size: 25px; } .competition-panel-heading { padding: 18px 16px; gap: 9px; flex-wrap: wrap; } .competition-panel-heading p { font-size: 11px; } .competition-room-status { margin-left: 0; } #competition-form { padding: 18px 16px; } .competition-referee-controls { padding: 18px 16px; } .competition-steps { margin: 18px 16px 0; padding: 10px 8px; } .competition-steps li { gap: 4px; font-size: 11px; } .competition-room-config { flex-wrap: wrap; } .competition-room-config label { min-width: 100px; } .competition-team-roster { gap: 8px; } .competition-side { padding: 12px; } }
+#view-competitions .view-heading > button { flex-shrink: 0; white-space: nowrap; }

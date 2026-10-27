@@ -488,6 +488,11 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     return response.type(`image/${mime}`).send(Buffer.from(match[2], 'base64'));
   });
 
+  // Portable launcher readiness check; instance identifies this process without exposing configuration.
+  app.get('/api/health', (request, response) => {
+    response.set('Cache-Control', 'no-store');
+    response.json({ status: 'ok', app: 'hanzi-sprint', instance: process.env.TYPING_RUNTIME_INSTANCE || null });
+  });
   app.get('/api/auth/me', (request, response) => {
     response.json({ authenticated: Boolean(request.user), user: request.user ? publicUser(request.user) : null });
   });
@@ -1324,9 +1329,10 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   const publicPath = path.join(__dirname, '..', 'public');
-  require('./battle').installBattle(app, { db, requireUser, now });
+  require('./battle').installBattle(app, { db, requireUser, requireAdmin, now });
   require('./boss').installBoss(app, { db, requireUser, now });
   require('./competition').installCompetition(app, { db, requireUser, now });
+  require('./competition-event').installCompetitionEvent(app, { db, requireUser, requireAdmin, now });
   require('./arena').installArena(app, { db, requireUser, now });
   require('./chase').installChase(app, { db, requireUser, now });
   require('./runner').installRunner(app, { db, requireUser, now });

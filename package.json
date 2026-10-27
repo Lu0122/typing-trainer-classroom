@@ -8,7 +8,9 @@
     "build": "vite build --config vite.config.js",
     "start": "npm run build && node backend/server.js",
     "dev": "npm run build && node backend/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "package:win": "node scripts/package-runtime.cjs",
+    "verify:runtime": "node scripts/verify-runtime.cjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
@@ -24,7 +26,8 @@
     "@vitejs/plugin-vue": "^5.2.4",
     "supertest": "^7.0.0",
     "vite": "^6.4.3",
-    "vue": "^3.5.42"
+    "vue": "^3.5.42",
+    "esbuild": "^0.25.12"
   },
   "engines": {
     "node": ">=20"

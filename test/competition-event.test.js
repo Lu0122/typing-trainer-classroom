@@ -56,7 +56,7 @@ test('runs a full individual event: qualifier, final, and final ranking', () => 
   assert.equal(midway.players.find((player) => player.userId === 1).finished, true);
   assert.equal(midway.players.find((player) => player.userId === 3).finished, false);
 
-  advance(180_000); // 时限到
+  advance(DEFAULT_CONFIG.roundMs + 1); // 时限到
   const settled = engine.state(event.id);
   assert.equal(settled.round.status, 'settled');
   assert.deepEqual(settled.ranking.map((row) => row.userId), [1, 2, 3, 4]);
@@ -158,4 +158,55 @@ test('only three or fewer players left means the next round is the final', () =>
   const round = engine.beginRound(event.id);
   assert.equal(round.round.isFinal, true);
   assert.equal(round.round.keepCount, 3, '决赛轮不淘汰');
+});
+
+test('round-robin rotation schedules every pair exactly once for five sides', () => {
+  const db = createDatabase(':memory:');
+  const engine = new CompetitionEvent(db);
+  const event = engine.create({
+    name: '五方循环测试',
+    mode: 'team',
+    config: { series: 'league', teamSize: 1 },
+    sides: [{ name: '甲' }, { name: '乙' }, { name: '丙' }, { name: '丁' }, { name: '戊' }]
+  });
+  const sides = engine.sidesOf(event.id);
+  const pairs = new Set();
+  for (let round = 1; round <= 5; round += 1) {
+    for (const pair of engine.pairingsFor(sides, round)) pairs.add([pair.sideA.id, pair.sideB.id].sort().join(':'));
+  }
+  assert.equal(pairs.size, 10);
+  db.close();
+});
+
+test('Chinese and English speed events use one shared text and settle only at the fixed deadline', () => {
+  for (const language of ['zh', 'en']) {
+    let now = 1_000_000;
+    const db = createDatabase(':memory:');
+    const engine = new CompetitionEvent(db, { now: () => now });
+    const event = engine.create({ name: `${language} speed`, mode: 'speed', config: { language, roundMs: 60_000, maxBatch: 2000 } });
+    const insertUser = db.prepare('INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, ?)');
+    for (const id of [1, 2, 3]) insertUser.run(id, `speed${id}`, `选手${id}`, 'hash');
+    engine.openRegistration(event.id);
+    for (const id of [1, 2, 3]) engine.join(event.id, { id });
+    const started = engine.beginRound(event.id);
+    assert.equal(started.players.length, 3);
+    assert.equal(started.round.status, 'countdown');
+    assert.throws(() => engine.submit(event.id, 1, 'a'), /倒计时/);
+    assert.ok(started.round.text.length > 200);
+    if (language === 'en') assert.match(started.round.text, /[a-z] [a-z]/i);
+    now += started.config.countdownMs;
+    assert.equal(engine.state(event.id).round.status, 'running');
+    now += 10_000;
+    engine.submit(event.id, 1, started.round.text.slice(0, 40));
+    engine.submit(event.id, 2, started.round.text.slice(0, 20));
+    assert.equal(engine.state(event.id).status, 'running');
+    now += 50_001;
+    const finished = engine.state(event.id);
+    assert.equal(finished.status, 'finished');
+    assert.deepEqual(finished.ranking.map((row) => row.userId), [1, 2, 3]);
+    assert.equal(finished.ranking[0].correct, 40);
+    assert.equal(finished.ranking[0].timeMs, 60_000);
+    assert.equal(finished.ranking[0].speed, 40);
+    db.close();
+  }
 });

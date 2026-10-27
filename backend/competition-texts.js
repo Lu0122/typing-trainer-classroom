@@ -51,6 +51,18 @@ const BANKS = {
 const LEVELS = Object.freeze(['basic', 'standard', 'challenge']);
 const LEVEL_LABELS = Object.freeze({ basic: '入门', standard: '标准', challenge: '挑战' });
 
+const ENGLISH_COMPETITION_TEXTS = [
+  'A good typing habit begins with accuracy and a steady rhythm. Keep your eyes on the sentence, let your fingers find the keys, and correct your mistakes before they grow. Practice does not need to be perfect every day. Small efforts repeated over time can make a remarkable difference.',
+  'Our classroom is a place to learn together. Some students move quickly, while others need more time to find their pace. Each careful attempt teaches us something useful. When we share ideas, listen to one another, and keep trying, everyone has a chance to improve.',
+  'Technology helps us work, study, and communicate across great distances. A keyboard may seem ordinary, but it connects our thoughts to the wider world. Clear writing, patient reading, and accurate typing are practical skills that we can use in many different jobs.'
+];
+
+function speedTextAt(language, index) {
+  const source = language === 'en' ? ENGLISH_COMPETITION_TEXTS : BANKS.standard;
+  const count = language === 'en' ? 4 : 5;
+  return Array.from({ length: count }, (_, offset) => source[(index + offset) % source.length]).join(language === 'en' ? ' ' : '');
+}
+
 function textsFor(level) {
   return BANKS[level] || BANKS.standard;
 }
@@ -62,4 +74,4 @@ function textAt(level, index) {
   return bank[((index % size) + size) % size];
 }
 
-module.exports = { BANKS, LEVELS, LEVEL_LABELS, textsFor, textAt };
+module.exports = { BANKS, LEVELS, LEVEL_LABELS, textsFor, textAt, speedTextAt };

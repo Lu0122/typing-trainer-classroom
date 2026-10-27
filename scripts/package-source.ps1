@@ -6,7 +6,8 @@ $packagePath = Join-Path $packageDir ("打字软件-源码拷贝版-{0}.zip" -f 
 $rootFiles = @(
   '.env', '.env.example', '.gitignore', 'README.md',
   'package.json', 'package-lock.json', 'vite.config.js', 'start-server.bat',
-  'scripts/package-source.ps1'
+  'scripts/package-source.ps1', 'scripts/package-runtime.cjs',
+  'scripts/runtime-launcher.cjs', 'scripts/verify-runtime.cjs'
 )
 $sourceDirs = @('frontend', 'backend', 'public', 'docs')
 

@@ -9,6 +9,7 @@ const BattleGame = defineAsyncComponent(() => import('./BattleGame.vue'));
 const BossGame = defineAsyncComponent(() => import('./BossGame.vue'));
 const ArenaGame = defineAsyncComponent(() => import('./ArenaGame.vue'));
 const GameLobby = defineAsyncComponent(() => import('./GameLobby.vue'));
+const CompetitionHub = defineAsyncComponent(() => import('./CompetitionHub.vue'));
 const ChaseGame = defineAsyncComponent(() => import('./ChaseGame.vue'));
 const RunnerGame = defineAsyncComponent(() => import('./RunnerGame.vue'));
 const BugFeedback = defineAsyncComponent(() => import('./BugFeedback.vue'));
@@ -20,6 +21,7 @@ import { AlertTriangle, ArrowLeft, ArrowUpRight, BarChart3, ChevronRight, Flame,
 const page = ref('home'); const category = ref('英文打字'); const passage = ref(null); const typed = ref(''); const pressedCode = ref(null); const wrongCode = ref(null); const wrongNotice = ref(''); const lastCode = ref('KeyboardEvent.code'); const beginnerSequence = ref([]); const beginnerIndex = ref(0); const beginnerCorrect = ref(0); const beginnerWrong = ref(0); const beginnerStartedAt = ref(null); const practiceStartedAt = ref(null); const now = ref(Date.now()); let timer; let wrongFeedbackTimer;
 const user = ref(null);
 const authOpen = ref(false);
+const returnAfterLogin = ref(null);
 const authView = ref('login');
 const authBusy = ref(false);
 const authMessage = ref('');
@@ -451,6 +453,11 @@ function openAccount() {
   authView.value = user.value ? 'profile' : 'login';
   authOpen.value = true;
 }
+function openCompetitionLogin(targetPage) {
+  returnAfterLogin.value = targetPage;
+  setPage('home');
+  openAccount();
+}
 function optimizeAvatar(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -494,7 +501,8 @@ async function submitLogin() {
     loginForm.password = '';
     authMessage.value = '';
     authOpen.value = false;
-    setPage('home');
+    setPage(returnAfterLogin.value || 'home');
+    returnAfterLogin.value = null;
     loadLearningData();
   } catch (error) { authMessage.value = error.message; }
   finally { authBusy.value = false; }
@@ -510,6 +518,7 @@ async function submitRegister() {
       loginForm.username = registerForm.displayName;
     } else {
       user.value = data.user; authView.value = 'profile'; authMessage.value = '账号创建成功。'; loadLearningData();
+      if (returnAfterLogin.value) { const destination = returnAfterLogin.value; returnAfterLogin.value = null; authOpen.value = false; setPage(destination); }
     }
     registerForm.displayName = ''; registerForm.password = '';
   } catch (error) { authMessage.value = error.message; }
@@ -767,7 +776,7 @@ function updateInput(event) { typed.value=event.target.value; }
 onMounted(async () => {
   makeBeginnerSequence();
   const savedPage = window.location.hash.slice(1);
-  const allowedPages = ['games', 'competition', 'bug-feedback', 'boss', 'race', 'rhythm', 'chase', 'battle', 'runner', 'beginner', 'english-home', 'english-word', 'english-phrase', 'english-article', 'pinyin-home', 'pinyin-syllable', 'pinyin-word', 'pinyin-article', 'challenge-home', 'challenge-english', 'challenge-pinyin', 'practice', 'growth', 'diagnostics', 'diagnostic-drill'];
+  const allowedPages = ['games', 'competition-hub', 'competition', 'battle-competition', 'bug-feedback', 'boss', 'race', 'rhythm', 'chase', 'battle', 'runner', 'beginner', 'english-home', 'english-word', 'english-phrase', 'english-article', 'pinyin-home', 'pinyin-syllable', 'pinyin-word', 'pinyin-article', 'challenge-home', 'challenge-english', 'challenge-pinyin', 'practice', 'growth', 'diagnostics', 'diagnostic-drill'];
   if (savedPage === 'challenge') page.value = 'challenge-home';
   else if (allowedPages.includes(savedPage)) page.value = savedPage;
   if (['race', 'rhythm', 'chase', 'boss', 'battle'].includes(savedPage)) {
@@ -793,15 +802,17 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 </script>
 <template>
 <BattleGame v-if="page === 'battle'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
+<BattleGame v-else-if="page === 'battle-competition'" :user="user" competition @back="setPage('competition-hub')" @leaderboard="openLeaderboard" @login="openCompetitionLogin('battle-competition')"/>
 <BossGame v-else-if="page === 'boss'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
 <ArenaGame v-else-if="page === 'race' || page === 'rhythm'" :key="page" :mode="page" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
 <ChaseGame v-else-if="page === 'chase'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
 <RunnerGame v-else-if="page === 'runner'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
 <BugFeedback v-else-if="page === 'bug-feedback'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
-<CompetitionGame v-else-if="page === 'competition'" :user="user" @back="setPage('games')" @login="setPage('competition'); openAccount()"/>
+<CompetitionGame v-else-if="page === 'competition'" :user="user" @back="setPage('competition-hub')" @login="openCompetitionLogin('competition')"/>
+<CompetitionHub v-else-if="page === 'competition-hub'" :user="user" @back="goHome" @select="setPage" @login="openCompetitionLogin('competition-hub')"/>
 <GameLobby v-else-if="page === 'games'" :user="user" @select="setPage" @back="goHome" @growth="openGrowth" @leaderboard="openLeaderboard" @account="openAccount" @bug-report="setPage('bug-feedback')"/>
 <div v-else class="app-shell" :class="{ 'is-home-page': page === 'home', 'is-reference-page': page === 'beginner' || page === 'growth' || page === 'diagnostics' || page === 'diagnostic-drill' || page.startsWith('challenge-') || page.startsWith('english-') || page.startsWith('pinyin-'), 'is-beginner-page': page === 'beginner', 'is-english-home': page === 'english-home', 'is-english-practice': page.startsWith('english-') && page !== 'english-home', 'is-pinyin-practice': page.startsWith('pinyin-') && page !== 'pinyin-home', 'is-pinyin-home': page === 'pinyin-home', 'is-challenge-running': page.startsWith('challenge-') && !!challenge }"><AppHeader variant="hero" title="字练场 2026" subtitle="中文与英文键盘训练" :icon="KeyboardIcon" decor clickable-brand :user="user" @brand="goHome" @account="openAccount" />
-  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择打字课程</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="setPage('games')"><span class="home-challenge-icon">VS</span><strong>游戏模式</strong><small>六种游戏玩法，和同学一起挑战</small></button></div><p class="footnote">四种练习均可直接开始，登录后可保存一分钟挑战成绩并参与排行榜。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
+  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card competition" @click="setPage('competition-hub')"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="setPage('games')"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button></div><p class="footnote">练习可直接开始；参加现场比赛请先登录，等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
 <section v-else-if="page === 'growth'" class="lesson-view learning-view">
   <div class="lesson-nav"><button @click="goHome"><ArrowLeft :size="14"/>返回</button><span>首页</span><b>›</b><strong>我的成长</strong></div>
   <section class="learning-hero"><div><p class="eyebrow">学生成长中心</p><h1>{{ user?.displayName || '同学' }}，继续保持输入节奏。</h1><p v-if="learningSummary?.hasData">当前阶段：{{ learningSummary.level.label }} · {{ learningSummary.level.next }}</p><p v-else>完成一次练习后，这里会开始记录你的成长轨迹。</p></div><div class="learning-level"><Flame :size="20"/><strong>{{ learningSummary?.stats?.streak || 0 }}</strong><span>连续练习天</span></div></section>

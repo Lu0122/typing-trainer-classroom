@@ -1,4 +1,4 @@
-const adminState = { passages: [], users: [], progress: [], assignments: [], assignmentUsers: [], assignmentClasses: [], classes: [], unassignedStudents: [], page: 1, pages: 1, passagePage: 1, passagePages: 1, userPage: 1, userPages: 1, progressPage: 1, progressPages: 1, assignmentPage: 1, assignmentPages: 1, classPage: 1, classPages: 1, unassignedPage: 1, unassignedPages: 1, classMembersPage: 1, classMembersPages: 1, classMembersClassId: null, activeView: 'overview' };
+const adminState = { passages: [], users: [], progress: [], assignments: [], competitions: [], assignmentUsers: [], assignmentClasses: [], classes: [], unassignedStudents: [], page: 1, pages: 1, passagePage: 1, passagePages: 1, userPage: 1, userPages: 1, progressPage: 1, progressPages: 1, assignmentPage: 1, assignmentPages: 1, classPage: 1, classPages: 1, unassignedPage: 1, unassignedPages: 1, classMembersPage: 1, classMembersPages: 1, classMembersClassId: null, activeView: 'overview' };
 
 const el = {
   loginView: document.querySelector('#login-view'), adminShell: document.querySelector('#admin-shell'),
@@ -18,6 +18,8 @@ const el = {
   classes: document.querySelector('#class-table'), classCount: document.querySelector('#class-count'), classEmpty: document.querySelector('#class-empty'), classPagination: document.querySelector('#class-pagination'), classPageLabel: document.querySelector('#class-page-label'), classPreviousPage: document.querySelector('#class-previous-page'), classNextPage: document.querySelector('#class-next-page'), refreshClasses: document.querySelector('#refresh-classes'), classForm: document.querySelector('#class-form'), classId: document.querySelector('#class-id-input'), className: document.querySelector('#class-name-input'), classTerm: document.querySelector('#class-term-input'), classDescription: document.querySelector('#class-description-input'), classSubmit: document.querySelector('#class-submit'), classCancelEdit: document.querySelector('#class-cancel-edit'), classTarget: document.querySelector('#class-target-input'), classAssignForm: document.querySelector('#class-assign-form'), classStudents: document.querySelector('#class-students-input'), classMembersPanel: document.querySelector('#class-members-panel'), classMembersTitle: document.querySelector('#class-members-title'), classMembersTable: document.querySelector('#class-members-table'), classMembersEmpty: document.querySelector('#class-members-empty'), classMembersPagination: document.querySelector('#class-members-pagination'), classMembersPageLabel: document.querySelector('#class-members-page-label'), classMembersPreviousPage: document.querySelector('#class-members-previous-page'), classMembersNextPage: document.querySelector('#class-members-next-page'), classOverviewContent: document.querySelector('#class-overview-content'), classMetricMembers: document.querySelector('#class-metric-members'), classMetricActive: document.querySelector('#class-metric-active'), classMetricSessions: document.querySelector('#class-metric-sessions'), classMetricMinutes: document.querySelector('#class-metric-minutes'), classMetricSpeed: document.querySelector('#class-metric-speed'), classMetricAccuracy: document.querySelector('#class-metric-accuracy'), classOverviewTasks: document.querySelector('#class-overview-tasks'), classOverviewTasksEmpty: document.querySelector('#class-overview-tasks-empty'), classOverviewRisks: document.querySelector('#class-overview-risks'), classOverviewRisksEmpty: document.querySelector('#class-overview-risks-empty'), classOverviewRanking: document.querySelector('#class-overview-ranking'), classOverviewRankingEmpty: document.querySelector('#class-overview-ranking-empty'), closeClassMembers: document.querySelector('#close-class-members'), unassignedTable: document.querySelector('#unassigned-table'), unassignedCount: document.querySelector('#unassigned-count'), unassignedEmpty: document.querySelector('#unassigned-empty'), unassignedPagination: document.querySelector('#unassigned-pagination'), unassignedPageLabel: document.querySelector('#unassigned-page-label'), unassignedPreviousPage: document.querySelector('#unassigned-previous-page'), unassignedNextPage: document.querySelector('#unassigned-next-page'),
   scoreTable: document.querySelector('#score-table'), scoreCount: document.querySelector('#score-count'), scoreEmpty: document.querySelector('#score-empty'),
   scorePagination: document.querySelector('#score-pagination'), pageLabel: document.querySelector('#page-label'), previousPage: document.querySelector('#previous-page'), nextPage: document.querySelector('#next-page'), refreshScores: document.querySelector('#refresh-scores'),
+  competitionForm: document.querySelector('#competition-form'), competitionName: document.querySelector('#competition-name-input'), competitionMode: document.querySelector('#competition-mode-input'), competitionSchedule: document.querySelector('#competition-schedule-input'), competitionDuration: document.querySelector('#competition-duration-input'), competitionSeries: document.querySelector('#competition-series-input'), competitionSideA: document.querySelector('#competition-side-a-input'), competitionSideB: document.querySelector('#competition-side-b-input'), competitionSideNames: document.querySelector('#competition-side-names-input'), competitionTeamSize: document.querySelector('#competition-team-size-input'), competitionTeamFields: document.querySelectorAll('.competition-team-field'), competitionLeagueFields: document.querySelectorAll('.competition-league-field'), competitionTable: document.querySelector('#competition-table'), competitionCount: document.querySelector('#competition-count'), competitionEmpty: document.querySelector('#competition-empty'), refreshCompetitions: document.querySelector('#refresh-competitions'),
+  battleCompetitionStatus: document.querySelector('#battle-competition-status'), battleCompetitionSummary: document.querySelector('#battle-competition-summary'), battleCompetitionRoster: document.querySelector('#battle-competition-roster'), battleCompetitionDuration: document.querySelector('#battle-competition-duration'), battleCompetitionPrepare: document.querySelector('#battle-competition-prepare'), battleCompetitionStart: document.querySelector('#battle-competition-start'),
   dialog: document.querySelector('#passage-dialog'), passageForm: document.querySelector('#passage-form'), dialogTitle: document.querySelector('#passage-dialog-title'),
   passageId: document.querySelector('#passage-id'), passageTitle: document.querySelector('#passage-title-input'), passageCategory: document.querySelector('#passage-category-input'),
   passageContent: document.querySelector('#passage-content-input'), passageActive: document.querySelector('#passage-active-input'), contentCounter: document.querySelector('#content-counter'),
@@ -664,6 +666,222 @@ async function loadScores() {
   window.lucide?.createIcons();
 }
 
+const competitionStatusNames = { draft: '草稿', registration: '检录中', running: '比赛中', paused: '已暂停', finished: '已结束' };
+function renderCompetitions() {
+  const rows = adminState.competitions;
+  el.competitionCount.textContent = `共 ${rows.length} 场`;
+  el.competitionEmpty.hidden = rows.length > 0;
+  el.competitionTable.replaceChildren(...rows.map((item) => {
+    const row = document.createElement('tr');
+    const name = document.createElement('td'); name.className = 'article-cell';
+    const strong = document.createElement('strong'); strong.textContent = item.name;
+    const small = document.createElement('span'); small.textContent = item.id.slice(0, 8); name.append(strong, small);
+    const mode = document.createElement('td'); mode.textContent = item.mode === 'speed' ? `个人赛 · ${item.language === 'en' ? '英文' : '中文'}` : item.mode === 'duel' ? '旧版 1v1' : '旧版团队同题赛';
+    const status = document.createElement('td');
+    const pill = document.createElement('span'); pill.className = `status-pill ${item.status === 'running' ? '' : item.status === 'finished' ? 'is-inactive' : ''}`; pill.textContent = competitionStatusNames[item.status] || item.status; status.append(pill);
+    const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
+    const actions = document.createElement('td'); actions.className = 'table-actions';
+    if (item.status === 'draft') actions.append(actionButton('clipboard-check', '开启检录', '', () => openCompetitionRegistration(item)));
+    if (item.status === 'registration') actions.append(actionButton('play', '开始比赛', '', () => startCompetition(item)));
+    if (item.status === 'running') {
+      if (item.mode !== 'speed') actions.append(actionButton('skip-forward', '结算本轮或开始下一轮', '', () => advanceCompetition(item)));
+      actions.append(actionButton('pause', '暂停赛事', '', () => pauseCompetition(item)));
+      if (item.mode !== 'speed') actions.append(actionButton('plus-circle', '本轮加时', '', () => addCompetitionTime(item)));
+    }
+    if (item.status === 'paused') actions.append(actionButton('play', '继续赛事', '', () => resumeCompetition(item)));
+    if (['running', 'paused', 'finished'].includes(item.status)) {
+      const boardLink = document.createElement('a'); boardLink.className = 'table-action'; boardLink.href = `/board?competition=${item.id}`; boardLink.target = '_blank'; boardLink.rel = 'noopener'; boardLink.title = '打开大屏'; boardLink.setAttribute('aria-label', '打开大屏'); boardLink.innerHTML = '<i data-lucide="monitor-up"></i>'; actions.append(boardLink);
+    }
+    if (item.status === 'finished') {
+      const exportLink = document.createElement('a'); exportLink.className = 'table-action'; exportLink.href = `/api/competitions/${item.id}/export.csv`; exportLink.title = '导出成绩'; exportLink.setAttribute('aria-label', '导出成绩'); exportLink.innerHTML = '<i data-lucide="download"></i>'; actions.append(exportLink);
+      if (item.mode === 'team') actions.append(actionButton('gavel', '确认队伍结果', '', () => decideCompetitionResult(item)));
+    }
+    for (const action of actions.children) {
+      const label = document.createElement('span');
+      label.textContent = action.getAttribute('aria-label') || action.title;
+      action.append(label);
+    }
+    row.append(name, mode, status, created, actions);
+    return row;
+  }));
+  window.lucide?.createIcons();
+}
+
+async function loadCompetitions() {
+  const rows = await api('/api/competitions');
+  adminState.competitions = Array.isArray(rows) ? rows : [];
+  renderCompetitions();
+}
+
+async function loadBattleCompetition() {
+  const state = await api('/api/battle/competition/referee');
+  el.battleCompetitionStatus.textContent = ({ waiting: '等待选手', countdown: '开赛倒计时', running: '比赛中', finished: '本局已结束' })[state.phase] || state.phase;
+  el.battleCompetitionSummary.textContent = state.phase === 'finished'
+    ? `红方 ${state.result.red.toFixed(1)}% · 蓝方 ${(100 - state.result.red).toFixed(1)}% · ${state.result.winner ? (state.result.winner === 'red' ? '红方' : '蓝方') + '获胜' : '平局'}`
+    : `红方 ${state.teams.red.count} 人 · 蓝方 ${state.teams.blue.count} 人 · ${Math.round(state.durationMs / 1000)} 秒/局`;
+  el.battleCompetitionStart.disabled = state.phase !== 'waiting' || !state.teams.red.count || !state.teams.blue.count;
+  el.battleCompetitionPrepare.disabled = ['countdown', 'running'].includes(state.phase);
+  const redNames = state.players.filter((player) => player.team === 'red').map((player) => player.name).join('、') || '暂无';
+  const blueNames = state.players.filter((player) => player.team === 'blue').map((player) => player.name).join('、') || '暂无';
+  el.battleCompetitionStatus.dataset.phase = state.phase;
+  const roster = [['red', '红方阵营', redNames, state.teams.red.count], ['blue', '蓝方阵营', blueNames, state.teams.blue.count]];
+  const rosterKey = JSON.stringify(roster);
+  if (el.battleCompetitionRoster.dataset.roster === rosterKey) return;
+  el.battleCompetitionRoster.dataset.roster = rosterKey;
+  el.battleCompetitionRoster.replaceChildren(...roster.map(([team, title, names, count]) => {
+    const group = document.createElement('section'); group.className = `competition-side is-${team}`;
+    const heading = document.createElement('div');
+    const name = document.createElement('strong'); name.textContent = title;
+    const total = document.createElement('b'); total.textContent = `${count} 人`;
+    heading.append(name, total);
+    const players = document.createElement('p'); players.textContent = names === '暂无' ? '等待学生加入阵营' : names;
+    group.append(heading, players);
+    return group;
+  }));
+}
+
+async function prepareBattleCompetition() {
+  try {
+    const current = await api('/api/battle/competition/referee');
+    if (current.phase === 'waiting' && current.online > 0 && !window.confirm('新建房间会清空当前已加入选手，确定继续吗？')) return;
+    await api('/api/battle/competition/referee/prepare', { method: 'POST', body: JSON.stringify({ durationMs: Number(el.battleCompetitionDuration.value) }) });
+    toast('团队比赛房间已准备，选手可以选择阵营'); await loadBattleCompetition();
+  } catch (error) { toast(error.message, true); }
+}
+
+async function startBattleCompetition() {
+  try {
+    await api('/api/battle/competition/referee/start', { method: 'POST' });
+    toast('团队比赛已开始'); await loadBattleCompetition();
+  } catch (error) { toast(error.message, true); }
+}
+
+function updateCompetitionModeFields() {
+  const team = el.competitionMode.value === 'team';
+  el.competitionTeamFields.forEach((field) => { field.hidden = !team; });
+  const league = team && el.competitionSeries.value === 'league';
+  el.competitionLeagueFields.forEach((field) => { field.hidden = !league; });
+  el.competitionSideA.parentElement.hidden = !team || league;
+  el.competitionSideB.parentElement.hidden = !team || league;
+  el.competitionSideA.required = team && !league;
+  el.competitionSideB.required = team && !league;
+  el.competitionSideNames.required = league;
+}
+
+async function saveCompetition(event) {
+  event.preventDefault();
+  try {
+    const team = el.competitionMode.value === 'team';
+    const speed = el.competitionMode.value.startsWith('speed-');
+    const league = team && el.competitionSeries.value === 'league';
+    const names = league
+      ? el.competitionSideNames.value.split(/[、,，]/).map((name) => name.trim()).filter(Boolean).slice(0, 8)
+      : [el.competitionSideA.value.trim(), el.competitionSideB.value.trim()].filter(Boolean);
+    if (team && names.length < 2) { toast('请至少填写两个参赛方', true); return; }
+    await api('/api/competitions', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: el.competitionName.value.trim(),
+        mode: speed ? 'speed' : el.competitionMode.value,
+        schedule: el.competitionSchedule.value,
+        config: {
+          roundMs: Number(el.competitionDuration.value),
+          capacity: speed ? 60 : team ? Number(el.competitionTeamSize.value) * names.length : 2,
+          ...(speed ? { language: el.competitionMode.value === 'speed-en' ? 'en' : 'zh' } : {}),
+          teamSize: Number(el.competitionTeamSize.value),
+          series: team ? el.competitionSeries.value : 'single'
+        },
+        sides: team ? names.map((name, index) => ({ name, color: ['#e05b5b', '#4a8fe0', '#3fae74', '#d9a93a', '#8d6fd4', '#dd8442'][index] || '#4a8fe0' })) : []
+      })
+    });
+    el.competitionForm.reset();
+    el.competitionDuration.value = '120000';
+    updateCompetitionModeFields();
+    toast('赛事已创建');
+    await loadCompetitions();
+  } catch (error) { toast(error.message, true); }
+}
+
+async function openCompetitionRegistration(item) {
+  try { await api(`/api/competitions/${item.id}/registration`, { method: 'POST' }); toast('检录已开启'); await loadCompetitions(); }
+  catch (error) { toast(error.message, true); }
+}
+
+async function startCompetition(item) {
+  try {
+    let body;
+    if (item.schedule === 'multi_day') {
+      const planned = window.prompt('输入计划开始时间（例如 2026-10-23 14:30），留空则立即开始', '');
+      if (planned) {
+        const plannedAt = Date.parse(planned.replace(' ', 'T'));
+        if (!Number.isFinite(plannedAt)) { toast('计划时间格式不正确', true); return; }
+        body = JSON.stringify({ plannedAt });
+      }
+    }
+    await api(`/api/competitions/${item.id}/start`, { method: 'POST', ...(body ? { body } : {}) });
+    toast('比赛已开始或已排期'); await loadCompetitions();
+  }
+  catch (error) { toast(error.message, true); }
+}
+
+async function advanceCompetition(item) {
+  try {
+    const state = await api(`/api/competitions/${item.id}/admin`);
+    const path = state.round?.status === 'running' ? 'settle' : 'start';
+    let options = { method: 'POST' };
+    if (path === 'start' && item.schedule === 'multi_day') {
+      const planned = window.prompt('输入下一轮计划开始时间，留空则立即开始', '');
+      if (planned) {
+        const plannedAt = Date.parse(planned.replace(' ', 'T'));
+        if (!Number.isFinite(plannedAt)) { toast('计划时间格式不正确', true); return; }
+        options.body = JSON.stringify({ plannedAt });
+      }
+    }
+    await api(`/api/competitions/${item.id}/${path}`, options);
+    toast(path === 'settle' ? '本轮已结算' : '下一轮已开始');
+    await loadCompetitions();
+  } catch (error) { toast(error.message, true); }
+}
+
+async function pauseCompetition(item) {
+  try { await api(`/api/competitions/${item.id}/pause`, { method: 'POST' }); toast('赛事已暂停'); await loadCompetitions(); }
+  catch (error) { toast(error.message, true); }
+}
+
+async function resumeCompetition(item) {
+  try { await api(`/api/competitions/${item.id}/resume`, { method: 'POST' }); toast('赛事已继续'); await loadCompetitions(); }
+  catch (error) { toast(error.message, true); }
+}
+
+async function addCompetitionTime(item) {
+  const seconds = Number.parseInt(window.prompt('增加多少秒？', '30'), 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) return;
+  try { await api(`/api/competitions/${item.id}/overtime`, { method: 'POST', body: JSON.stringify({ extraMs: seconds * 1000 }) }); toast(`本轮已加时 ${seconds} 秒`); await loadCompetitions(); }
+  catch (error) { toast(error.message, true); }
+}
+
+async function decideCompetitionResult(item) {
+  try {
+    const state = await api(`/api/competitions/${item.id}/admin`);
+    if (!state.sides?.length || !state.matches?.length) return;
+    let match = state.matches.at(-1);
+    if (state.matches.length > 1) {
+      const matchOptions = state.matches.map((current, index) => `${index + 1}. ${current.sideAName} vs ${current.sideBName}`).join('；');
+      const matchIndex = Number.parseInt(window.prompt(`请选择要裁定的场次（${matchOptions}）`, String(state.matches.length)), 10) - 1;
+      if (!Number.isInteger(matchIndex) || !state.matches[matchIndex]) return;
+      match = state.matches[matchIndex];
+    }
+    const candidates = [state.sides.find((side) => side.id === match.sideAId), state.sides.find((side) => side.id === match.sideBId)].filter(Boolean);
+    const options = candidates.map((side, index) => `${index + 1}. ${side.name}`).join('；');
+    const selected = Number.parseInt(window.prompt(`请选择胜方（${options}）`, '1'), 10) - 1;
+    if (!Number.isInteger(selected) || !candidates[selected]) return;
+    const reason = window.prompt('请输入裁定原因', '现场复核后确认') || '';
+    await api(`/api/competitions/${item.id}/result`, { method: 'POST', body: JSON.stringify({ matchId: match.id, winnerSideId: candidates[selected].id, reason }) });
+    toast('队伍结果已确认');
+    await loadCompetitions();
+  } catch (error) { toast(error.message, true); }
+}
+
 async function switchView(view) {
   adminState.activeView = view;
   el.navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
@@ -676,6 +894,7 @@ async function switchView(view) {
     if (view === 'classes') await loadClasses();
     if (view === 'progress') await loadProgress();
     if (view === 'assignments') await Promise.all([loadAssignments(), loadAssignmentUsers(), loadAssignmentClasses()]);
+    if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition()]);
     if (view === 'scores') await loadScores();
   } catch (error) {
     if (error.status === 401) setAuthenticated(false);
@@ -731,6 +950,12 @@ el.resetForm.addEventListener('submit', submitPasswordReset);
 el.closeReset.addEventListener('click', () => el.resetDialog.close());
 el.cancelReset.addEventListener('click', () => el.resetDialog.close());
 el.refreshScores.addEventListener('click', loadScores);
+el.competitionForm.addEventListener('submit', saveCompetition);
+el.battleCompetitionPrepare.addEventListener('click', prepareBattleCompetition);
+el.battleCompetitionStart.addEventListener('click', startBattleCompetition);
+el.competitionMode.addEventListener('change', updateCompetitionModeFields);
+el.competitionSeries.addEventListener('change', updateCompetitionModeFields);
+el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetitions(), loadBattleCompetition()]));
 el.passagePreviousPage.addEventListener('click', () => { adminState.passagePage -= 1; loadPassages(); });
 el.passageNextPage.addEventListener('click', () => { adminState.passagePage += 1; loadPassages(); });
 el.userPreviousPage.addEventListener('click', () => { adminState.userPage -= 1; loadUsers(); });
@@ -747,6 +972,7 @@ el.mobileMenu.addEventListener('click', () => el.sidebar.classList.toggle('is-op
 
 window.addEventListener('DOMContentLoaded', async () => {
   window.lucide?.createIcons();
+  updateCompetitionModeFields();
   el.currentDate.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
   try {
     const session = await api('/api/admin/me');
@@ -760,3 +986,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     setAuthenticated(false);
   }
 });
+setInterval(() => {
+  if (adminState.activeView === 'competitions' && !el.adminShell.hidden) loadBattleCompetition().catch(() => {});
+}, 2000);

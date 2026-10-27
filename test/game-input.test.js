@@ -322,3 +322,78 @@ test('race: cancelling composition leaves no mistakes, while a confirmed wrong c
   assert.equal(calls.length, 1);
   assert.equal(calls[0].text, '异');
 });
+
+test('competition polling preserves local text and corrections made after its snapshot', () => {
+  const game = load('CompetitionGame.vue', ['applyEvent', 'eventDraft'], async () => response({}), {}, {
+    window: { innerWidth: 1033 }, document: { body: {}, activeElement: null }
+  });
+  const state = typed => ({ id: 'event-1', status: 'running', mode: 'speed', serverNow: Date.now(),
+    round: { id: 'round-1', status: 'running', text: '清晨的校园笼罩着一层薄雾', startsAt: Date.now(), durationMs: 60000 },
+    me: { typed }, players: [] });
+  game.applyEvent(state('清晨'));
+  game.eventDraft.value = '清晨的校园笼罩着一层薄雾';
+  game.applyEvent(state('清晨的校园'));
+  assert.equal(game.eventDraft.value, '清晨的校园笼罩着一层薄雾');
+  game.eventDraft.value = '清晨的校';
+  game.applyEvent(state('清晨的校园'));
+  assert.equal(game.eventDraft.value, '清晨的校', '旧快照不能撤销本地修改');
+  game.applyEvent({ ...state(''), round: { ...state('').round, id: 'round-2' } });
+  assert.equal(game.eventDraft.value, '', '新一轮才重置输入');
+});
+
+test('battle countdown advances locally while waiting for server confirmation to unlock play', () => {
+  const game = load('BattleGame.vue', ['state', 'battleClock', 'serverClockOffset', 'countdownSeconds', 'remaining'], async () => response({}), { competition: true });
+  game.serverClockOffset.value = 0;
+  game.battleClock.value = 100000;
+  game.state.value = { phase: 'countdown', startsAt: 105000, endsAt: 225000, durationMs: 120000 };
+  assert.equal(game.countdownSeconds.value, 5);
+  assert.equal(game.remaining.value, '00:05');
+  game.battleClock.value = 103100;
+  assert.equal(game.countdownSeconds.value, 2);
+  assert.equal(game.remaining.value, '00:02');
+  game.battleClock.value = 105200;
+  assert.equal(game.countdownSeconds.value, 0);
+  assert.equal(game.state.value.phase, 'countdown', '本地倒计时归零不能擅自解锁输入');
+  game.state.value = { ...game.state.value, phase: 'running' };
+  assert.equal(game.remaining.value, '02:00');
+});
+
+test('battle performance announcements preserve an ongoing draft and never take input focus', async () => {
+  let broadcasts = [];
+  const packet = () => ({ phase: 'running', round: 'round-1', serverNow: Date.now(), me: { id: 1, team: 'red' }, events: [], broadcasts });
+  const game = load('BattleGame.vue', ['refresh', 'state', 'task', 'input', 'inputEl', 'globalAnnouncement', 'connected'], async () => response(packet()));
+  game.state.value = packet();
+  game.task.value = { id: 'task-1', text: '清晨的校园笼罩着一层薄雾', progress: 0 };
+  game.input.value = '清晨的校园';
+  let focused = 0;
+  game.inputEl.value = { focus() { focused++; } };
+  await game.refresh();
+  broadcasts = [{ id: 'notice-1', team: 'red', title: '刷新本局最快段落', detail: '第 1 段用时 30 秒' }];
+  await game.refresh();
+  assert.equal(game.globalAnnouncement.value.id, 'notice-1');
+  assert.equal(game.input.value, '清晨的校园');
+  assert.equal(game.task.value.id, 'task-1');
+  assert.equal(game.connected.value, true);
+  assert.equal(focused, 0);
+});
+
+test('competition frontend submits later correct positions after mistakes and previews combo and accuracy', async () => {
+  const calls=[];
+  const game=load('BattleGame.vue',['state','task','input','handleBattleInput','sendCharacterBatch','canAttackCharacter','myCombo','myMultiplier','localBattleStats','characterState'], async (url,options)=>{
+    calls.push(JSON.parse(options.body));
+    return response({phase:'running',round:'r1',inputRules:{allowMistakes:true},me:{id:1,team:'red',correct:8,attempted:9,combo:2,multiplier:1},players:[]});
+  }, {competition:true});
+  game.state.value={phase:'running',round:'r1',inputRules:{allowMistakes:true},me:{id:1,team:'red',correct:6,attempted:6,combo:6,multiplier:1.5}};
+  game.task.value={id:'t1',text:'abcdefghijklm',progress:6,typed:'abcdef'};
+  game.input.value='abcdefx';game.handleBattleInput();
+  assert.equal(game.myCombo.value,0);assert.equal(game.myMultiplier.value,1);assert.equal(game.localBattleStats.value.accuracy,86);
+  game.input.value='abcdefxhi';game.handleBattleInput();
+  assert.equal(game.canAttackCharacter.value,true);assert.equal(game.myCombo.value,2);
+  await game.sendCharacterBatch();
+  assert.equal(calls[0].text,'abcdefxhi');
+  assert.equal(game.task.value.progress,9);assert.equal(game.task.value.typed,'abcdefxhi');
+  assert.equal(game.characterState('g',6).wrong,true,'已提交的错字仍须标红');
+  assert.equal(game.myCombo.value,2);assert.equal(game.localBattleStats.value.accuracy,89);
+  game.input.value='abcdefghi';game.handleBattleInput();
+  assert.equal(game.input.value,'abcdefxhi','已经结算的错字不能改成正确字后再计分');
+});

@@ -5,6 +5,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 // 数据来自 /api/competition/:mode/board，服务端已剔除 seat 令牌。
 const params = new URLSearchParams(window.location.search);
 const mode = params.get('mode') === 'team' ? 'team' : 'personal';
+const competitionId = params.get('competition');
+const eventMode = Boolean(competitionId);
 
 const data = ref(null);
 const clock = ref(Date.now());
@@ -15,7 +17,7 @@ let clockTimer;
 
 async function refresh() {
   try {
-    const response = await fetch(`/api/competition/${mode}/board`, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(eventMode ? `/api/competitions/${competitionId}/board` : `/api/competition/${mode}/board`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error('bad status');
     const payload = await response.json();
     data.value = payload;
@@ -27,11 +29,26 @@ async function refresh() {
   }
 }
 
-const phase = computed(() => data.value?.phase || 'waiting');
-const phaseLabel = computed(() => data.value?.phaseLabel || '连接中');
+const phase = computed(() => {
+  if (!eventMode) return data.value?.phase || 'waiting';
+  if (data.value?.status === 'finished') return 'finished';
+  if (data.value?.status === 'paused') return 'paused';
+  if (data.value?.round?.status === 'settled') return 'break';
+  if (data.value?.round?.status === 'running') return 'qualifier';
+  return 'waiting';
+});
+const phaseLabel = computed(() => {
+  if (!eventMode) return data.value?.phaseLabel || '连接中';
+  if (phase.value === 'finished') return '比赛结束';
+  if (phase.value === 'paused') return '赛事暂停';
+  if (phase.value === 'break') return '本轮结算';
+  if (phase.value === 'qualifier') return '比赛进行中';
+  return data.value?.round?.status === 'scheduled' ? '等待计划时间' : '等待开赛';
+});
 const countdownTarget = computed(() => {
   const value = data.value;
   if (!value) return null;
+  if (eventMode) return value.round?.status === 'scheduled' ? value.round.plannedAt : value.round?.endsAt;
   if (value.phase === 'waiting') return value.startsAt;
   if (value.phase === 'finished') return value.result?.endedAt ? value.result.endedAt + 30000 : null;
   return value.endsAt;
@@ -42,23 +59,50 @@ const remaining = computed(() => {
 });
 const timeLabel = computed(() => `${String(Math.floor(remaining.value / 60)).padStart(2, '0')}:${String(remaining.value % 60).padStart(2, '0')}`);
 const hint = computed(() => {
+  if (phase.value === 'paused') return '等待主持台继续';
   if (phase.value === 'waiting') return '距离初赛开始';
   if (phase.value === 'break') return '距离决赛开始';
   if (phase.value === 'final') return '决赛剩余';
   if (phase.value === 'finished') return '成绩展示';
   return '初赛剩余';
 });
-const top = computed(() => data.value?.top || []);
+const top = computed(() => {
+  if (!eventMode) return data.value?.top || [];
+  const ordered = (data.value?.players || []).slice().sort((a, b) => data.value?.mode === 'speed'
+    ? b.correct - a.correct || b.accuracy - a.accuracy
+    : (a.rank || 999) - (b.rank || 999));
+  return ordered.map((row, index) => ({
+    ...row,
+    id: row.userId,
+    rank: row.rank || index + 1,
+    speed: row.speed ?? (row.finished && row.elapsedMs ? Math.round(row.correct / row.elapsedMs * 60000) : 0),
+    qualified: false,
+    flagged: false,
+    disqualified: false
+  })).sort((a, b) => (a.rank || 999) - (b.rank || 999));
+});
 const leader = computed(() => Math.max(1, ...top.value.map((row) => row.correct)));
-const teams = computed(() => data.value?.teams || []);
-const total = computed(() => data.value?.total || 0);
-const qualifiedCount = computed(() => data.value?.qualifiedCount || 0);
-const finalists = computed(() => data.value?.finalists || 16);
-const champion = computed(() => data.value?.result?.winner || null);
-const events = computed(() => (data.value?.events || []).slice(-4).reverse());
-const modeLabel = computed(() => (mode === 'team' ? '团队赛' : '个人晋级赛'));
+const teams = computed(() => {
+  if (!eventMode) return data.value?.teams || [];
+  return (data.value?.standings || data.value?.sides || []).map((side) => ({ team: side.id, name: side.name, correct: side.correct, members: side.members, score: side.score }));
+});
+const total = computed(() => eventMode ? (data.value?.playerCount || 0) : (data.value?.total || 0));
+const qualifiedCount = computed(() => eventMode ? (data.value?.players || []).filter((row) => row.finished).length : (data.value?.qualifiedCount || 0));
+const finalists = computed(() => eventMode ? (data.value?.config?.capacity || 2) : (data.value?.finalists || 16));
+const champion = computed(() => {
+  if (!eventMode) return data.value?.result?.winner || null;
+  if (data.value?.mode === 'speed') return top.value[0] || null;
+  const winnerId = data.value?.config?.series === 'league'
+    ? data.value?.sides?.slice().sort((a, b) => b.score - a.score)[0]?.id
+    : data.value?.match?.winnerSideId;
+  const winner = data.value?.sides?.find((side) => side.id === winnerId);
+  return winner ? { team: winner.id, name: winner.name, correct: winner.correct } : null;
+});
+const events = computed(() => (eventMode ? [] : (data.value?.events || []).slice(-4).reverse()));
+const modeLabel = computed(() => eventMode ? (data.value?.mode === 'team' ? '同题团队赛' : data.value?.mode === 'speed' ? `个人赛 · ${data.value?.config?.language === 'en' ? '英文' : '中文'}` : '1v1') : (mode === 'team' ? '团队赛' : '个人晋级赛'));
 
 function teamName(team) {
+  if (eventMode) return data.value?.sides?.find((side) => side.id === team)?.name || '参赛方';
   return team === 'red' ? '红队' : '蓝队';
 }
 
@@ -103,7 +147,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="score">
               <strong>{{ row.correct }}</strong>
-              <small>{{ row.accuracy }}% · {{ row.speed }} 字/分</small>
+              <small>{{ eventMode && data?.mode === 'speed' && phase === 'finished' ? `${((row.timeMs ?? 0) / 1000).toFixed(1)} 秒 · ` : '' }}{{ row.accuracy }}% · {{ row.speed }} 字/分</small>
             </div>
             <span v-if="row.disqualified" class="badge">作废</span>
             <span v-else-if="row.flagged" class="badge warn">异常</span>
@@ -129,8 +173,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="card numbers">
-          <div><small>晋级名额</small><strong>{{ finalists }}</strong></div>
-          <div><small>已晋级</small><strong>{{ qualifiedCount }}</strong></div>
+          <div><small>{{ eventMode && data?.mode === 'speed' ? '报名上限' : '晋级名额' }}</small><strong>{{ finalists }}</strong></div>
+          <div><small>{{ eventMode && data?.mode === 'speed' ? '已完成全文' : '已晋级' }}</small><strong>{{ qualifiedCount }}</strong></div>
         </div>
 
         <div class="card feed">

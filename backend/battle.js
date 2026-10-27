@@ -30,20 +30,35 @@ const TEXTS = [
 ];
 
 class Battle {
-  constructor({ now = Date.now, save = () => {}, recordProgress = () => {} } = {}) {
+  constructor({ now = Date.now, save = () => {}, recordProgress = () => {}, competition = false } = {}) {
     this.now = now; this.save = save; this.recordProgress = recordProgress; this.players = new Map();
+    this.competition = competition; this.durationMs = 120_000;
     this.round = crypto.randomUUID(); this.phase = 'waiting'; this.red = 50;
     this.host = null; this.started = null; this.balanceAt = now() + 30000;
-    this.notice = '选择阵营，两人加入后自动开始。'; this.result = null; this.event = 0;
+    this.notice = competition ? '选择阵营，等待裁判统一开赛。' : '选择阵营，两人加入后自动开始。'; this.result = null; this.event = 0;
     this.frontier = [...INITIAL_FRONTIER]; this.lastAttack = null; this.events = [];
     this.broadcastId = 0; this.broadcasts = []; this.fastestSegmentMs = null; this.fastestSpeed = 0;
   }
   online() { return [...this.players.values()].filter(p => this.now() - p.seen < 15000); }
   fail(message) { throw Object.assign(new Error(message), { status: 400 }); }
+  prepareCompetition(durationMs) {
+    if (!this.competition) this.fail('不是正式比赛房间');
+    this.tick();
+    if (this.phase === 'running' || this.phase === 'countdown') this.fail('本局还在进行中');
+    if (!Number.isInteger(durationMs) || durationMs < 30_000 || durationMs > 10 * 60_000) this.fail('比赛时长应为 30 秒到 10 分钟');
+    this.durationMs = durationMs;
+    this.players.clear(); this.host = null; this.started = null; this.result = null;
+    this.round = crypto.randomUUID(); this.phase = 'waiting'; this.red = 50;
+    this.frontier = [...INITIAL_FRONTIER]; this.lastAttack = null; this.events = [];
+    this.broadcastId = 0; this.broadcasts = []; this.fastestSegmentMs = null; this.fastestSpeed = 0;
+    this.notice = '检录中：选手选择阵营，等待裁判统一开赛。';
+    return this.state(null);
+  }
   publishPerformance(player, ticket) {
     const durationMs = Math.max(1000, this.now() - ticket.issued);
     const durationSeconds = Math.round(durationMs / 100) / 10;
-    const speed = Math.round(ticket.text.length / durationMs * 60_000);
+    const speed = Math.round((this.competition ? ticket.correct || 0 : ticket.text.length) / durationMs * 60_000);
+    if (this.competition && !ticket.correct) return;
     const fastestSegment = this.fastestSegmentMs === null || durationMs < this.fastestSegmentMs;
     const speedLeader = speed > this.fastestSpeed;
     if (!fastestSegment && !speedLeader) return;
@@ -60,7 +75,16 @@ class Battle {
   tick() {
     const online = this.online();
     if (!online.some(p => p.id === this.host)) this.host = online[0]?.id ?? null;
-    if (this.phase === 'finished' && this.now() - this.result.endedAt >= 20000) {
+    if (this.competition && this.phase === 'countdown' && this.now() >= this.started) {
+      if (online.some(p => p.team === 'red') && online.some(p => p.team === 'blue')) {
+        this.phase = 'running';
+        this.notice = '比赛开始！时间结束时，占领面积较大的一方获胜。';
+      } else {
+        this.phase = 'waiting'; this.started = null;
+        this.notice = '有选手在倒计时期间离线，请双方重新进入后由裁判开赛。';
+      }
+    }
+    if (!this.competition && this.phase === 'finished' && this.now() - this.result.endedAt >= 20000) {
       this.phase = 'waiting'; this.red = 50; this.started = null;
       this.frontier = [...INITIAL_FRONTIER]; this.lastAttack = null; this.events = [];
       this.broadcastId = 0; this.broadcasts = []; this.fastestSegmentMs = null; this.fastestSpeed = 0;
@@ -71,7 +95,8 @@ class Battle {
         this.start(this.host);
       }
     }
-    if (this.phase === 'running' && this.now() >= this.balanceAt) {
+    if (this.competition && this.phase === 'running' && this.now() >= this.started + this.durationMs) this.finish();
+    if (!this.competition && this.phase === 'running' && this.now() >= this.balanceAt) {
       this.balanceAt = this.now() + 30000;
       let red = online.filter(p => p.team === 'red'), blue = online.filter(p => p.team === 'blue');
       if (Math.abs(red.length - blue.length) > 2) {
@@ -88,7 +113,9 @@ class Battle {
     this.tick();
     const existing = this.players.get(user.id);
     if (!existing && this.online().length >= 60) this.fail('房间已满，最多同时在线 60 人');
-    if (existing && this.phase === 'running' && existing.team !== team) this.fail('对局中由系统平衡阵营，不能自行换边');
+    if (existing && ['countdown','running'].includes(this.phase) && existing.team !== team) this.fail('对局中不能自行换边');
+    if (this.competition && ['countdown', 'running'].includes(this.phase) && !existing) this.fail('比赛已开始，不能中途加入');
+    if (this.competition && this.phase === 'finished') this.fail('本局已结束，请等待裁判创建下一局');
     if (!existing && this.phase !== 'running' && this.players.size >= 60) {
       for (const p of this.players.values()) if (this.now() - p.seen >= 15000) this.players.delete(p.id);
     }
@@ -96,7 +123,7 @@ class Battle {
     const p = existing || { id:user.id, name:user.displayName, avatarUrl:user.avatarUrl || null, attacks:0, correct:0, attempted:0, combo:0, bestCombo:0, joined:this.now(), ticket:null, taskIndex:0 };
     p.name = user.displayName; p.avatarUrl = user.avatarUrl || null; p.team = team; p.seen = this.now(); this.players.set(p.id,p);
     if (!this.host) this.host = p.id;
-    if (this.phase === 'waiting' && this.online().length >= 2) {
+    if (!this.competition && this.phase === 'waiting' && this.online().length >= 2) {
       const online = this.online();
       if (online.every(member => member.team === online[0].team)) online[online.length-1].team = online[0].team === 'red' ? 'blue' : 'red';
       this.start(this.host);
@@ -111,27 +138,28 @@ class Battle {
     if (this.phase === 'running') this.notice = `${player.name} 已退出当前对局。`;
     return true;
   }
-  start(id) {
+  start(id, { referee = false } = {}) {
     this.tick();
-    if (id !== this.host) this.fail('只有房主可以开始');
-    if (this.phase === 'running') this.fail('对局已经开始');
+    if (this.competition ? !referee : id !== this.host) this.fail(this.competition ? '只有裁判可以开始' : '只有房主可以开始');
+    if (this.competition && this.phase === 'finished') this.fail('请先新建团队比赛房间');
+    if (this.phase === 'countdown' || this.phase === 'running') this.fail('对局已经开始');
     const online = this.online();
     if (!online.some(p => p.team === 'red') || !online.some(p => p.team === 'blue')) this.fail('红蓝双方至少各一人才能开局');
     this.players = new Map(online.map(p => [p.id,p]));
     for (const p of online) Object.assign(p,{ attacks:0,correct:0,attempted:0,combo:0,bestCombo:0,ticket:null,taskIndex:0,lastProgressSavedAt:0 });
-    this.round = crypto.randomUUID(); this.phase = 'running'; this.red = 50;
+    this.round = crypto.randomUUID(); this.phase = this.competition ? 'countdown' : 'running'; this.red = 50;
     this.frontier = [...INITIAL_FRONTIER]; this.lastAttack = null; this.events = [];
     this.broadcastId = 0; this.broadcasts = []; this.fastestSegmentMs = null; this.fastestSpeed = 0;
-    this.started = this.now(); this.balanceAt = this.now()+30000; this.result = null;
-    this.notice = '对局开始！每完成一段正确输入，触发一次攻击，占领 1% 领地。';
+    this.started = this.now() + (this.competition ? 5_000 : 0); this.balanceAt = this.now()+30000; this.result = null;
+    this.notice = this.competition ? '裁判已开赛，5 秒倒计时后统一开始。' : '对局开始！每完成一段正确输入，触发一次攻击，占领 1% 领地。';
     return this.state(id);
   }
   task(id) {
     this.tick(); const p = this.players.get(id);
     if (!p || this.phase !== 'running') this.fail('请先加入正在进行的对局');
     p.seen = this.now();
-    if (!p.ticket) { const sequenceIndex = Number.isInteger(p.taskIndex) ? p.taskIndex : 0; const lesson = TEXTS[sequenceIndex % TEXTS.length]; p.ticket = { id:crypto.randomUUID(), text:lesson.text, kind:lesson.kind, progress:0, sequence:sequenceIndex + 1, total:null, issued:this.now(), round:this.round }; }
-    return { id:p.ticket.id, text:p.ticket.text, kind:p.ticket.kind, progress:p.ticket.progress||0, sequence:p.ticket.sequence, total:p.ticket.total, round:this.round, team:p.team };
+    if (!p.ticket) { const sequenceIndex = Number.isInteger(p.taskIndex) ? p.taskIndex : 0; const lesson = TEXTS[sequenceIndex % TEXTS.length]; p.ticket = { id:crypto.randomUUID(), text:lesson.text, kind:lesson.kind, progress:0, sequence:sequenceIndex + 1, total:null, typed:'', correct:0, issued:this.now(), round:this.round }; }
+    return { id:p.ticket.id, text:p.ticket.text, kind:p.ticket.kind, progress:p.ticket.progress||0, ...(this.competition ? {typed:p.ticket.typed||''}:{}), sequence:p.ticket.sequence, total:p.ticket.total, round:this.round, team:p.team };
   }
   attack(id, body) {
     this.tick(); const p = this.players.get(id), t = p?.ticket;
@@ -151,7 +179,7 @@ class Battle {
     if (this.events.length > 40) this.events.splice(0,this.events.length-40);
     this.notice = `${p.name} 完成打字，${p.team === 'red' ? '红' : '蓝'}方占领 1% 领地！`;
     this.recordProgress({ round: this.round, player: p, durationMs: Math.max(1000, this.now() - this.started), completedAt: this.now(), finalized: false });
-    if (this.red === 0 || this.red === 100) this.finish();
+    if (!this.competition && (this.red === 0 || this.red === 100)) this.finish();
     return this.state(id);
   }
   attackCharacter(id, body) {
@@ -165,41 +193,47 @@ class Battle {
     const input = String(body.text ?? '').slice(0, 200);
     const expected = t.text.slice(0, input.length);
     const count = input.length - progress;
-    // 网络重试可能再次提交已确认的前缀，不能重复攻击或惩罚连击。
-    if (count <= 0 && input === expected) return this.state(id);
-    if (count < 1 || count > 12 || input !== expected) {
-      // 打错即中断连击：这是高连击威力的代价，避免“只靠快、不靠稳”。
-      p.attempted += 1; p.combo = 0;
-      this.fail('连续字符内容不正确，请修正后再攻击');
+    const previous = this.competition ? (t.typed || '') : t.text.slice(0, progress);
+    // Retries acknowledge the same processed positions without counting mistakes twice.
+    if (count <= 0 && previous.startsWith(input)) return this.state(id);
+    if (count < 1 || count > 12 || input.length > t.text.length || !input.startsWith(previous) || (!this.competition && input !== expected)) {
+      if (!this.competition) { p.attempted += 1; p.combo = 0; }
+      this.fail(this.competition ? '已提交的位置不能修改，请继续输入后续文字' : '连续字符内容不正确，请修正后再攻击');
     }
-    t.progress = input.length;
-    p.attacks += count; p.correct += count; p.attempted += count;
-    // 每个字符按当时的连击档位独立结算威力，连击越高推进越快；错字会清空连击。
-    let power = 0;
-    for (let i = 0; i < count; i++) {
+    let correct = 0, wrong = 0, power = 0;
+    // Judge each new position in order. Mistakes break the combo but never block later hits.
+    for (let index = progress; index < input.length; index++) {
+      if (input[index] !== t.text[index]) { wrong++; p.combo = 0; continue; }
+      correct++;
       p.combo = (p.combo || 0) + 1;
       p.bestCombo = Math.max(p.bestCombo || 0, p.combo);
       power += CHARACTER_ATTACK_POWER * comboPower(p.combo);
     }
+    t.progress = input.length;
+    t.typed = input;
+    t.correct = (t.correct || 0) + correct;
+    p.attacks += correct; p.correct += correct; p.attempted += count;
     power = Math.round(power * 1000) / 1000;
     this.red = Math.max(0, Math.min(100, this.red + (p.team === 'red' ? power : -power)));
-    this.event++;
-    const captured = this.captureCells(p.team);
-    const row = (this.event * 5) % GRID_ROWS;
-    const impact = { row, column: p.team === 'red' ? Math.min(GRID_COLUMNS - 1, this.frontier[row]) : Math.max(0, this.frontier[row] - 1), team:p.team };
-    this.lastAttack = { id:this.event, team:p.team, playerId:p.id, playerName:p.name, captured, impact, characters:count, power,
-      combo:p.combo, multiplier:comboPower(p.combo), label:comboLabel(p.combo), at:this.now() };
-    this.events.push(this.lastAttack);
-    if (this.events.length > 40) this.events.splice(0, this.events.length-40);
+    if (correct > 0) {
+      this.event++;
+      const captured = this.captureCells(p.team);
+      const row = (this.event * 5) % GRID_ROWS;
+      const impact = { row, column: p.team === 'red' ? Math.min(GRID_COLUMNS - 1, this.frontier[row]) : Math.max(0, this.frontier[row] - 1), team:p.team };
+      this.lastAttack = { id:this.event, team:p.team, playerId:p.id, playerName:p.name, captured, impact, characters:correct, mistakes:wrong, power,
+        combo:p.combo, multiplier:comboPower(p.combo), label:comboLabel(p.combo), at:this.now() };
+      this.events.push(this.lastAttack);
+      if (this.events.length > 40) this.events.splice(0, this.events.length-40);
+    }
     const completed = t.progress >= t.text.length;
     if (completed) { this.publishPerformance(p, t); p.ticket = null; p.taskIndex = (Number.isInteger(p.taskIndex) ? p.taskIndex : 0) + 1; }
     const tier = comboPower(p.combo);
-    this.notice = `${p.name} 连续输入 ${count} 个正确字符，${p.team === 'red' ? '红' : '蓝'}方发动攻击${tier > 1 ? `（${comboLabel(p.combo)} ×${tier}）` : ''}${completed ? '并完成本段' : ''}。`;
+    this.notice = `${p.name} 本次输入 ${count} 字，${correct} 字正确${wrong ? `、${wrong} 字错误（错字不攻击并中断连击）` : ''}${correct ? `，${p.team === 'red' ? '红' : '蓝'}方发动攻击${tier > 1 ? `（${comboLabel(p.combo)} ×${tier}）` : ''}` : ''}${completed ? '，已完成本段' : ''}。`;
     if (!p.lastProgressSavedAt || this.now() - p.lastProgressSavedAt >= BATTLE_PROGRESS_SAVE_INTERVAL_MS || completed) {
       this.recordProgress({ round: this.round, player: p, durationMs: Math.max(1000, this.now() - this.started), completedAt: this.now(), finalized: false });
       p.lastProgressSavedAt = this.now();
     }
-    if (this.red === 0 || this.red === 100) this.finish();
+    if (!this.competition && (this.red === 0 || this.red === 100)) this.finish();
     return this.state(id);
   }
   advance(id, body) {
@@ -209,6 +243,14 @@ class Battle {
     const input = String(body.text ?? '').slice(0, t.text.length);
     if (input.length !== t.text.length) this.fail('请先完成整段输入，再按回车进入下一段');
     const progress = Number(t.progress) || 0;
+    if (this.competition) {
+      const previous = t.typed || '';
+      if (!input.startsWith(previous)) this.fail('已提交的位置不能修改');
+      while (p.ticket && p.ticket.progress < input.length) {
+        this.attackCharacters(id, { ticket: t.id, text: input.slice(0, p.ticket.progress + 12) });
+      }
+      return this.state(id);
+    }
     // Correct characters have already been committed through attackCharacters.
     // The advance action only records the uncommitted remainder and never creates an attack.
     p.attempted += Math.max(0, input.length - progress);
@@ -238,27 +280,31 @@ class Battle {
     return changed;
   }
   finish() {
-    const duration = Math.max(1,Math.floor((this.now()-this.started)/1000));
+    if (this.phase === 'finished') return;
+    const duration = this.competition ? Math.ceil(this.durationMs / 1000) : Math.max(1,Math.floor((this.now()-this.started)/1000));
     const teams = {};
     for (const team of ['red','blue']) teams[team] = [...this.players.values()].filter(p=>p.team===team).map(p=>({ id:p.id,name:p.name,attacks:p.attacks,correct:p.correct,accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,speed:Math.round(p.correct*60/duration) })).sort((a,b)=>b.correct-a.correct||b.accuracy-a.accuracy||a.id-b.id);
-    const result = { id:this.round, winner:this.red===100?'red':'blue', duration, endedAt:this.now(), teams, red:this.red };
+    const winner = this.competition ? (this.red > 50 ? 'red' : this.red < 50 ? 'blue' : null) : this.red===100?'red':'blue';
+    const result = { id:this.round, winner, duration, endedAt:this.competition ? this.started + this.durationMs : this.now(), teams, red:this.red, competition:this.competition };
     this.save(result); this.result = result; this.phase = 'finished';
-    this.notice = `${result.winner === 'red' ? '红' : '蓝'}方占领全部领地，对局结束！`;
+    this.notice = this.competition
+      ? `时间结束：红方 ${this.red.toFixed(1)}%，蓝方 ${(100 - this.red).toFixed(1)}%，${winner ? (winner === 'red' ? '红方' : '蓝方') + '获胜' : '平局'}。`
+      : `${result.winner === 'red' ? '红' : '蓝'}方占领全部领地，对局结束！`;
   }
   state(id, user = null) {
     const p = this.players.get(id); if (p) { p.seen=this.now(); if (user) { p.name=user.displayName; p.avatarUrl=user.avatarUrl || null; } } this.tick();
-    const online = this.online(), duration = this.started ? Math.max(1,(this.now()-this.started)/1000) : 1;
+    const online = this.online(), duration = this.started ? Math.max(1,((this.competition ? Math.min(this.now(), this.started + this.durationMs) : this.now())-this.started)/1000) : 1;
     const teams = {};
     for (const team of ['red','blue']) {
       const members=online.filter(p=>p.team===team), all=[...this.players.values()].filter(p=>p.team===team);
       const correct=all.reduce((s,p)=>s+p.correct,0), attempted=all.reduce((s,p)=>s+p.attempted,0);
-      teams[team]={ count:members.length, speed:members.length?Math.round(correct*60/duration/members.length):0, accuracy:attempted?Math.round(correct/attempted*100):100, attacks:all.reduce((s,p)=>s+p.attacks,0), area:Math.round(team==='red'?this.red:100-this.red) };
+      teams[team]={ count:members.length, speed:members.length?Math.round(correct*60/duration/members.length):0, accuracy:attempted?Math.round(correct/attempted*100):100, attacks:all.reduce((s,p)=>s+p.attacks,0), area:this.competition ? Math.round((team==='red'?this.red:100-this.red)*10)/10 : Math.round(team==='red'?this.red:100-this.red) };
     }
-    return { room:'1024', round:this.round, phase:this.phase, host:this.host, online:online.length, elapsed:this.started?Math.floor(duration):0, balanceIn:Math.max(0,Math.ceil((this.balanceAt-this.now())/1000)), teams, territory:{columns:GRID_COLUMNS,rows:GRID_ROWS,frontier:[...this.frontier],redCells:this.frontier.reduce((sum,columns)=>sum+columns,0),totalCells:GRID_COLUMNS*GRID_ROWS}, players:online.map(p=>({ id:p.id,name:p.name,avatarUrl:p.avatarUrl || null,team:p.team,correct:p.correct,attacks:p.attacks,speed:Math.round(p.correct*60/duration),accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,sequence:(Number.isInteger(p.taskIndex)?p.taskIndex:0)+1,progress:p.ticket?.progress||0,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0) })), me:p?{id:p.id,team:p.team,attacks:p.attacks,correct:p.correct,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0),progress:p.ticket?.progress||0}:null, comboPower:{tiers:COMBO_TIERS,base:CHARACTER_ATTACK_POWER}, notice:this.notice, broadcasts:this.broadcasts.map((item)=>({...item})), event:this.event, lastAttack:this.lastAttack, events:this.events.map(event=>({...event,impact:event.impact?{...event.impact}:null,captured:event.captured.map(cell=>({...cell}))})), result:this.result };
+    return { room:'1024', competition:this.competition, inputRules:{allowMistakes:this.competition}, durationMs:this.competition?this.durationMs:null, startsAt:this.competition?this.started:null, endsAt:this.competition&&this.started?this.started+this.durationMs:null, serverNow:this.now(), round:this.round, phase:this.phase, host:this.host, online:online.length, elapsed:this.started?Math.max(0,Math.floor((this.now()-this.started)/1000)):0, balanceIn:Math.max(0,Math.ceil((this.balanceAt-this.now())/1000)), teams, territory:{columns:GRID_COLUMNS,rows:GRID_ROWS,frontier:[...this.frontier],redCells:this.frontier.reduce((sum,columns)=>sum+columns,0),totalCells:GRID_COLUMNS*GRID_ROWS}, players:online.map(p=>({ id:p.id,name:p.name,avatarUrl:p.avatarUrl || null,team:p.team,correct:p.correct,attacks:p.attacks,speed:Math.round(p.correct*60/duration),accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,sequence:(Number.isInteger(p.taskIndex)?p.taskIndex:0)+1,progress:p.ticket?.progress||0,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0) })), me:p?{id:p.id,team:p.team,attacks:p.attacks,correct:p.correct,attempted:p.attempted,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0),progress:p.ticket?.progress||0}:null, comboPower:{tiers:COMBO_TIERS,base:CHARACTER_ATTACK_POWER}, notice:this.notice, broadcasts:this.broadcasts.map((item)=>({...item})), event:this.event, lastAttack:this.lastAttack, events:this.events.map(event=>({...event,impact:event.impact?{...event.impact}:null,captured:event.captured.map(cell=>({...cell}))})), result:this.result };
   }
 }
 
-function installBattle(app, { db, requireUser, now }) {
+function installBattle(app, { db, requireUser, requireAdmin, now }) {
   db.exec('CREATE TABLE IF NOT EXISTS battle_results (id TEXT PRIMARY KEY, ended_at INTEGER NOT NULL, result_json TEXT NOT NULL)');
   const saveBattleProgress = ({ round, player, durationMs, completedAt, finalized }) => {
     if (!player.correct) return;
@@ -286,6 +332,7 @@ function installBattle(app, { db, requireUser, now }) {
     }
   });
   const battle = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress });
+  const competition = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress, competition: true });
   const route = fn => (req,res,next) => { try { res.json(fn(req)); } catch(e) { if(e.status) res.status(e.status).json({message:e.message}); else next(e); } };
   app.get('/api/battle',requireUser,route(req=>battle.state(req.user.id, req.user)));
   app.post('/api/battle/join',requireUser,route(req=>battle.join(req.user,req.body.team)));
@@ -295,5 +342,15 @@ function installBattle(app, { db, requireUser, now }) {
   app.post('/api/battle/advance',requireUser,route(req=>battle.advance(req.user.id,req.body)));
   app.post('/api/battle/attack',requireUser,route(req=>battle.attack(req.user.id,req.body)));
   app.post('/api/battle/leave',requireUser,route(req=>({ ok: battle.leave(req.user.id) })));
+  app.get('/api/battle/competition', requireUser, route(req => competition.state(req.user.id, req.user)));
+  app.get('/api/battle/competition/board', route(() => competition.state(null)));
+  app.post('/api/battle/competition/join', requireUser, route(req => competition.join(req.user, req.body.team)));
+  app.get('/api/battle/competition/task', requireUser, route(req => competition.task(req.user.id)));
+  app.post('/api/battle/competition/characters', requireUser, route(req => competition.attackCharacters(req.user.id, req.body)));
+  app.post('/api/battle/competition/advance', requireUser, route(req => competition.advance(req.user.id, req.body)));
+  app.post('/api/battle/competition/leave', requireUser, route(req => ({ ok: competition.leave(req.user.id) })));
+  app.get('/api/battle/competition/referee', requireAdmin, route(() => competition.state(null)));
+  app.post('/api/battle/competition/referee/prepare', requireAdmin, route(req => competition.prepareCompetition(req.body.durationMs)));
+  app.post('/api/battle/competition/referee/start', requireAdmin, route(() => competition.start(null, { referee: true })));
 }
 module.exports = { Battle, installBattle, comboPower, comboLabel, COMBO_TIERS, CHARACTER_ATTACK_POWER };

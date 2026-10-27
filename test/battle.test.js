@@ -5,6 +5,28 @@ function setup(){let time=100000;const saved=[];const b=new Battle({now:()=>time
 test('single room starts automatically with two players even on same side',()=>{
  const {b,join}=setup();assert.equal(join(1,'red').phase,'waiting');const s=join(2,'red');assert.equal(s.phase,'running');assert.equal(s.teams.red.count,1);assert.equal(s.teams.blue.count,1);
 });
+test('competition territory waits for referee and awards the larger area at the deadline',()=>{
+ let time=100000;const saved=[];
+ const b=new Battle({now:()=>time,save:result=>saved.push(result),competition:true});
+ b.prepareCompetition(30000);
+ b.join({id:1,displayName:'甲'},'red');
+ b.join({id:2,displayName:'乙'},'blue');
+ assert.equal(b.state(1).phase,'waiting');
+ assert.throws(()=>b.start(1),/裁判/);
+ assert.equal(b.start(null,{referee:true}).phase,'countdown');
+ assert.throws(()=>b.start(null,{referee:true}),/已经开始/);
+ assert.throws(()=>b.join({id:1,displayName:'甲'},'blue'),/换边/);
+ assert.throws(()=>b.task(1),/正在进行/);
+ time+=5000;
+ const ticket=b.task(1);b.attackCharacters(1,{ticket:ticket.id,text:ticket.text.slice(0,5)});
+ assert.ok(b.state(1).teams.red.area>50);
+ assert.equal(b.state(1).teams.red.area,50.8);
+ time+=30001;
+ const result=b.state(1);
+ assert.equal(result.phase,'finished');assert.equal(result.result.winner,'red');assert.equal(saved.length,1);
+ assert.equal(result.result.duration,30);
+ time+=30000;assert.equal(b.state(1).phase,'finished','等待下一局由裁判重置');
+});
 test('gives every player the same ordered task queue while preserving slower progress',()=>{
  const {b,join,advance}=setup();join(1,'red');join(2,'blue');
  const first=b.task(1);const second=b.task(2);
@@ -114,4 +136,54 @@ test('a wrong character resets the combo and drops power back to base',()=>{
  // 重新起连击时威力从基础值开始，且要接着已结算的位置继续输入。
  const retry=b.attackCharacters(1,{ticket:task.id,text:task.text.slice(0,11)});
  assert.equal(retry.lastAttack.multiplier,1);assert.equal(retry.me.combo,1);assert.equal(b.state(1).me.bestCombo,10);
+});
+
+function competitionSetup() {
+ let time=100000;
+ const b=new Battle({competition:true,now:()=>time});
+ b.prepareCompetition(300000);b.join({id:1,displayName:'甲'},'red');b.join({id:2,displayName:'乙'},'blue');
+ b.start(null,{referee:true});time+=5000;
+ return {b,advance:ms=>{time+=ms;}};
+}
+
+test('competition judges correct characters after a mistake and rebuilds combo in order',()=>{
+ const {b}=competitionSetup();const t=b.task(1);
+ b.attackCharacters(1,{ticket:t.id,text:t.text.slice(0,6)});
+ const text=t.text.slice(0,6)+'x'+t.text.slice(7,12);
+ const state=b.attackCharacters(1,{ticket:t.id,text});
+ assert.equal(state.me.correct,11);assert.equal(state.me.attacks,11);assert.equal(state.me.attempted,12);
+ assert.equal(state.me.combo,5);assert.equal(state.me.multiplier,1.5);
+ assert.equal(state.lastAttack.characters,5);assert.equal(state.lastAttack.mistakes,1);assert.equal(state.lastAttack.power,.825);
+ assert.equal(state.players.find(p=>p.id===1).accuracy,92);
+ assert.equal(b.task(1).typed,text);assert.equal(b.task(1).progress,12);
+ const replay=b.attackCharacters(1,{ticket:t.id,text});
+ assert.equal(replay.me.attempted,12);assert.equal(replay.event,state.event);assert.deepEqual(replay.territory,state.territory);
+ assert.throws(()=>b.attackCharacters(1,{ticket:t.id,text:'x'+text.slice(1)}),/不能修改/);
+ assert.equal(b.state(1).me.attempted,12);
+});
+
+test('competition wrong-only packets do not attack, retries are free and subsequent hits work',()=>{
+ const {b}=competitionSetup();const t=b.task(1);const initial=b.state(1);
+ const miss=b.attackCharacters(1,{ticket:t.id,text:'x'});
+ assert.equal(miss.me.correct,0);assert.equal(miss.me.attempted,1);assert.equal(miss.me.combo,0);
+ assert.equal(miss.event,initial.event);assert.deepEqual(miss.territory,initial.territory);
+ const replay=b.attackCharacters(1,{ticket:t.id,text:'x'});
+ assert.equal(replay.me.attempted,1);
+ const hit=b.attackCharacters(1,{ticket:t.id,text:'x'+t.text[1]});
+ assert.equal(hit.me.correct,1);assert.equal(hit.me.attacks,1);assert.equal(hit.me.combo,1);assert.equal(hit.lastAttack.power,.15);
+ assert.equal(hit.players.find(p=>p.id===1).accuracy,50);
+});
+
+test('competition completes paragraphs containing errors without awarding mistakes or replayed characters',()=>{
+ const {b}=competitionSetup();const t=b.task(1);const text='x'+t.text.slice(1,-1)+'x';
+ for(let end=12;end<text.length;end+=12)b.attackCharacters(1,{ticket:t.id,text:text.slice(0,end)});
+ const state=b.attackCharacters(1,{ticket:t.id,text});
+ assert.equal(state.me.correct,text.length-2);assert.equal(state.me.attempted,text.length);assert.equal(state.me.combo,0);
+ assert.equal(b.task(1).sequence,2);
+ const before=b.state(1).me.correct;
+ assert.throws(()=>b.attackCharacters(1,{ticket:t.id,text}),/失效/);
+ assert.equal(b.state(1).me.correct,before);
+ const next=b.task(1);const advanced=b.advance(1,{ticket:next.id,text:'x'+next.text.slice(1)});
+ assert.equal(advanced.me.correct,before+next.text.length-1);
+ assert.equal(b.task(1).sequence,3);
 });

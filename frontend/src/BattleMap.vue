@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as THREE from 'three';
+import { sampleFrontier, softenFrontier } from './battle-frontier.mjs';
 
 const GRID_COLUMNS = 36;
 const GRID_ROWS = 18;
@@ -33,6 +34,9 @@ let grid;
 let frontierLine;
 let frontierGlow;
 let cells = [];
+let territorySurfaces = [];
+let smoothFrontier = [...INITIAL_FRONTIER];
+const FRONTIER_SAMPLES = GRID_ROWS * 12 + 1;
 let playerSprites = [];
 let playerLabels = [];
 let playerTanks = new Map();
@@ -49,63 +53,6 @@ let targetFrontier = [...INITIAL_FRONTIER];
 let lastFrame = 0;
 let textureCache = new Map();
 let impactShake = 0;
-// One bounded draw call for debris, including when many players fire together.
-const DEBRIS_LIMIT = 480;
-const debris = Array.from({ length: DEBRIS_LIMIT }, () => ({ life: 0 }));
-const debrisTransform = new THREE.Object3D();
-let debrisMesh, debrisCursor = 0;
-
-function makeDebris() {
-  const geometry = new THREE.BoxGeometry(CELL_WIDTH * .92, CELL_HEIGHT * .92, 1.1);
-  const shades = [];
-  for (const brightness of [.62, .9, 1, .68, .84, .55]) {
-    for (let vertex = 0; vertex < 4; vertex++) shades.push(brightness, brightness, brightness);
-  }
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
-  debrisMesh = new THREE.InstancedMesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: .96 }), DEBRIS_LIMIT);
-  debrisMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  debrisMesh.frustumCulled = false;
-  debrisMesh.renderOrder = 20;
-  debrisTransform.scale.setScalar(0);
-  debrisTransform.updateMatrix();
-  for (let i = 0; i < DEBRIS_LIMIT; i++) debrisMesh.setMatrixAt(i, debrisTransform.matrix);
-  scene.add(debrisMesh);
-}
-
-function scatterDebris(x, y, team) {
-  if (!debrisMesh || reducedMotion) return;
-  impactShake = Math.min(1.2, impactShake + .34);
-  for (let i = 0; i < 36; i++) {
-    const slot = debrisCursor++ % DEBRIS_LIMIT;
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 4 + Math.random() * 11;
-    debris[slot] = { x, y, z: 3.8 + Math.random() * 1.8, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      vz: 7 + Math.random() * 8, rx: Math.random() * 6, ry: Math.random() * 6,
-      spin: (Math.random() - .5) * 18, size: .34 + Math.random() * .72, life: 1.45 + Math.random() * .9 };
-    // Most fragments retain the color of the territory being hit.
-    debrisMesh.setColorAt(slot, colorFor(i % 4 === 0 ? team : (team === 'red' ? 'blue' : 'red')));
-  }
-  debrisMesh.instanceColor.needsUpdate = true;
-}
-
-function updateDebris(delta) {
-  if (!debrisMesh) return;
-  debris.forEach((piece, slot) => {
-    if (piece.life > 0) {
-      piece.life = Math.max(0, piece.life - delta);
-      piece.vz -= 25 * delta;
-      piece.x += piece.vx * delta; piece.y += piece.vy * delta; piece.z += piece.vz * delta;
-      if (piece.z < .9) { piece.z = .9; piece.vz = Math.abs(piece.vz) * .32; piece.vx *= .72; piece.vy *= .72; }
-      piece.rx += piece.spin * delta; piece.ry += piece.spin * .7 * delta;
-      debrisTransform.position.set(piece.x, piece.y, piece.z);
-      debrisTransform.rotation.set(piece.rx, piece.ry, piece.rx * .3);
-      debrisTransform.scale.setScalar(piece.size * Math.min(1, piece.life / .3));
-    } else debrisTransform.scale.setScalar(0);
-    debrisTransform.updateMatrix(); debrisMesh.setMatrixAt(slot, debrisTransform.matrix);
-  });
-  debrisMesh.instanceMatrix.needsUpdate = true;
-}
-
 const keyOf = (row, column) => `${row}:${column}`;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const colorFor = (team) => team === 'red' ? RED : BLUE;
@@ -145,45 +92,67 @@ function cellTeam(row, column, frontier = targetFrontier) {
   return column < (frontier[row] ?? GRID_COLUMNS / 2) ? 'red' : 'blue';
 }
 
-function makeMaterial(team, opacity = 0.8) {
-  return new THREE.MeshBasicMaterial({ color: colorFor(team), transparent: true, opacity, depthWrite: false });
-}
-
 function makeGrid() {
-  const points = [];
-  for (let column = 0; column <= GRID_COLUMNS; column += 1) {
-    const x = -WORLD_WIDTH / 2 + column * CELL_WIDTH;
-    points.push(x, -WORLD_HEIGHT / 2, 0.55, x, WORLD_HEIGHT / 2, 0.55);
+  const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.1;
+  // Widely spaced contour lines give terrain detail without a square grid.
+  for (let band = -3; band < 18; band++) {
+    ctx.beginPath();
+    for (let x = -20; x <= 1044; x += 6) {
+      const y = band * 42 + Math.sin(x * .009 + band * .65) * 20 + Math.sin(x * .019 - band * .5) * 7;
+      if (x === -20) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
   }
-  for (let row = 0; row <= GRID_ROWS; row += 1) {
-    const y = -WORLD_HEIGHT / 2 + row * CELL_HEIGHT;
-    points.push(-WORLD_WIDTH / 2, y, 0.55, WORLD_WIDTH / 2, y, 0.55);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-  return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: '#d6f5ff', transparent: true, opacity: 0.22 }));
+  const texture = new THREE.CanvasTexture(canvas); textureCache.set('terrain-contours', texture);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT), new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: .12, depthWrite: false }));
+  mesh.position.z = .5;
+  return mesh;
 }
 
-function frontierPoints(frontier = visualFrontier) {
-  const points = [];
-  for (let row = 0; row < GRID_ROWS; row += 1) {
-    const bottom = -WORLD_HEIGHT / 2 + row * CELL_HEIGHT;
-    const top = bottom + CELL_HEIGHT;
-    const x = frontierX(frontier[row]);
-    if (row === 0) points.push(new THREE.Vector3(x, bottom, 1.8));
-    points.push(new THREE.Vector3(x, top, 1.8));
-    if (row < GRID_ROWS - 1) points.push(new THREE.Vector3(frontierX(frontier[row + 1]), top, 1.8));
+function makeTerritorySurface(team) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(FRONTIER_SAMPLES * 6);
+  const colors = new Float32Array(FRONTIER_SAMPLES * 6);
+  const indices = [];
+  const shade = new THREE.Color();
+  for (let i = 0; i < FRONTIER_SAMPLES; i++) {
+    const t = i / (FRONTIER_SAMPLES - 1);
+    for (let side = 0; side < 2; side++) {
+      shade.set(team === 'red' ? '#dc7083' : '#6aaee0');
+      shade.multiplyScalar(.88 + t * .13 + (side === (team === 'red' ? 1 : 0) ? .06 : 0));
+      shade.toArray(colors, i * 6 + side * 3);
+    }
+    if (i < FRONTIER_SAMPLES - 1) {
+      const v = i * 2; indices.push(v, v + 1, v + 2, v + 1, v + 3, v + 2);
+    }
   }
-  return points;
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, depthWrite: false }));
+  mesh.frustumCulled = false;
+  scene.add(mesh); territorySurfaces.push({ mesh, team });
 }
 
 function updateFrontierLine() {
-  if (!frontierLine || !frontierGlow) return;
-  const points = frontierPoints();
-  frontierLine.geometry.dispose();
-  frontierLine.geometry = new THREE.BufferGeometry().setFromPoints(points);
-  frontierGlow.geometry.dispose();
-  frontierGlow.geometry = new THREE.BufferGeometry().setFromPoints(points);
+  if (!frontierLine) return;
+  const line = frontierLine.geometry.getAttribute('position');
+  const contour = softenFrontier(smoothFrontier);
+  for (let i = 0; i < FRONTIER_SAMPLES; i++) {
+    const row = GRID_ROWS * i / (FRONTIER_SAMPLES - 1);
+    const y = -WORLD_HEIGHT / 2 + row * CELL_HEIGHT;
+    const x = frontierX(sampleFrontier(contour, row));
+    line.setXYZ(i, x, y, 1.8);
+    for (const { mesh, team } of territorySurfaces) {
+      const position = mesh.geometry.getAttribute('position');
+      position.setXYZ(i * 2, team === 'red' ? -WORLD_WIDTH / 2 : x, y, 0);
+      position.setXYZ(i * 2 + 1, team === 'red' ? x : WORLD_WIDTH / 2, y, 0);
+    }
+  }
+  line.needsUpdate = true;
+  for (const { mesh } of territorySurfaces) mesh.geometry.getAttribute('position').needsUpdate = true;
 }
 
 function readjustVisualFrontier(row) {
@@ -196,8 +165,7 @@ function setCellTeam(cell, team, pulse = false) {
   cell.userData.team = team;
   cell.userData.targetTeam = team;
   cell.userData.flipAt = 0;
-  cell.material.color.copy(colorFor(team));
-  cell.material.opacity = team === 'red' ? 0.8 : 0.74;
+
   if (pulse) cell.userData.pulse = 0.5;
   readjustVisualFrontier(cell.userData.row);
 }
@@ -205,13 +173,13 @@ function setCellTeam(cell, team, pulse = false) {
 function makeCells() {
   targetFrontier = currentFrontier();
   visualFrontier = [...targetFrontier];
+  smoothFrontier = [...targetFrontier];
   for (let row = 0; row < GRID_ROWS; row += 1) {
     for (let column = 0; column < GRID_COLUMNS; column += 1) {
       const team = cellTeam(row, column);
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(CELL_WIDTH - 0.07, CELL_HEIGHT - 0.07), makeMaterial(team, team === 'red' ? 0.8 : 0.74));
+      const mesh = new THREE.Object3D(); // Logical cells remain available to attack events.
       mesh.position.set(cellX(column), cellY(row), 0);
       mesh.userData = { row, column, team, targetTeam: team, flipAt: 0, pulse: 0 };
-      scene.add(mesh);
       cells.push(mesh);
     }
   }
@@ -224,7 +192,8 @@ function syncTerritory() {
     const desired = cellTeam(cell.userData.row, cell.userData.column, frontier);
     cell.userData.targetTeam = desired;
     if (cell.userData.team === desired || cellDelays.has(keyOf(cell.userData.row, cell.userData.column))) return;
-    cell.userData.flipAt = performance.now() + 140;
+    if (reducedMotion) setCellTeam(cell, desired);
+    else cell.userData.flipAt = performance.now() + 140;
   });
 }
 
@@ -397,10 +366,14 @@ function updatePlayerSprites() {
 }
 
 function makeGridLayer() {
+  makeTerritorySurface('red');
+  makeTerritorySurface('blue');
   grid = makeGrid();
   scene.add(grid);
-  frontierLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#fff', transparent: true, opacity: 0.98 }));
-  frontierGlow = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#ffdb72', transparent: true, opacity: 0.28 }));
+  frontierLine = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(FRONTIER_SAMPLES * 3), 3)), new THREE.LineBasicMaterial({ color: '#fff', transparent: true, opacity: 0.98 }));
+  frontierGlow = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(FRONTIER_SAMPLES * 3), 3)), new THREE.LineBasicMaterial({ color: '#f5fafb', transparent: true, opacity: 0.28 }));
+  frontierGlow.geometry.dispose();
+  frontierGlow.geometry = frontierLine.geometry;
   scene.add(frontierGlow, frontierLine);
   updateFrontierLine();
 }
@@ -422,21 +395,21 @@ function pointOnCurve(start, control, end, t) {
 }
 
 function createExplosion(x, y, team, commitCell = null) {
-  scatterDebris(x, y, team);
-  const scorch = new THREE.Mesh(new THREE.CircleGeometry(1.4, 18), new THREE.MeshBasicMaterial({ color: '#182436', transparent: true, opacity: .42, depthWrite: false }));
+
+  const scorch = new THREE.Mesh(new THREE.CircleGeometry(1.4, 18), new THREE.MeshBasicMaterial({ color: '#182436', transparent: true, opacity: .12, depthWrite: false }));
   scorch.position.set(x, y, .7); scorch.scale.set(.45, .24, 1); scene.add(scorch);
   scorchMarks.push({ mesh: scorch, age: 0 });
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeFlashTexture(team), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   flash.position.set(x, y, 3.2); flash.scale.set(8, 8, 1); scene.add(flash);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.7, 28), new THREE.MeshBasicMaterial({ color: lightColorFor(team), transparent: true, opacity: .95, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.5, 48), new THREE.MeshBasicMaterial({ color: lightColorFor(team), transparent: true, opacity: .95, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
   ring.position.set(x, y, 3); scene.add(ring);
-  const count = 36; const positions = new Float32Array(count * 3); const velocities = [];
+  const count = 12; const positions = new Float32Array(count * 3); const velocities = [];
   for (let index = 0; index < count; index += 1) {
     const angle = index / count * Math.PI * 2; positions[index * 3] = x; positions[index * 3 + 1] = y; positions[index * 3 + 2] = 3;
     velocities.push({ x: Math.cos(angle) * (1.2 + Math.random() * 2.2), y: Math.sin(angle) * (1.2 + Math.random() * 2.2) });
   }
   const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const sparks = new THREE.Points(geometry, new THREE.PointsMaterial({ color: lightColorFor(team), size: 1.15, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const sparks = new THREE.Points(geometry, new THREE.PointsMaterial({ color: lightColorFor(team), size: .65, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
   scene.add(sparks); explosions.push({ flash, ring, sparks, velocities, age: 0, commitCell });
 }
 
@@ -505,6 +478,7 @@ function playEvent(event) {
       if (target) { cellDelays.delete(keyOf(cell.row, cell.column)); setCellTeam(target, event.team); }
     });
     updateFrontierLine();
+    return;
   }
   const targets = captured.length ? captured : (event.impact ? [event.impact] : []);
   createAttackSequence(event.team, targets, new Set(captured.map((cell) => keyOf(cell.row, cell.column))), event.playerId);
@@ -576,14 +550,19 @@ function animate(time = 0) {
       if (cell.userData.flipAt && time >= cell.userData.flipAt) {
         const key = keyOf(cell.userData.row, cell.userData.column); cellDelays.delete(key); cell.userData.breaking = false; setCellTeam(cell, cell.userData.targetTeam, true); updateFrontierLine();
       }
-      if (cell.userData.breaking && cell.userData.flipAt) {
-        const remaining = Math.max(0, cell.userData.flipAt - time);
-        cell.scale.setScalar(.35 + .65 * Math.min(1, remaining / 90));
-      } else if (cell.userData.pulse > 0) { cell.userData.pulse = Math.max(0, cell.userData.pulse - delta); const scale = 1 + Math.sin(cell.userData.pulse * 18) * .06; cell.scale.setScalar(scale); } else cell.scale.setScalar(1);
+
     });
     if (frontierLine) frontierLine.material.opacity = .8 + Math.sin(time * .006) * .15;
   }
-  updateDebris(delta);
+  let frontierMoving = false;
+  for (let row = 0; row < GRID_ROWS; row++) {
+    const difference = visualFrontier[row] - smoothFrontier[row];
+    if (Math.abs(difference) > .0001) {
+      smoothFrontier[row] = reducedMotion ? visualFrontier[row] : smoothFrontier[row] + difference * (1 - Math.exp(-delta * 6));
+      frontierMoving = true;
+    }
+  }
+  if (frontierMoving) updateFrontierLine();
   if (!reducedMotion && impactShake > .01) {
     scene.position.set((Math.random() - .5) * impactShake, (Math.random() - .5) * impactShake, 0);
     impactShake *= Math.max(0, 1 - delta * 8);
@@ -610,7 +589,7 @@ onMounted(() => {
   reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
   scene = new THREE.Scene(); camera = new THREE.OrthographicCamera(-60, 60, 30, -30, .1, 20); camera.position.z = 10;
   renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' }); renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); renderer.setClearColor(0x000000, 0); host.value.appendChild(renderer.domElement);
-  makeCells(); makeGridLayer(); makeDebris(); updatePlayerSprites(); syncTerritory(); resize(); resizeObserver = new ResizeObserver(resize); resizeObserver.observe(host.value); animate();
+  makeCells(); makeGridLayer(); updatePlayerSprites(); syncTerritory(); resize(); resizeObserver = new ResizeObserver(resize); resizeObserver.observe(host.value); animate();
 });
 
 watch(() => props.territory?.frontier, syncTerritory, { deep: true });

@@ -49,6 +49,7 @@
           <button class="admin-nav-item" type="button" data-view="classes"><i data-lucide="school"></i><span>班级分组</span></button>
           <button class="admin-nav-item" type="button" data-view="progress"><i data-lucide="trending-up"></i><span>学习进步</span></button>
           <button class="admin-nav-item" type="button" data-view="assignments"><i data-lucide="clipboard-check"></i><span>教学任务</span></button>
+          <button class="admin-nav-item" type="button" data-view="competitions"><i data-lucide="trophy"></i><span>比赛赛事</span></button>
           <button class="admin-nav-item" type="button" data-view="scores"><i data-lucide="trophy"></i><span>竞速成绩</span></button>
         </nav>
       <div class="sidebar-bottom">
@@ -235,6 +236,46 @@
           <div class="table-scroll"><table><thead><tr><th>任务</th><th>课程</th><th>目标</th><th>截止时间</th><th>完成情况</th><th>状态</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="assignment-table"></tbody></table></div>
           <p class="table-empty" id="assignment-empty" hidden>还没有教学任务。</p>
           <div class="pagination" id="assignment-pagination" hidden><button class="icon-button" id="assignment-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="assignment-page-label">第 1 / 1 页</span><button class="icon-button" id="assignment-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-competitions" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">赛事主持</p><h1>现场打字比赛</h1><p>个人赛按中文或英文同题限时比速度；团队赛使用阵营占领，由裁判统一开赛。</p></div>
+          <button class="secondary-button" id="refresh-competitions" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+        </header>
+        <div class="competition-workspace">
+          <section class="admin-section competition-setup">
+            <header class="competition-panel-heading"><span class="competition-panel-icon"><i data-lucide="keyboard"></i></span><div><h2>个人打字赛</h2><p>中文 / 英文 · 同题限时，比打字速度</p></div></header>
+            <ol class="competition-steps" aria-label="个人赛流程"><li><b>1</b> 创建赛事</li><li><b>2</b> 开启检录</li><li><b>3</b> 裁判开赛</li></ol>
+          <form id="competition-form" class="form-grid">
+            <label class="competition-name-field"><span>赛事名称</span><input id="competition-name-input" type="text" maxlength="40" required placeholder="例如：25级中文打字个人赛"></label>
+            <label><span>比赛语言</span><select id="competition-mode-input"><option value="speed-zh">中文打字</option><option value="speed-en">英文打字</option></select></label>
+            <label><span>赛程</span><select id="competition-schedule-input"><option value="single">单日</option><option value="multi_day">跨天</option></select></label>
+            <label><span>比赛时长</span><select id="competition-duration-input"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option><option value="300000">5 分钟</option></select></label>
+            <label class="competition-team-field" hidden><span>团体赛制</span><select id="competition-series-input"><option value="single">单场</option><option value="league">循环赛</option></select></label>
+            <label class="competition-team-field" hidden><span>甲方名称</span><input id="competition-side-a-input" type="text" maxlength="40" placeholder="例如：一班"></label>
+            <label class="competition-team-field" hidden><span>乙方名称</span><input id="competition-side-b-input" type="text" maxlength="40" placeholder="例如：二班"></label>
+            <label class="competition-team-field competition-league-field" hidden><span>循环赛参赛方</span><input id="competition-side-names-input" type="text" maxlength="300" placeholder="例如：一班、二班、三班、四班"></label>
+            <label class="competition-team-field" hidden><span>每方出场人数</span><input id="competition-team-size-input" type="number" min="1" max="30" value="5"></label>
+            <div class="form-actions"><p>创建后在下方开启检录，等学生到齐再开始。</p><button class="primary-button" type="submit"><i data-lucide="plus"></i><span>创建个人赛</span></button></div>
+          </form>
+          </section>
+          <section class="admin-section competition-team-panel">
+            <header class="competition-panel-heading"><span class="competition-panel-icon"><i data-lucide="flag"></i></span><div><h2>团队阵营赛</h2><p>红蓝对抗 · 时间结束，占领更多的一方获胜</p></div><span id="battle-competition-status" class="competition-room-status">读取中</span></header>
+            <div class="competition-referee-controls">
+              <div class="competition-room-config"><label><span>每局时长</span><select id="battle-competition-duration"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option></select></label><button class="secondary-button" id="battle-competition-prepare" type="button"><i data-lucide="plus"></i>新建比赛房间</button></div>
+              <div id="battle-competition-roster" class="competition-team-roster" aria-live="polite">正在读取阵营名单…</div>
+              <p id="battle-competition-summary" class="competition-room-summary">选手选好红蓝阵营后，裁判再开始。</p>
+              <div class="competition-room-actions"><button class="primary-button" id="battle-competition-start" type="button"><i data-lucide="play"></i>裁判开始本局</button><a class="secondary-button" href="/#battle-competition" target="_blank" rel="noopener"><i data-lucide="monitor-up"></i>投影战况</a></div>
+              <p class="competition-room-help">学生从首页「打字比赛 → 团队阵营赛」加入，双方有人后即可开赛。</p>
+            </div>
+          </section>
+        </div>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><div><strong>赛事管理</strong><p class="competition-list-hint">开启检录、统一开赛，结束后可导出成绩。</p></div><span id="competition-count">共 0 场</span></div>
+          <div class="table-scroll"><table><thead><tr><th>赛事</th><th>模式</th><th>状态</th><th>创建时间</th><th class="competition-actions-heading">操作</th></tr></thead><tbody id="competition-table"></tbody></table></div>
+          <p class="table-empty" id="competition-empty" hidden>还没有创建比赛赛事。</p>
         </section>
       </section>
 
