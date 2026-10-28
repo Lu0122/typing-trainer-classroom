@@ -78,6 +78,23 @@ el.scoreSearch = document.querySelector('#score-search');
 el.scoreRangeFilter = document.querySelector('#score-range-filter');
 el.scoreCategoryFilter = document.querySelector('#score-category-filter');
 
+el.studentImportOpen = document.querySelector('#student-import-open');
+el.studentImportDialog = document.querySelector('#student-import-dialog');
+el.closeStudentImport = document.querySelector('#close-student-import');
+el.cancelStudentImport = document.querySelector('#cancel-student-import');
+el.cancelStudentImportPaste = document.querySelector('#cancel-student-import-paste');
+el.importTabExcel = document.querySelector('#import-tab-excel');
+el.importTabPaste = document.querySelector('#import-tab-paste');
+el.importPanelExcel = document.querySelector('#import-panel-excel');
+el.importPanelPaste = document.querySelector('#import-panel-paste');
+el.studentImportTemplate = document.querySelector('#student-import-template');
+el.studentImportFile = document.querySelector('#student-import-file');
+el.studentImportDrop = document.querySelector('#student-import-drop');
+el.studentImportFileName = document.querySelector('#student-import-file-name');
+el.studentImportPreview = document.querySelector('#student-import-preview');
+el.studentImportPasteSubmit = document.querySelector('#student-import-paste-submit');
+el.studentImportPasteResult = document.querySelector('#student-import-paste-result');
+
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   const body = await response.json().catch(() => ({}));
@@ -1233,19 +1250,211 @@ el.passageForm.addEventListener('submit', savePassage);
 el.userSearch.addEventListener('input', debounce(() => loadUsers(1)));
 el.userClassFilter.addEventListener('change', () => loadUsers(1));
 el.refreshUsers.addEventListener('click', () => loadUsers(1));
-el.studentImportSubmit?.addEventListener('click', async () => {
-  const text = el.studentImportText.value.trim();
-  if (!text) { toast('请先粘贴姓名和学号', true); return; }
+// ------------------------------------------------------------ 学生导入（弹框）
+//
+// 两种方式：Excel 上传（前端解析成 rows，走 /api/admin/users/import 的 rows 分支）
+// 和粘贴文本（直接交给后端的 text 分支，分隔符由后端兼容）。
+
+let studentImportRows = [];
+
+function switchImportTab(tab) {
+  const excel = tab !== 'paste';
+  el.importTabExcel.classList.toggle('is-active', excel);
+  el.importTabPaste.classList.toggle('is-active', !excel);
+  el.importTabExcel.setAttribute('aria-selected', String(excel));
+  el.importTabPaste.setAttribute('aria-selected', String(!excel));
+  el.importPanelExcel.hidden = !excel;
+  el.importPanelPaste.hidden = excel;
+}
+
+function openStudentImportDialog() {
+  studentImportRows = [];
+  el.studentImportFile.value = '';
+  el.studentImportFileName.textContent = '点击选择 Excel，或把文件拖到这里';
+  el.studentImportPreview.replaceChildren();
+  el.studentImportPreview.hidden = true;
+  el.studentImportResult.textContent = '还没有选择文件。';
+  el.studentImportResult.classList.remove('is-error');
+  el.studentImportSubmit.disabled = true;
+  el.studentImportText.value = '';
+  el.studentImportPasteResult.textContent = '';
+  el.studentImportPasteResult.classList.remove('is-error');
+  switchImportTab('excel');
+  el.studentImportDialog.showModal();
+  window.lucide?.createIcons();
+}
+
+// 表头按关键字认（姓名/名字、学号/账号/用户名）；认不出就按「第一列姓名、第二列学号」读。
+function parseStudentSheet(buffer) {
+  if (!window.XLSX) throw new Error('表格组件未加载，请刷新页面重试');
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('文件里没有工作表');
+  const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, blankrows: false, defval: '' });
+  if (!matrix.length) throw new Error('表格是空的');
+  const header = matrix[0].map((cell) => String(cell ?? '').trim());
+  const nameIndex = header.findIndex((cell) => /姓名|名字/.test(cell));
+  const idIndex = header.findIndex((cell) => /学号|账号|用户名|登录名/.test(cell));
+  const hasHeader = nameIndex >= 0 && idIndex >= 0;
+  const body = hasHeader ? matrix.slice(1) : matrix;
+  const rows = body.map((line) => ({
+    displayName: String(line[hasHeader ? nameIndex : 0] ?? '').trim(),
+    studentId: String(line[hasHeader ? idIndex : 1] ?? '').trim()
+  })).filter((row) => row.displayName || row.studentId);
+  if (!rows.length) throw new Error(hasHeader ? '表格里没有数据行' : '没读到数据，请下载模板后按「姓名」「学号」两列填写');
+  if (!hasHeader && rows.some((row) => !row.displayName || !row.studentId)) {
+    throw new Error('表格需要「姓名」「学号」两列，请下载模板后填写');
+  }
+  return rows;
+}
+
+function renderStudentImportPreview() {
+  el.studentImportPreview.replaceChildren();
+  if (!studentImportRows.length) { el.studentImportPreview.hidden = true; return; }
+  const head = document.createElement('p');
+  head.textContent = `共读到 ${studentImportRows.length} 行，下面是前 5 行：`;
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  for (const label of ['姓名', '学号']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headRow.append(th);
+  }
+  thead.append(headRow);
+  const tbody = document.createElement('tbody');
+  for (const row of studentImportRows.slice(0, 5)) {
+    const tr = document.createElement('tr');
+    const name = document.createElement('td'); name.textContent = row.displayName || '（空）';
+    const id = document.createElement('td'); id.textContent = row.studentId || '（空）';
+    tr.append(name, id);
+    tbody.append(tr);
+  }
+  table.append(thead, tbody);
+  el.studentImportPreview.append(head, table);
+  el.studentImportPreview.hidden = false;
+}
+
+async function handleStudentImportFile(file) {
+  if (!file) return;
+  el.studentImportFileName.textContent = file.name;
+  el.studentImportResult.classList.remove('is-error');
+  el.studentImportResult.textContent = '正在读取…';
+  studentImportRows = [];
   el.studentImportSubmit.disabled = true;
   try {
+    studentImportRows = parseStudentSheet(await file.arrayBuffer());
+    renderStudentImportPreview();
+    el.studentImportResult.textContent = `已读取 ${studentImportRows.length} 行，确认无误后点「导入学生」。`;
+    el.studentImportSubmit.disabled = false;
+  } catch (error) {
+    renderStudentImportPreview();
+    el.studentImportResult.textContent = error.message;
+    el.studentImportResult.classList.add('is-error');
+  }
+}
+
+function showImportResult(resultEl, result) {
+  resultEl.replaceChildren();
+  const summary = document.createElement('p');
+  summary.textContent = `已导入 ${result.imported} 人${result.failed ? `，${result.failed} 行失败` : ''}`;
+  resultEl.append(summary);
+  resultEl.classList.toggle('is-error', result.failed > 0);
+  if (result.errors?.length) {
+    const list = document.createElement('ul');
+    list.className = 'import-error-list';
+    for (const item of result.errors.slice(0, 8)) {
+      const li = document.createElement('li');
+      li.textContent = `第 ${item.line} 行：${item.message}`;
+      list.append(li);
+    }
+    resultEl.append(list);
+  }
+}
+
+function downloadStudentImportTemplate() {
+  if (!window.XLSX) { toast('表格组件未加载，请刷新页面重试', true); return; }
+  const workbook = XLSX.utils.book_new();
+  const list = XLSX.utils.aoa_to_sheet([['姓名', '学号']]);
+  list['!cols'] = [{ wch: 16 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(workbook, list, '学生名单');
+  const guide = XLSX.utils.aoa_to_sheet([
+    ['填写说明'],
+    ['1. 在「学生名单」工作表里，从第 2 行开始填写，每行一个学生。'],
+    ['2. A 列填姓名（2-12 个字），B 列填学号（4-32 位字母、数字、下划线或短横线）。'],
+    ['3. 导入后学生用姓名登录，初始密码就是学号。'],
+    ['4. 姓名不能重复；已存在的姓名会被跳过，并在导入结果里提示行号。'],
+    ['5. 单次最多导入 2000 人。'],
+    [],
+    ['示例（只作参照，不要填进「学生名单」）'],
+    ['姓名', '学号'],
+    ['张三', '20250101'],
+    ['李四', '20250102']
+  ]);
+  guide['!cols'] = [{ wch: 72 }];
+  XLSX.utils.book_append_sheet(workbook, guide, '填写说明');
+  XLSX.writeFile(workbook, '学生导入模板.xlsx');
+}
+
+el.studentImportOpen.addEventListener('click', openStudentImportDialog);
+el.closeStudentImport.addEventListener('click', () => el.studentImportDialog.close());
+el.cancelStudentImport.addEventListener('click', () => el.studentImportDialog.close());
+el.cancelStudentImportPaste.addEventListener('click', () => el.studentImportDialog.close());
+el.importTabExcel.addEventListener('click', () => switchImportTab('excel'));
+el.importTabPaste.addEventListener('click', () => switchImportTab('paste'));
+el.studentImportTemplate.addEventListener('click', downloadStudentImportTemplate);
+el.studentImportFile.addEventListener('change', () => handleStudentImportFile(el.studentImportFile.files?.[0]));
+['dragenter', 'dragover'].forEach((type) => el.studentImportDrop.addEventListener(type, (event) => {
+  event.preventDefault();
+  el.studentImportDrop.classList.add('is-dragging');
+}));
+el.studentImportDrop.addEventListener('dragleave', () => el.studentImportDrop.classList.remove('is-dragging'));
+el.studentImportDrop.addEventListener('drop', (event) => {
+  event.preventDefault();
+  el.studentImportDrop.classList.remove('is-dragging');
+  handleStudentImportFile(event.dataTransfer?.files?.[0]);
+});
+
+el.studentImportSubmit.addEventListener('click', async () => {
+  if (!studentImportRows.length) return;
+  el.studentImportSubmit.disabled = true;
+  try {
+    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ rows: studentImportRows }) });
+    showImportResult(el.studentImportResult, result);
+    toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
+    await loadUsers();
+    if (!result.failed) el.studentImportDialog.close();
+  } catch (error) {
+    el.studentImportResult.textContent = error.message;
+    el.studentImportResult.classList.add('is-error');
+    toast(error.message, true);
+  } finally {
+    el.studentImportSubmit.disabled = false;
+  }
+});
+
+el.studentImportPasteSubmit.addEventListener('click', async () => {
+  const text = el.studentImportText.value.trim();
+  if (!text) {
+    el.studentImportPasteResult.textContent = '请先粘贴姓名和学号';
+    el.studentImportPasteResult.classList.add('is-error');
+    return;
+  }
+  el.studentImportPasteSubmit.disabled = true;
+  try {
     const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ text }) });
-    el.studentImportResult.textContent = `已导入 ${result.imported} 人${result.failed ? `，${result.failed} 行失败` : ''}`;
-    if (result.errors?.length) el.studentImportResult.title = result.errors.map((item) => `第 ${item.line} 行：${item.message}`).join('\n');
+    showImportResult(el.studentImportPasteResult, result);
     toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
     el.studentImportText.value = '';
     await loadUsers();
-  } catch (error) { toast(error.message, true); }
-  finally { el.studentImportSubmit.disabled = false; }
+    if (!result.failed) el.studentImportDialog.close();
+  } catch (error) {
+    el.studentImportPasteResult.textContent = error.message;
+    el.studentImportPasteResult.classList.add('is-error');
+    toast(error.message, true);
+  } finally {
+    el.studentImportPasteSubmit.disabled = false;
+  }
 });
 el.refreshClasses.addEventListener('click', () => loadClasses(1, 1));
 el.classForm.addEventListener('submit', saveClass);

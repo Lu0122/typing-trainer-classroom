@@ -46,17 +46,6 @@
 #view-admins table { min-width: 760px; }
 #view-admins .table-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; min-height: 34px; height: auto; margin: 3px 0 3px 6px; padding: 7px 10px; color: #3b5d49; font-size: 12px; text-decoration: none; }
 #view-admins .table-action svg { width: 14px; }
-.student-import-section { margin-top: 24px; overflow: hidden; }
-.student-import-section > header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:22px 28px; border-bottom:1px solid var(--line); }
-.student-import-section h2 { margin:0 0 6px; font-size:18px; }
-.student-import-section header p:last-child { margin:0; color:var(--ink-soft); font-size:12px; }
-.student-import-format { padding:7px 10px; border-radius:7px; color:#24744e; background:#edf6ef; font:700 12px Consolas,monospace; white-space:nowrap; }
-.student-import-body { display:grid; grid-template-columns:minmax(0,1fr) 210px; gap:18px; padding:22px 28px; }
-.student-import-body textarea { width:100%; min-height:126px; padding:12px; resize:vertical; border:1px solid #d3ddd5; border-radius:8px; color:var(--ink); background:#fbfcfa; font:13px/1.8 Consolas,"Microsoft YaHei",sans-serif; }
-.student-import-body textarea:focus { outline:3px solid #1b8a5530; border-color:#278354; }
-.student-import-actions { display:flex; flex-direction:column; align-items:stretch; gap:12px; }
-.student-import-actions p { margin:0; color:var(--ink-soft); font-size:11px; line-height:1.7; }
-@media(max-width:700px){.student-import-section>header{padding:18px 16px;flex-direction:column;gap:10px}.student-import-body{grid-template-columns:1fr;padding:18px 16px}.student-import-actions .primary-button{width:100%}}
 .login-error { min-height: 18px; margin: 10px 0 0; color: var(--red); font-size: 12px; text-align: center; }
 .back-link { position: absolute; bottom: 30px; left: clamp(28px, 5vw, 72px); display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid #ffffff35; border-radius: 999px; color: #d2efda; background: #ffffff0d; font-size: 12px; font-weight: 700; text-decoration: none; }
 .back-link:hover { color: #fff; background: #ffffff18; }
@@ -400,3 +389,31 @@ tbody tr:hover { background: #f8faf6; }
 
 /* 每页条数下拉：与翻页按钮同高，放在分页条最左边 */
 .pagination-size { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 11px; }
+
+/* 学生导入弹框：顶部按钮打开，Excel 与粘贴两种方式用 tab 切换 */
+.view-heading-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.student-import-dialog { width: min(560px, calc(100vw - 32px)); padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.student-import-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.student-import-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.student-import-dialog h2 { margin: 0; font-family: SimSun, serif; font-size: 27px; }
+.import-intro { margin: 10px 0 18px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.import-tabs { display: flex; gap: 6px; margin-bottom: 18px; padding: 4px; border-radius: 9px; background: #f1f4ef; }
+.import-tab { flex: 1; padding: 9px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft); font-size: 12px; font-weight: 700; cursor: pointer; }
+.import-tab.is-active { background: #fff; color: var(--green-dark); box-shadow: 0 1px 4px rgba(20, 30, 24, 0.08); }
+.import-excel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; color: var(--ink-soft); font-size: 11px; }
+.student-import-drop { display: grid; justify-items: center; gap: 6px; padding: 26px 18px; border: 1px dashed #cbd9cd; border-radius: 10px; background: #fafcf9; text-align: center; cursor: pointer; }
+.student-import-drop:hover, .student-import-drop.is-dragging { border-color: var(--green-dark); background: #f2f9f4; }
+.student-import-drop svg { width: 26px; color: var(--green-dark); }
+.student-import-drop strong { font-size: 13px; }
+.student-import-drop small { color: var(--ink-soft); font-size: 11px; }
+.student-import-preview { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #fbfdfb; }
+.student-import-preview > p { margin: 0 0 8px; color: var(--ink-soft); font-size: 11px; }
+.student-import-preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.student-import-preview th, .student-import-preview td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.student-import-preview th { color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+.import-result { min-height: 18px; margin: 12px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.import-result.is-error { color: #b4373a; }
+.import-error-list { margin: 6px 0 0; padding-left: 18px; color: #b4373a; font-size: 11px; line-height: 1.8; }
+.import-hint { margin: 0 0 10px; color: var(--ink-soft); font-size: 11px; }
+#import-panel-paste textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font: 13px/1.8 Consolas, "Microsoft YaHei", sans-serif; resize: vertical; }
+.import-panel footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/admin.css">
   <script src="/vendor/lucide/lucide.js" defer></script>
   <script src="/vendor/echarts/echarts.min.js" defer></script>
+  <script src="/vendor/xlsx/xlsx.full.min.js" defer></script>
   <script src="/admin.js" defer></script>
 </head>
 <body class="admin-body">
@@ -155,7 +156,10 @@
       <section class="admin-view" id="view-users" hidden>
         <header class="view-heading">
           <div><p class="eyebrow">账号管理</p><h1>学生账号</h1><p>账号被停用后会立即退出登录，并从排行榜中隐藏。</p></div>
-          <button class="secondary-button" id="refresh-users" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+          <div class="view-heading-actions">
+            <button class="primary-button" id="student-import-open" type="button"><i data-lucide="file-spreadsheet"></i><span>导入学生</span></button>
+            <button class="secondary-button" id="refresh-users" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+          </div>
         </header>
         <section class="admin-section table-section">
           <div class="table-toolbar">
@@ -171,10 +175,6 @@
           </div>
           <p class="table-empty" id="user-empty" hidden>没有找到匹配的学生账号。</p>
           <div class="pagination" id="user-pagination" hidden><button class="icon-button" id="user-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="user-page-label">第 1 / 1 页</span><button class="icon-button" id="user-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
-        </section>
-        <section class="admin-section student-import-section">
-          <header><div><p class="eyebrow">实名账号</p><h2>批量导入学生</h2><p>每行填写：姓名，学号。导入后学生使用姓名登录，密码默认为学号。</p></div><span class="student-import-format">姓名,学号</span></header>
-          <div class="student-import-body"><textarea id="student-import-text" rows="6" placeholder="张三,20250101\n李四,20250102"></textarea><div class="student-import-actions"><button class="primary-button" id="student-import-submit" type="button"><i data-lucide="upload"></i><span>导入学生</span></button><p id="student-import-result">支持换行、逗号、制表符分隔，单次最多 2000 人。</p></div></div>
         </section>
       </section>
 
@@ -426,6 +426,46 @@
       <div class="progress-chart-wrap"><svg id="progress-chart" viewBox="0 0 680 240" role="img" aria-label="速度变化趋势"></svg></div>
       <div class="progress-mode-list" id="progress-mode-list"></div>
       <h3>最近训练</h3><div class="progress-recent-list" id="progress-recent-list"></div>
+    </section>
+  </dialog>
+
+  <dialog class="student-import-dialog" id="student-import-dialog">
+    <button class="dialog-close" id="close-student-import" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow">实名账号</p>
+    <h2>批量导入学生</h2>
+    <p class="import-intro">导入后学生使用姓名登录，密码默认为学号。姓名重复或格式不合规的行会被跳过并提示行号。</p>
+    <div class="import-tabs" role="tablist">
+      <button class="import-tab is-active" id="import-tab-excel" type="button" role="tab" aria-selected="true" aria-controls="import-panel-excel">Excel 导入</button>
+      <button class="import-tab" id="import-tab-paste" type="button" role="tab" aria-selected="false" aria-controls="import-panel-paste">粘贴文本</button>
+    </div>
+
+    <section class="import-panel" id="import-panel-excel" role="tabpanel" aria-labelledby="import-tab-excel">
+      <div class="import-excel-head">
+        <span>按模板填写后上传，支持 .xlsx / .xls / .csv</span>
+        <button class="secondary-button" id="student-import-template" type="button"><i data-lucide="download"></i><span>下载模板</span></button>
+      </div>
+      <label class="student-import-drop" id="student-import-drop" for="student-import-file">
+        <i data-lucide="file-spreadsheet"></i>
+        <strong id="student-import-file-name">点击选择 Excel，或把文件拖到这里</strong>
+        <small>单次最多 2000 人</small>
+        <input id="student-import-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+      </label>
+      <div class="student-import-preview" id="student-import-preview" hidden></div>
+      <p class="import-result" id="student-import-result">还没有选择文件。</p>
+      <footer>
+        <button class="secondary-button" id="cancel-student-import" type="button">取消</button>
+        <button class="primary-button" id="student-import-submit" type="button" disabled><i data-lucide="upload"></i><span>导入学生</span></button>
+      </footer>
+    </section>
+
+    <section class="import-panel" id="import-panel-paste" role="tabpanel" aria-labelledby="import-tab-paste" hidden>
+      <p class="import-hint">每行一个学生，用逗号、制表符或空格分隔姓名和学号。</p>
+      <textarea id="student-import-text" rows="7" placeholder="张三,20250101&#10;李四,20250102"></textarea>
+      <p class="import-result" id="student-import-paste-result"></p>
+      <footer>
+        <button class="secondary-button" id="cancel-student-import-paste" type="button">取消</button>
+        <button class="primary-button" id="student-import-paste-submit" type="button"><i data-lucide="clipboard-paste"></i><span>导入粘贴内容</span></button>
+      </footer>
     </section>
   </dialog>
 
