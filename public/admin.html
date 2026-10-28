@@ -110,16 +110,8 @@
       <section class="admin-view" id="view-admins" hidden>
         <header class="view-heading">
           <div><p class="eyebrow">权限与协作</p><h1>后台账号</h1><p>超级管理员可以创建、停用和重置其他后台管理员。</p></div>
+          <button class="primary-button" id="admin-account-open" type="button"><i data-lucide="user-plus"></i><span>创建管理员</span></button>
         </header>
-        <section class="admin-section form-section admin-account-section">
-          <form id="admin-account-form" class="form-grid">
-            <label><span>账号</span><input id="admin-account-username" type="text" maxlength="24" required placeholder="例如：teacher01"></label>
-            <label><span>姓名/昵称</span><input id="admin-account-display-name" type="text" maxlength="20" required placeholder="例如：张老师"></label>
-            <label><span>初始密码</span><input id="admin-account-password" type="password" maxlength="12" required placeholder="6-12 位字母或数字"></label>
-            <label><span>角色</span><select id="admin-account-role"><option value="manager">普通管理员</option><option value="superadmin">超级管理员</option></select></label>
-            <div class="form-actions"><p>普通管理员可以管理学生、文章、班级和比赛；超级管理员额外可以管理后台账号。</p><button class="primary-button" type="submit"><i data-lucide="user-plus"></i><span>创建管理员</span></button></div>
-          </form>
-        </section>
         <section class="admin-section table-section">
           <div class="table-toolbar"><strong>管理员列表</strong><span id="admin-account-count">共 0 个</span></div>
           <div class="table-filters">
@@ -518,6 +510,25 @@
     <p class="passage-preview-meta" id="passage-preview-meta"></p>
     <p class="passage-preview-body" id="passage-preview-body"></p>
     <footer><button class="secondary-button" id="cancel-passage-preview" type="button">关闭</button></footer>
+  </dialog>
+
+  <dialog class="admin-account-dialog" id="admin-account-dialog">
+    <form id="admin-account-form">
+      <button class="dialog-close" id="close-admin-account" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">权限与协作</p>
+      <h2>创建管理员</h2>
+      <p class="account-dialog-intro">普通管理员可以管理学生、文章、班级和比赛；超级管理员额外可以管理后台账号。</p>
+      <div class="account-dialog-fields">
+        <label><span>账号</span><input id="admin-account-username" type="text" maxlength="24" required placeholder="例如：teacher01"></label>
+        <label><span>姓名/昵称</span><input id="admin-account-display-name" type="text" maxlength="20" required placeholder="例如：张老师"></label>
+        <label><span>初始密码</span><input id="admin-account-password" type="password" maxlength="12" required placeholder="6-12 位字母或数字"></label>
+        <label><span>角色</span><select id="admin-account-role"><option value="manager">普通管理员</option><option value="superadmin">超级管理员</option></select></label>
+      </div>
+      <footer>
+        <button class="secondary-button" id="cancel-admin-account" type="button">取消</button>
+        <button class="primary-button" type="submit"><i data-lucide="user-plus"></i><span>创建管理员</span></button>
+      </footer>
+    </form>
   </dialog>
 
   <div class="toast" id="admin-toast" role="status" aria-live="polite"></div>

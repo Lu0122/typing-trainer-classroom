@@ -31,6 +31,10 @@ const el = {
 };
 
 el.adminAccountForm = document.querySelector('#admin-account-form');
+el.adminAccountOpen = document.querySelector('#admin-account-open');
+el.adminAccountDialog = document.querySelector('#admin-account-dialog');
+el.closeAdminAccount = document.querySelector('#close-admin-account');
+el.cancelAdminAccount = document.querySelector('#cancel-admin-account');
 el.adminAccountUsername = document.querySelector('#admin-account-username');
 el.adminAccountDisplayName = document.querySelector('#admin-account-display-name');
 el.adminAccountPassword = document.querySelector('#admin-account-password');
@@ -1377,9 +1381,19 @@ el.adminAccountForm?.addEventListener('submit', async (event) => {
       username: el.adminAccountUsername.value.trim(), displayName: el.adminAccountDisplayName.value.trim(),
       password: el.adminAccountPassword.value, role: el.adminAccountRole.value
     }) });
-    toast('管理员已创建'); el.adminAccountForm.reset(); await loadAdminAccounts();
+    toast('管理员已创建');
+    el.adminAccountForm.reset();
+    el.adminAccountDialog.close();
+    await loadAdminAccounts();
   } catch (error) { toast(error.message, true); }
 });
+el.adminAccountOpen?.addEventListener('click', () => {
+  el.adminAccountForm.reset();
+  el.adminAccountDialog.showModal();
+  window.lucide?.createIcons();
+});
+el.closeAdminAccount?.addEventListener('click', () => el.adminAccountDialog.close());
+el.cancelAdminAccount?.addEventListener('click', () => el.adminAccountDialog.close());
 el.navItems.forEach((item) => item.addEventListener('click', () => switchView(item.dataset.view)));
 document.querySelectorAll('.jump-button').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
 el.passageSearch.addEventListener('input', debounce(() => loadPassages(1)));

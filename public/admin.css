@@ -33,14 +33,6 @@
 .password-wrap button svg { width: 17px; }
 .login-panel .primary-button { width: 100%; margin-top: 16px; }
 .login-panel > label + label { margin-top: 14px; }
-.admin-account-section .form-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.admin-account-section .form-actions p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
-.admin-account-section { overflow: hidden; }
-.admin-account-section form { padding: 26px 28px; gap: 18px 22px; }
-.admin-account-section label { display: grid; gap: 8px; }
-.admin-account-section label > span { color: #46594e; font-size: 12px; font-weight: 750; }
-.admin-account-section input, .admin-account-section select { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #d3ddd5; border-radius: 8px; color: var(--ink); background: #fbfcfa; font-size: 13px; }
-.admin-account-section input:focus, .admin-account-section select:focus { outline: 3px solid #1b8a5530; outline-offset: 1px; border-color: #278354; }
 #view-admins .table-toolbar { padding: 20px 28px; }
 #view-admins .table-scroll { padding: 0 28px 22px; }
 #view-admins table { min-width: 760px; }
@@ -458,3 +450,16 @@ tbody tr:hover { background: #f8faf6; }
 .passage-preview-meta { margin: 6px 0 16px; color: var(--ink-soft); font-size: 11px; }
 .passage-preview-body { margin: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfb; color: var(--ink); font-size: 14px; line-height: 2; white-space: pre-wrap; }
 .passage-preview-dialog footer { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+/* 创建管理员弹框：顶部按钮打开，字段两列排布 */
+.admin-account-dialog { width: min(560px, calc(100vw - 32px)); padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.admin-account-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.admin-account-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.admin-account-dialog h2 { margin: 0; font-family: SimSun, serif; font-size: 27px; }
+.account-dialog-intro { margin: 10px 0 18px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.account-dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.account-dialog-fields label { display: grid; gap: 6px; color: #46594e; font-size: 12px; font-weight: 700; }
+.account-dialog-fields input, .account-dialog-fields select { width: 100%; height: 42px; padding: 0 12px; border: 1px solid #d3ddd5; border-radius: 8px; color: var(--ink); background: #fbfcfa; font-size: 13px; }
+.account-dialog-fields input:focus, .account-dialog-fields select:focus { outline: 3px solid #1b8a5530; outline-offset: 1px; border-color: #278354; }
+.admin-account-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+@media (max-width: 520px) { .account-dialog-fields { grid-template-columns: 1fr; } }
