@@ -96,9 +96,24 @@ async function api(url, options = {}) {
 
 const pagers = {};
 
-// 只把有值的筛选条件拼进查询串，空字符串 = 不筛选。
+// 每页条数：全局共用一份，记在 localStorage 里，换页面或刷新后保持老师上次的选择。
+const PAGE_SIZE_KEY = 'admin-list-page-size';
+const PAGE_SIZES = [10, 20, 50];
+let listPageSize = (() => {
+  const saved = Number(window.localStorage?.getItem(PAGE_SIZE_KEY));
+  return PAGE_SIZES.includes(saved) ? saved : PAGE_SIZES[0];
+})();
+
+function setListPageSize(size) {
+  listPageSize = PAGE_SIZES.includes(Number(size)) ? Number(size) : PAGE_SIZES[0];
+  try { window.localStorage?.setItem(PAGE_SIZE_KEY, String(listPageSize)); } catch { /* 隐私模式忽略 */ }
+  // 其它列表的分页控件同步显示新条数，切过去时不会再是旧值。
+  document.querySelectorAll('.pagination-size').forEach((select) => { select.value = String(listPageSize); });
+}
+
+// 只把有值的筛选条件拼进查询串，空字符串 = 不筛选；每页条数始终带上。
 function filterQuery(pairs) {
-  const query = new URLSearchParams();
+  const query = new URLSearchParams({ pageSize: listPageSize });
   for (const [key, value] of Object.entries(pairs)) {
     if (value !== '' && value !== null && value !== undefined) query.set(key, value);
   }
@@ -106,16 +121,29 @@ function filterQuery(pairs) {
 }
 
 function createPager({ pagination, label, previous, next, load }) {
+  // 每页条数下拉：所有列表共用同一份设置，改完回到第 1 页。
+  const sizeSelect = document.createElement('select');
+  sizeSelect.className = 'pagination-size';
+  sizeSelect.setAttribute('aria-label', '每页条数');
+  for (const size of PAGE_SIZES) sizeSelect.append(new Option(`${size} 条/页`, String(size)));
+  sizeSelect.value = String(listPageSize);
+  sizeSelect.addEventListener('change', () => {
+    setListPageSize(sizeSelect.value);
+    load(1);
+  });
+  pagination.prepend(sizeSelect);
+
   const pager = {
     page: 1,
     pages: 1,
     total: 0,
-    pageSize: 20,
+    pageSize: listPageSize,
     render(data) {
       pager.page = data.page;
       pager.pages = data.pages;
       pager.total = data.total;
       pager.pageSize = data.pageSize;
+      sizeSelect.value = String(listPageSize);
       // 始终显示：即使只有一页也让老师看到「第 1 / 1 页」，不会以为分页没生效。
       pagination.hidden = false;
       label.textContent = `第 ${data.page} / ${data.pages} 页`;
@@ -277,7 +305,7 @@ function renderPassages() {
 }
 
 async function loadPassages(page = pagers.passages?.page || 1) {
-  const query = new URLSearchParams({ page, q: el.passageSearch.value.trim() });
+  const query = filterQuery({ page, q: el.passageSearch.value.trim() });
   const data = await api(`/api/admin/passages?${query}`);
   adminState.passages = data.rows;
   adminState.passagePage = data.page; adminState.passagePages = data.pages; adminState.passageTotal = data.total;
@@ -347,7 +375,7 @@ function renderUsers() {
 }
 
 async function loadUsers(page = pagers.users?.page || 1) {
-  const query = new URLSearchParams({ page, q: el.userSearch.value.trim(), classId: el.userClassFilter.value });
+  const query = filterQuery({ page, q: el.userSearch.value.trim(), classId: el.userClassFilter.value });
   const data = await api(`/api/admin/users?${query}`);
   adminState.users = data.rows;
   adminState.userPage = data.page; adminState.userPages = data.pages; adminState.userTotal = data.total;
@@ -397,7 +425,7 @@ function renderProgress() {
 }
 
 async function loadProgress(page = pagers.progress?.page || 1) {
-  const query = new URLSearchParams({ page, q: el.progressSearch.value.trim() });
+  const query = filterQuery({ page, q: el.progressSearch.value.trim() });
   const [overview, students] = await Promise.all([api('/api/admin/progress/overview'), api(`/api/admin/progress/students?${query}`)]);
   renderOverviewCharts(overview);
   adminState.progress = students.rows;

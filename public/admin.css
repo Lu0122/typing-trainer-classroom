@@ -397,3 +397,6 @@ tbody tr:hover { background: #f8faf6; }
 #view-admins .table-filters { padding: 0 28px 14px; }
 #view-competitions .table-filters { padding: 0 24px 14px; }
 @media (max-width: 600px) { .table-filters { padding: 0 16px 12px; } .table-filters .admin-filter-select { flex: 1; min-width: 0; } }
+
+/* 每页条数下拉：与翻页按钮同高，放在分页条最左边 */
+.pagination-size { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 11px; }
