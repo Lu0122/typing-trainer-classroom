@@ -551,3 +551,33 @@ test('filters scores by keyword, time range and passage category', async () => {
   assert.ok(categories.body.categories.includes(passage.category));
   context.db.close();
 });
+
+test('imports students straight into the chosen class', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const insertClass = context.db.prepare(`INSERT INTO classes (name, term, description, is_active, created_at, updated_at)
+    VALUES (?, ?, '', ?, 1000, 1000)`);
+  const classId = insertClass.run('一班', '2026秋', 1).lastInsertRowid;
+  const inactiveId = insertClass.run('旧班', '2025春', 0).lastInsertRowid;
+
+  const imported = await admin.post('/api/admin/users/import')
+    .send({ rows: [{ displayName: '陈一', studentId: '20260101' }], classId }).expect(201);
+  assert.equal(imported.body.imported, 1);
+  assert.equal(imported.body.classId, classId);
+  assert.equal(imported.body.className, '一班');
+  const members = await admin.get(`/api/admin/classes/${classId}/members`).expect(200);
+  assert.equal(members.body.total, 1);
+  assert.equal(members.body.rows[0].displayName, '陈一');
+
+  await admin.post('/api/admin/users/import')
+    .send({ rows: [{ displayName: '陈二', studentId: '20260102' }], classId: inactiveId }).expect(400);
+  await admin.post('/api/admin/users/import')
+    .send({ rows: [{ displayName: '陈三', studentId: '20260103' }], classId: 999_999 }).expect(400);
+
+  // 不传 classId 仍然只是建账号
+  const plain = await admin.post('/api/admin/users/import')
+    .send({ rows: [{ displayName: '陈四', studentId: '20260104' }] }).expect(201);
+  assert.equal(plain.body.className, null);
+  context.db.close();
+});

@@ -1217,6 +1217,14 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
         }).filter((row) => !['姓名', '姓名/姓名'].includes(String(row.displayName).replace(/\s/g, '')));
       if (!rawRows.length) return response.status(400).json({ message: '请粘贴“姓名,学号”数据后再导入' });
       if (rawRows.length > 2000) return response.status(400).json({ message: '单次最多导入 2000 名学生' });
+      // 可选：导入后直接分到某个班级。班级必须存在且启用。
+      const classId = Number.parseInt(request.body?.classId, 10);
+      let targetClass = null;
+      if (Number.isInteger(classId) && classId > 0) {
+        targetClass = db.prepare('SELECT id, name, is_active AS isActive FROM classes WHERE id = ?').get(classId);
+        if (!targetClass) return response.status(400).json({ message: '所选班级不存在' });
+        if (!targetClass.isActive) return response.status(400).json({ message: '所选班级已停用，请先启用再导入' });
+      }
       const errors = [], prepared = [], seen = new Set();
       for (let index = 0; index < rawRows.length; index += 1) {
         const displayName = normalizeDisplayName(rawRows[index]?.displayName);
@@ -1237,9 +1245,23 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
       const insert = db.prepare(`INSERT INTO users
         (username, display_name, password_hash, is_active, last_login_at)
         VALUES (?, ?, ?, 1, NULL)`);
-      const add = db.transaction(() => prepared.map((item) => insert.run(item.displayName, item.displayName, item.passwordHash).lastInsertRowid));
+      // 建账号和分班放同一个事务：不会出现「账号建好了但没进班」的半成品。
+      const add = db.transaction(() => {
+        const ids = prepared.map((item) => insert.run(item.displayName, item.displayName, item.passwordHash).lastInsertRowid);
+        if (targetClass && ids.length) {
+          const saveMember = db.prepare(`INSERT INTO class_members (class_id, user_id, joined_at, left_at)
+            VALUES (?, ?, ?, NULL)
+            ON CONFLICT(class_id, user_id) DO UPDATE SET left_at = NULL`);
+          const timestamp = now();
+          for (const userId of ids) saveMember.run(targetClass.id, userId, timestamp);
+        }
+        return ids;
+      });
       const ids = add();
-      response.status(201).json({ imported: ids.length, failed: errors.length, errors });
+      response.status(201).json({
+        imported: ids.length, failed: errors.length, errors,
+        classId: targetClass?.id || null, className: targetClass?.name || null
+      });
     } catch (error) { next(error); }
   });
 

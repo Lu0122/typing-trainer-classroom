@@ -417,3 +417,8 @@ tbody tr:hover { background: #f8faf6; }
 .import-hint { margin: 0 0 10px; color: var(--ink-soft); font-size: 11px; }
 #import-panel-paste textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font: 13px/1.8 Consolas, "Microsoft YaHei", sans-serif; resize: vertical; }
 .import-panel footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* 导入弹框里的「导入到班级」下拉，两种导入方式共用 */
+.import-class-field { display: flex; align-items: center; gap: 10px; margin: -4px 0 16px; color: var(--ink-soft); font-size: 12px; }
+.import-class-field > span { flex-shrink: 0; }
+.import-class-field select { flex: 1; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--ink); font-size: 12px; }

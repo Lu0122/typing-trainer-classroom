@@ -94,6 +94,7 @@ el.studentImportFileName = document.querySelector('#student-import-file-name');
 el.studentImportPreview = document.querySelector('#student-import-preview');
 el.studentImportPasteSubmit = document.querySelector('#student-import-paste-submit');
 el.studentImportPasteResult = document.querySelector('#student-import-paste-result');
+el.studentImportClass = document.querySelector('#student-import-class');
 
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
@@ -1282,6 +1283,23 @@ function openStudentImportDialog() {
   switchImportTab('excel');
   el.studentImportDialog.showModal();
   window.lucide?.createIcons();
+  loadStudentImportClasses();
+}
+
+// 班级下拉：只列启用中的班级，保留上次选择。
+async function loadStudentImportClasses() {
+  const current = el.studentImportClass.value;
+  try {
+    const data = await api('/api/admin/classes?all=true');
+    const options = (data.rows || []).filter((item) => item.isActive);
+    el.studentImportClass.replaceChildren(
+      new Option('暂不分班', ''),
+      ...options.map((item) => new Option(item.term ? `${item.name} · ${item.term}` : item.name, String(item.id)))
+    );
+    if ([...el.studentImportClass.options].some((option) => option.value === current)) el.studentImportClass.value = current;
+  } catch {
+    el.studentImportClass.replaceChildren(new Option('暂不分班', ''));
+  }
 }
 
 // 表头按关键字认（姓名/名字、学号/账号/用户名）；认不出就按「第一列姓名、第二列学号」读。
@@ -1357,7 +1375,7 @@ async function handleStudentImportFile(file) {
 function showImportResult(resultEl, result) {
   resultEl.replaceChildren();
   const summary = document.createElement('p');
-  summary.textContent = `已导入 ${result.imported} 人${result.failed ? `，${result.failed} 行失败` : ''}`;
+  summary.textContent = `已导入 ${result.imported} 人${result.className ? `，已加入「${result.className}」` : ''}${result.failed ? `，${result.failed} 行失败` : ''}`;
   resultEl.append(summary);
   resultEl.classList.toggle('is-error', result.failed > 0);
   if (result.errors?.length) {
@@ -1419,7 +1437,7 @@ el.studentImportSubmit.addEventListener('click', async () => {
   if (!studentImportRows.length) return;
   el.studentImportSubmit.disabled = true;
   try {
-    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ rows: studentImportRows }) });
+    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ rows: studentImportRows, classId: el.studentImportClass.value || undefined }) });
     showImportResult(el.studentImportResult, result);
     toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
     await loadUsers();
@@ -1442,7 +1460,7 @@ el.studentImportPasteSubmit.addEventListener('click', async () => {
   }
   el.studentImportPasteSubmit.disabled = true;
   try {
-    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ text }) });
+    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ text, classId: el.studentImportClass.value || undefined }) });
     showImportResult(el.studentImportPasteResult, result);
     toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
     el.studentImportText.value = '';
