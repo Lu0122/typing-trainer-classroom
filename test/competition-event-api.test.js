@@ -320,3 +320,21 @@ test('serves the passage catalog for the admin text picker', async () => {
   await request(app).get('/api/competitions/text-catalog').expect(401);
   db.close();
 });
+
+test('paginates the admin competition list', async () => {
+  const { app, db } = setup();
+  const admin = request.agent(app);
+  await admin.post('/api/admin/login').send({ password: 'test-pass' }).expect(200);
+  for (let index = 0; index < 25; index += 1) {
+    await admin.post('/api/competitions').send({ name: `赛事${index}`, mode: 'duel', config: { roundMs: 60_000 } }).expect(200);
+  }
+  const first = await admin.get('/api/competitions?pageSize=10').expect(200);
+  assert.equal(first.body.total, 25);
+  assert.equal(first.body.pages, 3);
+  assert.equal(first.body.rows.length, 10);
+  const second = await admin.get('/api/competitions?page=2&pageSize=10').expect(200);
+  assert.equal(second.body.page, 2);
+  assert.equal(second.body.rows.length, 10);
+  assert.notEqual(second.body.rows[0].id, first.body.rows[0].id, '第二页不重复第一页');
+  db.close();
+});

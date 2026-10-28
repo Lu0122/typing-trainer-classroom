@@ -473,3 +473,22 @@ test('rejects cross-origin state-changing requests', async () => {
     .send({ username: 'student001', displayName: '小林', password: 'Classroom123' }).expect(403);
   context.db.close();
 });
+
+test('paginates the administrator list and clamps out-of-range pages', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const insert = context.db.prepare(`INSERT INTO admin_accounts
+    (username, display_name, password_hash, role, is_active, created_at) VALUES (?, ?, 'x', 'manager', 1, ?)`);
+  for (let index = 0; index < 25; index += 1) insert.run(`teacher${index}`, `老师${index}`, 1000 + index);
+
+  const first = await admin.get('/api/admin/admins?pageSize=10').expect(200);
+  assert.equal(first.body.total, 26, '25 个新建 + 内置超级管理员');
+  assert.equal(first.body.pages, 3);
+  assert.equal(first.body.rows.length, 10);
+
+  const beyond = await admin.get('/api/admin/admins?page=99&pageSize=10').expect(200);
+  assert.equal(beyond.body.page, 3, '越界页夹到最后一页');
+  assert.equal(beyond.body.rows.length, 6);
+  context.db.close();
+});

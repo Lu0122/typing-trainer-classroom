@@ -15,7 +15,8 @@
 // 参数全部来自 config，代码里不写死任何时长。
 
 const crypto = require('node:crypto');
-const { textAt, speedTextAt, passageCatalog, passagesByIds, speedTextFromPassage, SPEED_TARGET_CHARS } = require('./competition-texts');
+const { textAt, speedTextAt, passageCatalog, passagesByIds, speedTextFromPassage, segmentText, SPEED_TARGET_CHARS } = require('./competition-texts');
+const { listPage } = require('./pagination');
 
 const DEFAULT_CONFIG = Object.freeze({
   registrationMs: 10 * 60_000, // 检录时长
@@ -870,11 +871,16 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
     }
   };
 
-  app.get('/api/competitions', requireAdmin, route(() => db.prepare(`
+  app.get('/api/competitions', requireAdmin, route((request) => {
+    const total = db.prepare('SELECT COUNT(*) AS count FROM competitions').get().count;
+    const pagination = listPage(request.query, total);
+    const rows = db.prepare(`
     SELECT id, name, kind AS mode, json_extract(config_json, '$.language') AS language, schedule, status, created_at AS createdAt,
            started_at AS startedAt, ended_at AS endedAt
-    FROM competitions ORDER BY created_at DESC
-  `).all()));
+    FROM competitions ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `).all(pagination.pageSize, pagination.offset);
+    return { rows, total, ...pagination };
+  }));
 
   // 学生端只看到可报名或进行中的赛事，不暴露参数 JSON 和内部时间字段。
   app.get('/api/competitions/available', requireUser, route((request) => {

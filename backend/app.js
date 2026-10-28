@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const express = require('express');
 const { scoreTyping, visibleCharacters } = require('./scoring');
+const { listPage } = require('./pagination');
 const {
   FAKE_PASSWORD_RECORD,
   createSessionToken,
@@ -303,13 +304,6 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     };
   }
 
-  function listPage(query, total) {
-    const pageSize = Math.min(50, Math.max(10, Number.parseInt(query.pageSize, 10) || 20));
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(pages, Math.max(1, Number.parseInt(query.page, 10) || 1));
-    return { page, pageSize, pages, offset: (page - 1) * pageSize };
-  }
-
   function getUserBest(userId, category = null) {
     const categoryFilter = category ? ' AND passages.category = ?' : '';
     const params = category ? [userId, category] : [userId];
@@ -502,12 +496,15 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.get('/api/admin/bug-reports', requireAdmin, (request, response) => {
-    const reports = db.prepare(`
+    const total = db.prepare('SELECT COUNT(*) AS count FROM bug_reports').get().count;
+    const pagination = listPage(request.query, total);
+    const rows = db.prepare(`
       SELECT ${bugReportColumns} FROM bug_reports
       JOIN users ON users.id = bug_reports.user_id
-      ORDER BY bug_reports.id DESC LIMIT 500
-    `).all();
-    return response.json({ reports });
+      ORDER BY bug_reports.id DESC LIMIT ? OFFSET ?
+    `).all(pagination.pageSize, pagination.offset);
+    // reports 是旧字段名，保留一份以免外部脚本失效。
+    return response.json({ rows, reports: rows, total, ...pagination });
   });
 
   app.get('/api/admin/bug-reports/:id/attachment', requireAdmin, (request, response) => {
@@ -880,10 +877,13 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.get('/api/admin/admins', requireSuperAdmin, (request, response) => {
+    const total = db.prepare('SELECT COUNT(*) AS count FROM admin_accounts').get().count;
+    const pagination = listPage(request.query, total);
     const rows = db.prepare(`SELECT id, username, display_name AS displayName, role,
       is_active AS isActive, created_at AS createdAt, last_login_at AS lastLoginAt
-      FROM admin_accounts ORDER BY created_at ASC`).all();
-    response.json({ rows });
+      FROM admin_accounts ORDER BY created_at ASC LIMIT ? OFFSET ?`)
+      .all(pagination.pageSize, pagination.offset);
+    response.json({ rows, total, ...pagination });
   });
 
   app.post('/api/admin/admins', requireSuperAdmin, async (request, response, next) => {
@@ -1144,10 +1144,8 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.get('/api/admin/scores', requireAdmin, (request, response) => {
-    const pageSize = 20;
     const total = db.prepare('SELECT COUNT(*) AS count FROM scores').get().count;
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(Math.max(Number.parseInt(request.query.page, 10) || 1, 1), pages);
+    const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT scores.id, COALESCE(users.display_name, scores.nickname) AS nickname, users.username,
              scores.score, scores.accuracy, scores.wrong_chars AS wrongChars,
@@ -1155,8 +1153,8 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
       FROM scores LEFT JOIN passages ON passages.id = scores.passage_id
       LEFT JOIN users ON users.id = scores.user_id
       ORDER BY scores.created_at DESC LIMIT ? OFFSET ?
-    `).all(pageSize, (page - 1) * pageSize);
-    response.json({ rows, page, pageSize, total, pages });
+    `).all(pagination.pageSize, pagination.offset);
+    response.json({ rows, total, ...pagination });
   });
 
   app.delete('/api/admin/scores/:id', requireAdmin, (request, response) => {

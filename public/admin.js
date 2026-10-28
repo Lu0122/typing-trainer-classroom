@@ -51,6 +51,15 @@ el.battlePoolCount = document.querySelector('#battle-pool-count');
 el.battlePoolTip = document.querySelector('#battle-pool-tip');
 el.battlePoolClear = document.querySelector('#battle-pool-clear');
 
+el.adminAccountPagination = document.querySelector('#admin-account-pagination');
+el.adminAccountPageLabel = document.querySelector('#admin-account-page-label');
+el.adminAccountPreviousPage = document.querySelector('#admin-account-previous-page');
+el.adminAccountNextPage = document.querySelector('#admin-account-next-page');
+el.competitionPagination = document.querySelector('#competition-pagination');
+el.competitionPageLabel = document.querySelector('#competition-page-label');
+el.competitionPreviousPage = document.querySelector('#competition-previous-page');
+el.competitionNextPage = document.querySelector('#competition-next-page');
+
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   const body = await response.json().catch(() => ({}));
@@ -60,6 +69,40 @@ async function api(url, options = {}) {
     throw error;
   }
   return body;
+}
+
+// ------------------------------------------------------------ 统一分页
+//
+// 各列表只提供 load(page)，页码文本、按钮禁用、控件显隐都由这里统一处理。
+// 服务端 listPage() 会把越界页码夹回 1..pages，所以删掉最后一页的数据后会自动落回有数据的页。
+
+const pagers = {};
+
+function createPager({ pagination, label, previous, next, load }) {
+  const pager = {
+    page: 1,
+    pages: 1,
+    total: 0,
+    pageSize: 20,
+    render(data) {
+      pager.page = data.page;
+      pager.pages = data.pages;
+      pager.total = data.total;
+      pager.pageSize = data.pageSize;
+      pagination.hidden = data.total <= data.pageSize;
+      label.textContent = `第 ${data.page} / ${data.pages} 页`;
+      previous.disabled = data.page <= 1;
+      next.disabled = data.page >= data.pages;
+    },
+    go(page) {
+      const target = Math.min(Math.max(1, page), pager.pages);
+      if (target === pager.page) return;
+      load(target);
+    }
+  };
+  previous.addEventListener('click', () => pager.go(pager.page - 1));
+  next.addEventListener('click', () => pager.go(pager.page + 1));
+  return pager;
 }
 
 let toastTimer;
@@ -85,7 +128,7 @@ function setAuthenticated(authenticated) {
 }
 
 function renderAdminAccounts(rows) {
-  el.adminAccountCount.textContent = `共 ${rows.length} 个`;
+  el.adminAccountCount.textContent = `共 ${adminState.adminAccountsTotal ?? rows.length} 个`;
   el.adminAccountEmpty.hidden = rows.length > 0;
   el.adminAccountTable.replaceChildren(...rows.map((item) => {
     const row = document.createElement('tr');
@@ -112,7 +155,13 @@ function renderAdminAccounts(rows) {
   }));
   window.lucide?.createIcons();
 }
-async function loadAdminAccounts() { const data = await api('/api/admin/admins'); renderAdminAccounts(data.rows || []); }
+async function loadAdminAccounts(page = pagers.admins?.page || 1) {
+  const data = await api(`/api/admin/admins?page=${page}`);
+  adminState.adminAccounts = data.rows || [];
+  adminState.adminAccountsTotal = data.total;
+  pagers.admins?.render(data);
+  renderAdminAccounts(adminState.adminAccounts);
+}
 
 function formatDate(value) {
   if (!value) return '--';
@@ -193,14 +242,12 @@ function renderPassages() {
   window.lucide?.createIcons();
 }
 
-async function loadPassages() {
-  const query = new URLSearchParams({ page: adminState.passagePage, q: el.passageSearch.value.trim() });
+async function loadPassages(page = pagers.passages?.page || 1) {
+  const query = new URLSearchParams({ page, q: el.passageSearch.value.trim() });
   const data = await api(`/api/admin/passages?${query}`);
   adminState.passages = data.rows;
   adminState.passagePage = data.page; adminState.passagePages = data.pages; adminState.passageTotal = data.total;
-  el.passagePagination.hidden = data.total <= data.pageSize;
-  el.passagePageLabel.textContent = `第 ${data.page} / ${data.pages} 页`;
-  el.passagePreviousPage.disabled = data.page <= 1; el.passageNextPage.disabled = data.page >= data.pages;
+  pagers.passages?.render(data);
   renderPassages();
 }
 
@@ -265,14 +312,12 @@ function renderUsers() {
   window.lucide?.createIcons();
 }
 
-async function loadUsers() {
-  const query = new URLSearchParams({ page: adminState.userPage, q: el.userSearch.value.trim(), classId: el.userClassFilter.value });
+async function loadUsers(page = pagers.users?.page || 1) {
+  const query = new URLSearchParams({ page, q: el.userSearch.value.trim(), classId: el.userClassFilter.value });
   const data = await api(`/api/admin/users?${query}`);
   adminState.users = data.rows;
   adminState.userPage = data.page; adminState.userPages = data.pages; adminState.userTotal = data.total;
-  el.userPagination.hidden = data.total <= data.pageSize;
-  el.userPageLabel.textContent = `第 ${data.page} / ${data.pages} 页`;
-  el.userPreviousPage.disabled = data.page <= 1; el.userNextPage.disabled = data.page >= data.pages;
+  pagers.users?.render(data);
   renderUsers();
 }
 
@@ -317,8 +362,8 @@ function renderProgress() {
   window.lucide?.createIcons();
 }
 
-async function loadProgress() {
-  const query = new URLSearchParams({ page: adminState.progressPage, q: el.progressSearch.value.trim() });
+async function loadProgress(page = pagers.progress?.page || 1) {
+  const query = new URLSearchParams({ page, q: el.progressSearch.value.trim() });
   const [overview, students] = await Promise.all([api('/api/admin/progress/overview'), api(`/api/admin/progress/students?${query}`)]);
   renderOverviewCharts(overview);
   adminState.progress = students.rows;
@@ -327,9 +372,7 @@ async function loadProgress() {
   el.progressImproving.textContent = overview.improvingStudents;
   el.progressSpeedChange.textContent = changeText(overview.averageSpeedChange);
   el.progressWeekSessions.textContent = overview.sessionsLast7Days;
-  el.progressPagination.hidden = students.total <= students.pageSize;
-  el.progressPageLabel.textContent = `第 ${students.page} / ${students.pages} 页`;
-  el.progressPreviousPage.disabled = students.page <= 1; el.progressNextPage.disabled = students.page >= students.pages;
+  pagers.progress?.render(students);
   renderProgress();
 }
 
@@ -338,10 +381,6 @@ function renderAssignments() {
   const rows = adminState.assignments;
   el.assignmentCount.textContent = `共 ${adminState.assignmentTotal || 0} 个`;
   el.assignmentEmpty.hidden = rows.length > 0;
-  el.assignmentPagination.hidden = (adminState.assignmentTotal || 0) <= (adminState.assignmentPageSize || 20);
-  el.assignmentPageLabel.textContent = `第 ${adminState.assignmentPage} / ${adminState.assignmentPages} 页`;
-  el.assignmentPreviousPage.disabled = adminState.assignmentPage <= 1;
-  el.assignmentNextPage.disabled = adminState.assignmentPage >= adminState.assignmentPages;
   el.assignments.replaceChildren(...rows.map((item) => {
     const row = document.createElement('tr');
     const title = document.createElement('td'); title.className = 'article-cell';
@@ -359,10 +398,11 @@ function renderAssignments() {
   }));
   window.lucide?.createIcons();
 }
-async function loadAssignments() {
-  const data = await api(`/api/admin/assignments?page=${adminState.assignmentPage}`);
+async function loadAssignments(page = pagers.assignments?.page || 1) {
+  const data = await api(`/api/admin/assignments?page=${page}`);
   adminState.assignments = data.rows || [];
   adminState.assignmentPage = data.page; adminState.assignmentPages = data.pages; adminState.assignmentPageSize = data.pageSize; adminState.assignmentTotal = data.total;
+  pagers.assignments?.render(data);
   renderAssignments();
 }
 async function loadAssignmentUsers() {
@@ -444,10 +484,6 @@ function renderClasses() {
   const rows = adminState.classes;
   el.classCount.textContent = `共 ${adminState.classTotal || 0} 个班级`;
   el.classEmpty.hidden = rows.length > 0;
-  el.classPagination.hidden = (adminState.classTotal || 0) <= (adminState.classPageSize || 20);
-  el.classPageLabel.textContent = `第 ${adminState.classPage} / ${adminState.classPages} 页`;
-  el.classPreviousPage.disabled = adminState.classPage <= 1;
-  el.classNextPage.disabled = adminState.classPage >= adminState.classPages;
   el.classes.replaceChildren(...rows.map((item) => {
     const row = document.createElement('tr');
     const title = document.createElement('td'); title.className = 'article-cell';
@@ -472,10 +508,6 @@ function renderUnassignedStudents() {
   const rows = adminState.unassignedStudents;
   el.unassignedCount.textContent = `${adminState.unassignedTotal || 0} 人`;
   el.unassignedEmpty.hidden = rows.length > 0;
-  el.unassignedPagination.hidden = (adminState.unassignedTotal || 0) <= (adminState.unassignedPageSize || 20);
-  el.unassignedPageLabel.textContent = `第 ${adminState.unassignedPage} / ${adminState.unassignedPages} 页`;
-  el.unassignedPreviousPage.disabled = adminState.unassignedPage <= 1;
-  el.unassignedNextPage.disabled = adminState.unassignedPage >= adminState.unassignedPages;
   el.unassignedTable.replaceChildren(...rows.map((item) => {
     const row = document.createElement('tr');
     const student = document.createElement('td'); student.className = 'student-cell';
@@ -489,32 +521,33 @@ function renderUnassignedStudents() {
   }));
 }
 
-async function loadClasses() {
+async function loadClasses(page = pagers.classes?.page || 1, unassignedPage = pagers.unassigned?.page || 1) {
   const [classes, unassigned, allUnassigned] = await Promise.all([
-    api(`/api/admin/classes?page=${adminState.classPage}`),
-    api(`/api/admin/classes/unassigned/students?page=${adminState.unassignedPage}`),
+    api(`/api/admin/classes?page=${page}`),
+    api(`/api/admin/classes/unassigned/students?page=${unassignedPage}`),
     api('/api/admin/classes/unassigned/students?all=true')
   ]);
   adminState.classes = classes.rows || [];
   adminState.unassignedStudents = unassigned.rows || [];
   adminState.classPage = classes.page; adminState.classPages = classes.pages; adminState.classPageSize = classes.pageSize; adminState.classTotal = classes.total;
   adminState.unassignedPage = unassigned.page; adminState.unassignedPages = unassigned.pages; adminState.unassignedPageSize = unassigned.pageSize; adminState.unassignedTotal = unassigned.total;
+  pagers.classes?.render(classes);
+  pagers.unassigned?.render(unassigned);
   renderClasses(); renderUnassignedStudents();
   el.classStudents.replaceChildren(...(allUnassigned.rows || []).map((user) => { const option = document.createElement('option'); option.value = user.id; option.textContent = `${user.displayName}（${user.username}）`; return option; }));
 }
 
-async function loadClassMembers(item) {
+async function loadClassMembers(item, page) {
   try {
-    const data = await api(`/api/admin/classes/${item.id}/members?page=${adminState.classMembersPage}`);
+    // 换一个班级就回到第 1 页；同一个班级翻页时保留当前页。
+    const target = page ?? (item.id === adminState.classMembersClassId ? (pagers.classMembers?.page || 1) : 1);
+    const data = await api(`/api/admin/classes/${item.id}/members?page=${target}`);
     await loadClassOverview(item);
     adminState.classMembersClassId = item.id; adminState.classMembersPage = data.page; adminState.classMembersPages = data.pages; adminState.classMembersPageSize = data.pageSize; adminState.classMembersTotal = data.total;
     el.classMembersTitle.textContent = `${data.class.name} · 成员`;
     el.classMembersPanel.hidden = false;
     el.classMembersEmpty.hidden = data.rows.length > 0;
-    el.classMembersPagination.hidden = (data.total || 0) <= (data.pageSize || 20);
-    el.classMembersPageLabel.textContent = `第 ${data.page} / ${data.pages} 页`;
-    el.classMembersPreviousPage.disabled = data.page <= 1;
-    el.classMembersNextPage.disabled = data.page >= data.pages;
+    pagers.classMembers?.render(data);
     el.classMembersTable.replaceChildren(...data.rows.map((member) => {
       const row = document.createElement('tr');
       const student = document.createElement('td'); student.className = 'student-cell';
@@ -692,16 +725,13 @@ async function deleteScore(item) {
   } catch (error) { toast(error.message, true); }
 }
 
-async function loadScores() {
-  const data = await api(`/api/admin/scores?page=${adminState.page}`);
+async function loadScores(page = pagers.scores?.page || 1) {
+  const data = await api(`/api/admin/scores?page=${page}`);
   adminState.page = data.page;
   adminState.pages = data.pages;
   el.scoreCount.textContent = `共 ${data.total} 条`;
   el.scoreEmpty.hidden = data.rows.length > 0;
-  el.scorePagination.hidden = data.total <= data.pageSize;
-  el.pageLabel.textContent = `第 ${data.page} / ${data.pages} 页`;
-  el.previousPage.disabled = data.page <= 1;
-  el.nextPage.disabled = data.page >= data.pages;
+  pagers.scores?.render(data);
   el.scoreTable.replaceChildren(...data.rows.map((item) => {
     const row = document.createElement('tr');
     const nickname = document.createElement('td'); nickname.className = 'student-cell';
@@ -723,7 +753,7 @@ async function loadScores() {
 const competitionStatusNames = { draft: '草稿', registration: '检录中', running: '比赛中', paused: '已暂停', finished: '已结束' };
 function renderCompetitions() {
   const rows = adminState.competitions;
-  el.competitionCount.textContent = `共 ${rows.length} 场`;
+  el.competitionCount.textContent = `共 ${adminState.competitionTotal || rows.length} 场`;
   el.competitionEmpty.hidden = rows.length > 0;
   el.competitionTable.replaceChildren(...rows.map((item) => {
     const row = document.createElement('tr');
@@ -761,9 +791,11 @@ function renderCompetitions() {
   window.lucide?.createIcons();
 }
 
-async function loadCompetitions() {
-  const rows = await api('/api/competitions');
-  adminState.competitions = Array.isArray(rows) ? rows : [];
+async function loadCompetitions(page = pagers.competitions?.page || 1) {
+  const data = await api(`/api/competitions?page=${page}`);
+  adminState.competitions = data.rows || [];
+  adminState.competitionTotal = data.total;
+  pagers.competitions?.render(data);
   renderCompetitions();
 }
 
@@ -1083,15 +1115,15 @@ el.adminAccountForm?.addEventListener('submit', async (event) => {
 });
 el.navItems.forEach((item) => item.addEventListener('click', () => switchView(item.dataset.view)));
 document.querySelectorAll('.jump-button').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
-el.passageSearch.addEventListener('input', debounce(() => { adminState.passagePage = 1; loadPassages(); }));
+el.passageSearch.addEventListener('input', debounce(() => loadPassages(1)));
 el.addPassage.addEventListener('click', () => openPassageDialog());
 el.closeDialog.addEventListener('click', () => el.dialog.close());
 el.cancelPassage.addEventListener('click', () => el.dialog.close());
 el.passageContent.addEventListener('input', () => { el.contentCounter.textContent = `${Array.from(el.passageContent.value).length} / 2000`; });
 el.passageForm.addEventListener('submit', savePassage);
-el.userSearch.addEventListener('input', debounce(() => { adminState.userPage = 1; loadUsers(); }));
-el.userClassFilter.addEventListener('change', () => { adminState.userPage = 1; loadUsers(); });
-el.refreshUsers.addEventListener('click', () => { adminState.userPage = 1; loadUsers(); });
+el.userSearch.addEventListener('input', debounce(() => loadUsers(1)));
+el.userClassFilter.addEventListener('change', () => loadUsers(1));
+el.refreshUsers.addEventListener('click', () => loadUsers(1));
 el.studentImportSubmit?.addEventListener('click', async () => {
   const text = el.studentImportText.value.trim();
   if (!text) { toast('请先粘贴姓名和学号', true); return; }
@@ -1106,26 +1138,18 @@ el.studentImportSubmit?.addEventListener('click', async () => {
   } catch (error) { toast(error.message, true); }
   finally { el.studentImportSubmit.disabled = false; }
 });
-el.refreshClasses.addEventListener('click', loadClasses);
+el.refreshClasses.addEventListener('click', () => loadClasses(1, 1));
 el.classForm.addEventListener('submit', saveClass);
 el.classCancelEdit.addEventListener('click', resetClassForm);
 el.classAssignForm.addEventListener('submit', assignStudents);
 el.closeClassMembers.addEventListener('click', () => { el.classMembersPanel.hidden = true; });
-el.assignmentPreviousPage.addEventListener('click', () => { adminState.assignmentPage -= 1; loadAssignments(); });
-el.assignmentNextPage.addEventListener('click', () => { adminState.assignmentPage += 1; loadAssignments(); });
-el.classPreviousPage.addEventListener('click', () => { adminState.classPage -= 1; loadClasses(); });
-el.classNextPage.addEventListener('click', () => { adminState.classPage += 1; loadClasses(); });
-el.unassignedPreviousPage.addEventListener('click', () => { adminState.unassignedPage -= 1; loadClasses(); });
-el.unassignedNextPage.addEventListener('click', () => { adminState.unassignedPage += 1; loadClasses(); });
-el.classMembersPreviousPage.addEventListener('click', () => { adminState.classMembersPage -= 1; const item = adminState.classes.find((row) => row.id === adminState.classMembersClassId); if (item) loadClassMembers(item); });
-el.classMembersNextPage.addEventListener('click', () => { adminState.classMembersPage += 1; const item = adminState.classes.find((row) => row.id === adminState.classMembersClassId); if (item) loadClassMembers(item); });
-el.progressSearch.addEventListener('input', debounce(() => { adminState.progressPage = 1; loadProgress(); }));
-el.refreshProgress.addEventListener('click', () => { adminState.progressPage = 1; loadProgress(); });
+el.progressSearch.addEventListener('input', debounce(() => loadProgress(1)));
+el.refreshProgress.addEventListener('click', () => loadProgress(1));
 el.closeProgressDialog.addEventListener('click', () => el.progressDialog.close());
 el.resetForm.addEventListener('submit', submitPasswordReset);
 el.closeReset.addEventListener('click', () => el.resetDialog.close());
 el.cancelReset.addEventListener('click', () => el.resetDialog.close());
-el.refreshScores.addEventListener('click', loadScores);
+el.refreshScores.addEventListener('click', () => loadScores(1));
 el.competitionForm.addEventListener('submit', saveCompetition);
 el.battleCompetitionPrepare.addEventListener('click', prepareBattleCompetition);
 el.battleCompetitionStart.addEventListener('click', startBattleCompetition);
@@ -1133,19 +1157,30 @@ el.competitionMode.addEventListener('change', () => { updateCompetitionModeField
 el.competitionPoolClear.addEventListener('click', () => { competitionPoolSelection().clear(); renderCompetitionPool(); });
 el.battlePoolClear.addEventListener('click', () => { battlePoolSelection.clear(); renderBattlePool(); });
 el.competitionSeries.addEventListener('change', updateCompetitionModeFields);
-el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetitions(), loadBattleCompetition()]));
-el.passagePreviousPage.addEventListener('click', () => { adminState.passagePage -= 1; loadPassages(); });
-el.passageNextPage.addEventListener('click', () => { adminState.passagePage += 1; loadPassages(); });
-el.userPreviousPage.addEventListener('click', () => { adminState.userPage -= 1; loadUsers(); });
-el.userNextPage.addEventListener('click', () => { adminState.userPage += 1; loadUsers(); });
-  el.progressPreviousPage.addEventListener('click', () => { adminState.progressPage -= 1; loadProgress(); });
-  el.progressNextPage.addEventListener('click', () => { adminState.progressPage += 1; loadProgress(); });
-  el.refreshAssignments.addEventListener('click', loadAssignments);
-  el.assignmentForm.addEventListener('submit', saveAssignment);
-  el.assignmentAudience.addEventListener('change', () => setAssignmentAudience(el.assignmentAudience.value));
-  el.assignmentCancelEdit.addEventListener('click', resetAssignmentForm);
-el.previousPage.addEventListener('click', () => { adminState.page -= 1; loadScores(); });
-el.nextPage.addEventListener('click', () => { adminState.page += 1; loadScores(); });
+el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetitions(1), loadBattleCompetition()]));
+el.refreshAssignments.addEventListener('click', () => loadAssignments(1));
+el.assignmentForm.addEventListener('submit', saveAssignment);
+el.assignmentAudience.addEventListener('change', () => setAssignmentAudience(el.assignmentAudience.value));
+el.assignmentCancelEdit.addEventListener('click', resetAssignmentForm);
+
+// 所有列表的分页控件在这里一次性接上；各页只提供 load(page)，翻页与按钮状态由 createPager 统一处理。
+pagers.passages = createPager({ pagination: el.passagePagination, label: el.passagePageLabel, previous: el.passagePreviousPage, next: el.passageNextPage, load: (page) => loadPassages(page) });
+pagers.users = createPager({ pagination: el.userPagination, label: el.userPageLabel, previous: el.userPreviousPage, next: el.userNextPage, load: (page) => loadUsers(page) });
+pagers.progress = createPager({ pagination: el.progressPagination, label: el.progressPageLabel, previous: el.progressPreviousPage, next: el.progressNextPage, load: (page) => loadProgress(page) });
+pagers.assignments = createPager({ pagination: el.assignmentPagination, label: el.assignmentPageLabel, previous: el.assignmentPreviousPage, next: el.assignmentNextPage, load: (page) => loadAssignments(page) });
+pagers.classes = createPager({ pagination: el.classPagination, label: el.classPageLabel, previous: el.classPreviousPage, next: el.classNextPage, load: (page) => loadClasses(page, pagers.unassigned?.page || 1) });
+pagers.unassigned = createPager({ pagination: el.unassignedPagination, label: el.unassignedPageLabel, previous: el.unassignedPreviousPage, next: el.unassignedNextPage, load: (page) => loadClasses(pagers.classes?.page || 1, page) });
+pagers.classMembers = createPager({
+  pagination: el.classMembersPagination, label: el.classMembersPageLabel,
+  previous: el.classMembersPreviousPage, next: el.classMembersNextPage,
+  load: (page) => {
+    const item = adminState.classes.find((row) => row.id === adminState.classMembersClassId);
+    if (item) loadClassMembers(item, page);
+  }
+});
+pagers.scores = createPager({ pagination: el.scorePagination, label: el.pageLabel, previous: el.previousPage, next: el.nextPage, load: (page) => loadScores(page) });
+pagers.competitions = createPager({ pagination: el.competitionPagination, label: el.competitionPageLabel, previous: el.competitionPreviousPage, next: el.competitionNextPage, load: (page) => loadCompetitions(page) });
+pagers.admins = createPager({ pagination: el.adminAccountPagination, label: el.adminAccountPageLabel, previous: el.adminAccountPreviousPage, next: el.adminAccountNextPage, load: (page) => loadAdminAccounts(page) });
 el.mobileMenu.addEventListener('click', () => el.sidebar.classList.toggle('is-open'));
 
 window.addEventListener('DOMContentLoaded', async () => {
