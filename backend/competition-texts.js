@@ -118,7 +118,7 @@ function toPassage(row) {
   };
 }
 
-// 后台「指定文章」列表：按分类分组用，只给标题、字数和预览，不下发全文。
+// 后台「指定文章」列表：按分类分组用。带上全文，老师点「全文」能直接看，不用另开接口。
 // 拼音文章（内容是拼音音节）不进候选：比赛打的是文章，不是拼音练习。
 function passageCatalog(db) {
   return db.prepare(`SELECT id, title, category, content FROM passages
@@ -131,7 +131,8 @@ function passageCatalog(db) {
       category: passage.category,
       language: passage.language,
       length: passage.content.length,
-      preview: passage.content.slice(0, 30)
+      preview: passage.content.slice(0, 30),
+      content: passage.content
     }));
 }
 

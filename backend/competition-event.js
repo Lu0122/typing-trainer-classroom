@@ -32,7 +32,7 @@ const DEFAULT_CONFIG = Object.freeze({
   teamSize: 5, // 多 v 多每方固定出场人数
   series: 'single', // team: single / league
   passageIds: [], // 老师指定的候选文章（练习文章 id），空数组 = 按轮次自动取题
-  textMinLength: SPEED_TARGET_CHARS // 速度赛抽中文章后补足到的中文字数
+  textMinLength: null // 速度赛题面长度（中文字数），空 = 按比赛时长自动估算
 });
 
 const FINAL_ROUND_SIZE = 3; // 剩 3 人及以下进决赛轮
@@ -174,10 +174,13 @@ class CompetitionEvent {
     const expectedLanguage = mode === 'speed' ? merged.language : 'zh';
     if (picked.some((passage) => passage.language !== expectedLanguage)) fail('指定的文章语言与比赛语言不一致');
     merged.passageIds = picked.map((passage) => passage.id);
-    const minLength = Number(merged.textMinLength);
-    merged.textMinLength = Number.isFinite(minLength)
-      ? Math.min(2000, Math.max(100, Math.round(minLength)))
-      : SPEED_TARGET_CHARS;
+    // 题面长度：老师没指定就跟随时长估算（约 3.3 字/秒，2 分钟 ≈ 400 字），
+    // 保证时限内打不完，比赛仍是「比限时字数」而不是「比谁先打完」。
+    const requestedLength = Number(merged.textMinLength);
+    const autoLength = Math.round((Number(merged.roundMs) / 1000) * 3.3 / 10) * 10;
+    merged.textMinLength = Number.isFinite(requestedLength) && requestedLength > 0
+      ? Math.min(2000, Math.max(100, Math.round(requestedLength)))
+      : Math.min(2000, Math.max(100, autoLength || SPEED_TARGET_CHARS));
     const create = this.db.transaction(() => {
       this.db.prepare(`INSERT INTO competitions (id, name, kind, schedule, status, config_json, created_at)
         VALUES (?, ?, ?, ?, 'draft', ?, ?)`)

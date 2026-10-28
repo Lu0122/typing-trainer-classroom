@@ -51,6 +51,14 @@ el.battlePoolCount = document.querySelector('#battle-pool-count');
 el.battlePoolTip = document.querySelector('#battle-pool-tip');
 el.battlePoolClear = document.querySelector('#battle-pool-clear');
 
+el.passagePreviewDialog = document.querySelector('#passage-preview-dialog');
+el.closePassagePreview = document.querySelector('#close-passage-preview');
+el.cancelPassagePreview = document.querySelector('#cancel-passage-preview');
+el.passagePreviewCategory = document.querySelector('#passage-preview-category');
+el.passagePreviewTitle = document.querySelector('#passage-preview-title');
+el.passagePreviewMeta = document.querySelector('#passage-preview-meta');
+el.passagePreviewBody = document.querySelector('#passage-preview-body');
+
 el.adminAccountPagination = document.querySelector('#admin-account-pagination');
 el.adminAccountPageLabel = document.querySelector('#admin-account-page-label');
 el.adminAccountPreviousPage = document.querySelector('#admin-account-previous-page');
@@ -59,6 +67,7 @@ el.competitionPagination = document.querySelector('#competition-pagination');
 el.competitionPageLabel = document.querySelector('#competition-page-label');
 el.competitionPreviousPage = document.querySelector('#competition-previous-page');
 el.competitionNextPage = document.querySelector('#competition-next-page');
+el.competitionTextLength = document.querySelector('#competition-text-length-input');
 
 el.adminAccountSearch = document.querySelector('#admin-account-search');
 el.adminAccountRoleFilter = document.querySelector('#admin-account-role-filter');
@@ -95,6 +104,28 @@ el.studentImportPreview = document.querySelector('#student-import-preview');
 el.studentImportPasteSubmit = document.querySelector('#student-import-paste-submit');
 el.studentImportPasteResult = document.querySelector('#student-import-paste-result');
 el.studentImportClass = document.querySelector('#student-import-class');
+
+el.bugReportSearch = document.querySelector('#bug-report-search');
+el.bugReportStatusFilter = document.querySelector('#bug-report-status-filter');
+el.bugReportPriorityFilter = document.querySelector('#bug-report-priority-filter');
+el.bugReportTable = document.querySelector('#bug-report-table');
+el.bugReportCount = document.querySelector('#bug-report-count');
+el.bugReportEmpty = document.querySelector('#bug-report-empty');
+el.bugReportPagination = document.querySelector('#bug-report-pagination');
+el.bugReportPageLabel = document.querySelector('#bug-report-page-label');
+el.bugReportPreviousPage = document.querySelector('#bug-report-previous-page');
+el.bugReportNextPage = document.querySelector('#bug-report-next-page');
+el.refreshBugReports = document.querySelector('#refresh-bug-reports');
+el.bugReportDialog = document.querySelector('#bug-report-dialog');
+el.closeBugReport = document.querySelector('#close-bug-report');
+el.cancelBugReport = document.querySelector('#cancel-bug-report');
+el.bugReportCode = document.querySelector('#bug-report-code');
+el.bugReportTitle = document.querySelector('#bug-report-title');
+el.bugReportMeta = document.querySelector('#bug-report-meta');
+el.bugReportFields = document.querySelector('#bug-report-fields');
+el.bugReportAttachment = document.querySelector('#bug-report-attachment');
+el.bugReportStatusSelect = document.querySelector('#bug-report-status-select');
+el.saveBugReportStatus = document.querySelector('#save-bug-report-status');
 
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
@@ -990,6 +1021,15 @@ function updatePoolSummary(countEl, selection) {
   countEl.textContent = count ? `已选 ${count} 篇 · 开赛随机抽一篇` : '未指定 · 自动取题';
 }
 
+function openPassagePreview(item) {
+  el.passagePreviewCategory.textContent = item.category;
+  el.passagePreviewTitle.textContent = item.title;
+  el.passagePreviewMeta.textContent = `${item.length} 字 · ${item.language === 'en' ? '英文' : '中文'}`;
+  el.passagePreviewBody.textContent = item.content || item.preview || '';
+  el.passagePreviewDialog.showModal();
+  window.lucide?.createIcons();
+}
+
 function renderPoolPicker({ listEl, tipEl, countEl, selection, language }) {
   const rows = textCatalog.filter((item) => item.language === language);
   listEl.replaceChildren();
@@ -1005,9 +1045,9 @@ function renderPoolPicker({ listEl, tipEl, countEl, selection, language }) {
     heading.textContent = `${group[0].category} · ${group.length} 篇`;
     block.append(heading);
     for (const item of group) {
-      const label = document.createElement('label');
-      label.className = 'competition-pool-item';
-      label.title = item.preview;
+      const row = document.createElement('div');
+      row.className = 'competition-pool-item';
+      row.title = item.preview;
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.value = String(item.id);
@@ -1021,8 +1061,23 @@ function renderPoolPicker({ listEl, tipEl, countEl, selection, language }) {
       preview.textContent = item.title;
       const length = document.createElement('small');
       length.textContent = `${item.length} 字`;
-      label.append(box, preview, length);
-      block.append(label);
+      const peek = document.createElement('button');
+      peek.type = 'button';
+      peek.className = 'pool-peek';
+      peek.textContent = '全文';
+      peek.setAttribute('aria-label', `查看《${item.title}》全文`);
+      peek.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openPassagePreview(item);
+      });
+      // 点标题/字数也能勾选，但点复选框和「全文」不重复切换。
+      row.addEventListener('click', (event) => {
+        if (event.target === box || event.target.closest('.pool-peek')) return;
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change'));
+      });
+      row.append(box, preview, length, peek);
+      block.append(row);
     }
     listEl.append(block);
   }
@@ -1091,6 +1146,7 @@ async function saveCompetition(event) {
           ...(speed ? { language: el.competitionMode.value === 'speed-en' ? 'en' : 'zh' } : {}),
           teamSize: Number(el.competitionTeamSize.value),
           series: team ? el.competitionSeries.value : 'single',
+          textMinLength: el.competitionTextLength.value ? Number(el.competitionTextLength.value) : undefined,
           passageIds: [...competitionPoolSelection()]
         },
         sides: team ? names.map((name, index) => ({ name, color: ['#e05b5b', '#4a8fe0', '#3fae74', '#d9a93a', '#8d6fd4', '#dd8442'][index] || '#4a8fe0' })) : []
@@ -1186,8 +1242,91 @@ async function decideCompetitionResult(item) {
   } catch (error) { toast(error.message, true); }
 }
 
+// ------------------------------------------------------------ 意见反馈
+
+const BUG_STATUS_CLASS = { 待处理: 'is-pending', 处理中: 'is-running', 已处理: 'is-done' };
+
+async function loadBugReports(page = pagers.bugReports?.page || 1) {
+  const query = filterQuery({
+    page,
+    q: el.bugReportSearch.value.trim(),
+    status: el.bugReportStatusFilter.value,
+    priority: el.bugReportPriorityFilter.value
+  });
+  const data = await api(`/api/admin/bug-reports?${query}`);
+  adminState.bugReports = data.rows || [];
+  el.bugReportCount.textContent = `共 ${data.total} 条`;
+  el.bugReportEmpty.hidden = adminState.bugReports.length > 0;
+  pagers.bugReports?.render(data);
+  renderBugReports();
+}
+
+function renderBugReports() {
+  el.bugReportTable.replaceChildren(...adminState.bugReports.map((item) => {
+    const row = document.createElement('tr');
+    const title = document.createElement('td'); title.className = 'article-cell';
+    const strong = document.createElement('strong'); strong.textContent = item.title;
+    const code = document.createElement('span'); code.textContent = `BUG-${String(item.id).padStart(5, '0')}`;
+    title.append(strong, code);
+    const student = document.createElement('td'); student.textContent = item.displayName;
+    const priority = document.createElement('td');
+    const chip = document.createElement('span');
+    chip.className = `bug-priority is-${String(item.priority || 'p2').toLowerCase()}`;
+    chip.textContent = item.priority;
+    priority.append(chip);
+    const status = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = `status-pill ${BUG_STATUS_CLASS[item.status] || ''}`;
+    pill.textContent = item.status;
+    status.append(pill);
+    const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
+    const attachment = document.createElement('td'); attachment.textContent = item.hasAttachment ? '有附件' : '—';
+    const actions = document.createElement('td'); actions.className = 'table-actions';
+    actions.append(actionButton('eye', '查看详情', '', () => openBugReport(item)));
+    row.append(title, student, priority, status, created, attachment, actions);
+    return row;
+  }));
+  window.lucide?.createIcons();
+}
+
+function openBugReport(item) {
+  el.bugReportCode.textContent = `BUG-${String(item.id).padStart(5, '0')}`;
+  el.bugReportTitle.textContent = item.title;
+  el.bugReportMeta.textContent = [item.displayName, formatDate(item.createdAt), `${item.priority} · ${item.frequency}`].filter(Boolean).join(' · ');
+  const fields = [
+    ['前置条件', item.preconditions],
+    ['复现步骤', item.steps],
+    ['测试数据', item.testData],
+    ['预期结果', item.expectedResult],
+    ['实际结果', item.actualResult],
+    ['运行环境', item.environment]
+  ].filter(([, value]) => String(value || '').trim());
+  el.bugReportFields.replaceChildren(...fields.map(([label, value]) => {
+    const block = document.createElement('div');
+    const name = document.createElement('strong'); name.textContent = label;
+    const text = document.createElement('p'); text.textContent = value;
+    block.append(name, text);
+    return block;
+  }));
+  if (item.hasAttachment) {
+    const link = document.createElement('a');
+    link.href = `/api/admin/bug-reports/${item.id}/attachment`;
+    link.className = 'secondary-button';
+    link.textContent = '下载附件';
+    el.bugReportAttachment.replaceChildren(link);
+    el.bugReportAttachment.hidden = false;
+  } else {
+    el.bugReportAttachment.replaceChildren();
+    el.bugReportAttachment.hidden = true;
+  }
+  el.bugReportStatusSelect.value = item.status;
+  el.bugReportDialog.dataset.id = String(item.id);
+  el.bugReportDialog.showModal();
+  window.lucide?.createIcons();
+}
+
 async function switchView(view) {
-  const allowedViews = ['overview', 'admins', 'passages', 'users', 'classes', 'progress', 'assignments', 'competitions', 'scores'];
+  const allowedViews = ['overview', 'admins', 'passages', 'users', 'classes', 'progress', 'assignments', 'competitions', 'scores', 'bug-reports'];
   if (!allowedViews.includes(view)) view = 'overview';
   adminState.activeView = view;
   try { localStorage.setItem('typing-admin-view', view); } catch { /* private mode */ }
@@ -1205,6 +1344,7 @@ async function switchView(view) {
     if (view === 'assignments') await Promise.all([loadAssignments(), loadAssignmentUsers(), loadAssignmentClasses()]);
     if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition(), loadTextCatalog()]);
     if (view === 'scores') await Promise.all([loadScores(), loadScoreCategories()]);
+    if (view === 'bug-reports') await loadBugReports();
   } catch (error) {
     if (error.status === 401) setAuthenticated(false);
     else toast(error.message, true);
@@ -1492,6 +1632,8 @@ el.battleCompetitionStart.addEventListener('click', startBattleCompetition);
 el.competitionMode.addEventListener('change', () => { updateCompetitionModeFields(); renderCompetitionPool(); });
 el.competitionPoolClear.addEventListener('click', () => { competitionPoolSelection().clear(); renderCompetitionPool(); });
 el.battlePoolClear.addEventListener('click', () => { battlePoolSelection.clear(); renderBattlePool(); });
+el.closePassagePreview.addEventListener('click', () => el.passagePreviewDialog.close());
+el.cancelPassagePreview.addEventListener('click', () => el.passagePreviewDialog.close());
 el.competitionSeries.addEventListener('change', updateCompetitionModeFields);
 el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetitions(1), loadBattleCompetition()]));
 el.refreshAssignments.addEventListener('click', () => loadAssignments(1));
@@ -1539,6 +1681,25 @@ el.competitionLanguageFilter.addEventListener('change', () => loadCompetitions(1
 el.scoreSearch.addEventListener('input', debounce(() => loadScores(1)));
 el.scoreRangeFilter.addEventListener('change', () => loadScores(1));
 el.scoreCategoryFilter.addEventListener('change', () => loadScores(1));
+pagers.bugReports = createPager({ pagination: el.bugReportPagination, label: el.bugReportPageLabel, previous: el.bugReportPreviousPage, next: el.bugReportNextPage, load: (page) => loadBugReports(page) });
+el.bugReportSearch.addEventListener('input', debounce(() => loadBugReports(1)));
+el.bugReportStatusFilter.addEventListener('change', () => loadBugReports(1));
+el.bugReportPriorityFilter.addEventListener('change', () => loadBugReports(1));
+el.refreshBugReports.addEventListener('click', () => loadBugReports(1));
+el.closeBugReport.addEventListener('click', () => el.bugReportDialog.close());
+el.cancelBugReport.addEventListener('click', () => el.bugReportDialog.close());
+el.saveBugReportStatus.addEventListener('click', async () => {
+  const id = el.bugReportDialog.dataset.id;
+  if (!id) return;
+  el.saveBugReportStatus.disabled = true;
+  try {
+    await api(`/api/admin/bug-reports/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: el.bugReportStatusSelect.value }) });
+    toast('反馈状态已更新');
+    el.bugReportDialog.close();
+    await loadBugReports();
+  } catch (error) { toast(error.message, true); }
+  finally { el.saveBugReportStatus.disabled = false; }
+});
 el.mobileMenu.addEventListener('click', () => el.sidebar.classList.toggle('is-open'));
 
 window.addEventListener('DOMContentLoaded', async () => {

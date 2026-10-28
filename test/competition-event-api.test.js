@@ -313,7 +313,7 @@ test('serves the passage catalog for the admin text picker', async () => {
   const rows = catalog.body.rows;
   assert.ok(rows.length > 0, '候选项来自「练习文章」表');
   assert.ok(rows.every((row) => row.id && row.title && row.category && row.length > 0));
-  assert.equal(rows.some((row) => 'content' in row), false, '列表不返回全文');
+  assert.ok(rows.every((row) => typeof row.content === 'string' && row.content.length > 0), '列表带全文，供「全文」预览');
   assert.ok(rows.some((row) => row.language === 'zh'));
   assert.ok(rows.some((row) => row.language === 'en'));
   assert.equal(rows.some((row) => row.language === 'pinyin'), false, '拼音文章不进候选');

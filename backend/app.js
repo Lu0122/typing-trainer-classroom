@@ -450,6 +450,9 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     return response.json({ user: publicUser(request.user) });
   });
 
+  // 学生反馈的处理状态，后台只能在这三个值之间流转。
+  const BUG_REPORT_STATUSES = ['待处理', '处理中', '已处理'];
+
   const bugReportColumns = `
     bug_reports.id, bug_reports.user_id AS userId, users.display_name AS displayName,
     bug_reports.title, bug_reports.preconditions AS preconditions, bug_reports.steps,
@@ -496,15 +499,39 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.get('/api/admin/bug-reports', requireAdmin, (request, response) => {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM bug_reports').get().count;
+    const status = cleanText(request.query.status, 20);
+    const priority = cleanText(request.query.priority, 10);
+    const keyword = cleanText(request.query.q, 80);
+    const filters = [];
+    const params = [];
+    if (BUG_REPORT_STATUSES.includes(status)) { filters.push('bug_reports.status = ?'); params.push(status); }
+    if (['P0', 'P1', 'P2', 'P3'].includes(priority)) { filters.push('bug_reports.priority = ?'); params.push(priority); }
+    if (keyword) {
+      filters.push('(bug_reports.title LIKE ? OR users.display_name LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM bug_reports
+      JOIN users ON users.id = bug_reports.user_id ${where}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT ${bugReportColumns} FROM bug_reports
       JOIN users ON users.id = bug_reports.user_id
+      ${where}
       ORDER BY bug_reports.id DESC LIMIT ? OFFSET ?
-    `).all(pagination.pageSize, pagination.offset);
+    `).all(...params, pagination.pageSize, pagination.offset);
     // reports 是旧字段名，保留一份以免外部脚本失效。
     return response.json({ rows, reports: rows, total, ...pagination });
+  });
+
+  app.patch('/api/admin/bug-reports/:id/status', requireAdmin, (request, response) => {
+    const id = Number.parseInt(request.params.id, 10);
+    const status = String(request.body?.status || '');
+    if (!Number.isInteger(id) || id <= 0) return response.status(400).json({ message: '反馈编号不正确' });
+    if (!BUG_REPORT_STATUSES.includes(status)) return response.status(400).json({ message: '反馈状态不正确' });
+    const result = db.prepare('UPDATE bug_reports SET status = ? WHERE id = ?').run(status, id);
+    if (!result.changes) return response.status(404).json({ message: '反馈不存在' });
+    response.json({ ok: true, status });
   });
 
   app.get('/api/admin/bug-reports/:id/attachment', requireAdmin, (request, response) => {

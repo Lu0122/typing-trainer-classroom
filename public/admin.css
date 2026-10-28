@@ -422,3 +422,39 @@ tbody tr:hover { background: #f8faf6; }
 .import-class-field { display: flex; align-items: center; gap: 10px; margin: -4px 0 16px; color: var(--ink-soft); font-size: 12px; }
 .import-class-field > span { flex-shrink: 0; }
 .import-class-field select { flex: 1; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--ink); font-size: 12px; }
+
+/* 意见反馈：优先级标签、状态色与详情弹框 */
+.bug-priority { display: inline-block; padding: 3px 7px; border-radius: 6px; background: #eef2f6; color: #51697f; font: 700 11px Consolas, monospace; }
+.bug-priority.is-p0 { background: #fdecea; color: #b4373a; }
+.bug-priority.is-p1 { background: #fdf1e6; color: #b26a1f; }
+.bug-priority.is-p2 { background: #eef4fb; color: #35618c; }
+.bug-priority.is-p3 { background: #f1f4f0; color: #5c6f5f; }
+.status-pill.is-pending { background: #fff4e0; color: #a9701a; }
+.status-pill.is-running { background: #e8f2ff; color: #2d6ca8; }
+.status-pill.is-done { background: #e9f7ef; color: #24744e; }
+.bug-report-dialog { width: min(620px, calc(100vw - 32px)); max-height: 86vh; overflow: auto; padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.bug-report-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.bug-report-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.bug-report-dialog h2 { margin: 6px 0 0; font-family: SimSun, serif; font-size: 24px; }
+.bug-report-meta { margin: 8px 0 18px; color: var(--ink-soft); font-size: 12px; }
+.bug-report-fields { display: grid; gap: 14px; }
+.bug-report-fields > div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: #fbfdfb; }
+.bug-report-fields strong { display: block; margin-bottom: 6px; color: #4d6b5a; font-size: 11px; }
+.bug-report-fields p { margin: 0; color: var(--ink); font-size: 12px; line-height: 1.8; white-space: pre-wrap; }
+.bug-report-attachment { margin: 14px 0 0; }
+.bug-report-dialog footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.bug-report-status-field { display: grid; gap: 6px; color: var(--ink-soft); font-size: 11px; }
+.bug-report-status-field select { height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--ink); font-size: 12px; }
+.bug-report-actions { display: flex; gap: 8px; }
+
+/* 选文列表里的「全文」按钮与预览弹框 */
+.competition-pool-item { grid-template-columns: auto 1fr auto auto; }
+.pool-peek { padding: 3px 7px; border: 1px solid #d8e4d9; border-radius: 6px; background: #fff; color: #24744e; font-size: 10px; font-weight: 700; cursor: pointer; }
+.pool-peek:hover { border-color: #b9d6c4; background: #f2f9f4; }
+.passage-preview-dialog { width: min(620px, calc(100vw - 32px)); max-height: 84vh; overflow: auto; padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.passage-preview-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.passage-preview-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.passage-preview-dialog h2 { margin: 6px 0 0; font-family: SimSun, serif; font-size: 24px; }
+.passage-preview-meta { margin: 6px 0 16px; color: var(--ink-soft); font-size: 11px; }
+.passage-preview-body { margin: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfb; color: var(--ink); font-size: 14px; line-height: 2; white-space: pre-wrap; }
+.passage-preview-dialog footer { display: flex; justify-content: flex-end; margin-top: 18px; }

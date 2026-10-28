@@ -302,3 +302,15 @@ test('deleting a picked passage blocks the round instead of silently swapping te
   assert.throws(() => engine.beginRound(event.id), /已被删除/);
   db.close();
 });
+
+test('derives the speed text length from the round duration unless told otherwise', () => {
+  const db = createDatabase(':memory:');
+  const engine = new CompetitionEvent(db, { now: () => 1 });
+  const auto = engine.create({ mode: 'speed', config: { language: 'zh', roundMs: 60_000 } });
+  assert.equal(auto.config.textMinLength, 200, '1 分钟按约 3.3 字/秒估 200 字');
+  const fixed = engine.create({ mode: 'speed', config: { language: 'zh', roundMs: 60_000, textMinLength: 300 } });
+  assert.equal(fixed.config.textMinLength, 300, '老师指定时用指定值');
+  const clamped = engine.create({ mode: 'speed', config: { language: 'zh', roundMs: 60_000, textMinLength: 9_999 } });
+  assert.equal(clamped.config.textMinLength, 2000, '上限 2000 字');
+  db.close();
+});

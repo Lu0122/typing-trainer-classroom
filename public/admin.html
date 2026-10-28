@@ -67,6 +67,7 @@
           <button class="admin-nav-item" type="button" data-view="assignments"><i data-lucide="clipboard-check"></i><span>教学任务</span></button>
           <button class="admin-nav-item" type="button" data-view="competitions"><i data-lucide="trophy"></i><span>比赛赛事</span></button>
           <button class="admin-nav-item" type="button" data-view="scores"><i data-lucide="trophy"></i><span>竞速成绩</span></button>
+          <button class="admin-nav-item" type="button" data-view="bug-reports"><i data-lucide="message-square-warning"></i><span>意见反馈</span></button>
         </nav>
       <div class="sidebar-bottom">
         <a href="/"><i data-lucide="external-link"></i><span>打开练习前台</span></a>
@@ -311,6 +312,7 @@
             <label><span>比赛语言</span><select id="competition-mode-input"><option value="speed-zh">中文打字</option><option value="speed-en">英文打字</option></select></label>
             <label><span>赛程</span><select id="competition-schedule-input"><option value="single">单日</option><option value="multi_day">跨天</option></select></label>
             <label><span>比赛时长</span><select id="competition-duration-input"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option><option value="300000">5 分钟</option></select></label>
+            <label><span>题面长度</span><select id="competition-text-length-input"><option value="">跟随时长（推荐）</option><option value="300">约 300 字</option><option value="400">约 400 字</option><option value="600">约 600 字</option><option value="800">约 800 字</option></select></label>
             <label class="competition-team-field" hidden><span>团体赛制</span><select id="competition-series-input"><option value="single">单场</option><option value="league">循环赛</option></select></label>
             <label class="competition-team-field" hidden><span>甲方名称</span><input id="competition-side-a-input" type="text" maxlength="40" placeholder="例如：一班"></label>
             <label class="competition-team-field" hidden><span>乙方名称</span><input id="competition-side-b-input" type="text" maxlength="40" placeholder="例如：二班"></label>
@@ -387,8 +389,47 @@
           </div>
         </section>
       </section>
+
+      <section class="admin-view" id="view-bug-reports" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">学生反馈</p><h1>意见反馈</h1><p>学生在游戏大厅「问题反馈」提交的内容，处理后可以把状态改成「处理中 / 已处理」。</p></div>
+          <button class="secondary-button" id="refresh-bug-reports" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>反馈列表</strong><span id="bug-report-count">共 0 条</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="bug-report-search" type="search" placeholder="搜索标题或学生姓名"></label>
+            <select id="bug-report-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="待处理">待处理</option><option value="处理中">处理中</option><option value="已处理">已处理</option></select>
+            <select id="bug-report-priority-filter" class="admin-filter-select" aria-label="按优先级筛选"><option value="">全部优先级</option><option value="P0">P0 阻断</option><option value="P1">P1 严重</option><option value="P2">P2 一般</option><option value="P3">P3 轻微</option></select>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>反馈</th><th>学生</th><th>优先级</th><th>状态</th><th>提交时间</th><th>附件</th><th><span class="sr-only">操作</span></th></tr></thead>
+              <tbody id="bug-report-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="bug-report-empty" hidden>还没有学生提交反馈。</p>
+          <div class="pagination" id="bug-report-pagination" hidden><button class="icon-button" id="bug-report-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="bug-report-page-label">第 1 / 1 页</span><button class="icon-button" id="bug-report-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
     </main>
   </div>
+
+  <dialog class="bug-report-dialog" id="bug-report-dialog">
+    <button class="dialog-close" id="close-bug-report" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow" id="bug-report-code">BUG</p>
+    <h2 id="bug-report-title">反馈</h2>
+    <p class="bug-report-meta" id="bug-report-meta"></p>
+    <div class="bug-report-fields" id="bug-report-fields"></div>
+    <p class="bug-report-attachment" id="bug-report-attachment" hidden></p>
+    <footer>
+      <label class="bug-report-status-field"><span>处理状态</span><select id="bug-report-status-select"><option value="待处理">待处理</option><option value="处理中">处理中</option><option value="已处理">已处理</option></select></label>
+      <div class="bug-report-actions">
+        <button class="secondary-button" id="cancel-bug-report" type="button">关闭</button>
+        <button class="primary-button" id="save-bug-report-status" type="button"><i data-lucide="check"></i><span>保存状态</span></button>
+      </div>
+    </footer>
+  </dialog>
 
   <dialog class="passage-dialog" id="passage-dialog">
     <form id="passage-form">
@@ -468,6 +509,15 @@
         <button class="primary-button" id="student-import-paste-submit" type="button"><i data-lucide="clipboard-paste"></i><span>导入粘贴内容</span></button>
       </footer>
     </section>
+  </dialog>
+
+  <dialog class="passage-preview-dialog" id="passage-preview-dialog">
+    <button class="dialog-close" id="close-passage-preview" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow" id="passage-preview-category">分类</p>
+    <h2 id="passage-preview-title">文章</h2>
+    <p class="passage-preview-meta" id="passage-preview-meta"></p>
+    <p class="passage-preview-body" id="passage-preview-body"></p>
+    <footer><button class="secondary-button" id="cancel-passage-preview" type="button">关闭</button></footer>
   </dialog>
 
   <div class="toast" id="admin-toast" role="status" aria-live="polite"></div>

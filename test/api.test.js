@@ -581,3 +581,28 @@ test('imports students straight into the chosen class', async () => {
   assert.equal(plain.body.className, null);
   context.db.close();
 });
+
+test('lists, filters and updates student bug reports', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const userId = context.db.prepare("INSERT INTO users (username, display_name, password_hash) VALUES ('bug1', '反馈学生', 'x')").run().lastInsertRowid;
+  const insert = context.db.prepare(`INSERT INTO bug_reports
+    (user_id, title, steps, expected_result, actual_result, priority, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  insert.run(userId, '首页打不开', '打开首页', '正常显示', '白屏', 'P0', '待处理', new Date().toISOString());
+  insert.run(userId, '按钮错位', '点按钮', '对齐', '偏移', 'P2', '已处理', new Date().toISOString());
+
+  const all = await admin.get('/api/admin/bug-reports').expect(200);
+  assert.equal(all.body.total, 2);
+  assert.equal((await admin.get(`/api/admin/bug-reports?status=${encodeURIComponent('待处理')}`).expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/admin/bug-reports?priority=P0').expect(200)).body.total, 1);
+  assert.equal((await admin.get(`/api/admin/bug-reports?q=${encodeURIComponent('首页')}`).expect(200)).body.total, 1);
+
+  const target = all.body.rows.find((row) => row.title === '首页打不开');
+  await admin.patch(`/api/admin/bug-reports/${target.id}/status`).send({ status: '处理中' }).expect(200);
+  assert.equal((await admin.get(`/api/admin/bug-reports?status=${encodeURIComponent('处理中')}`).expect(200)).body.total, 1);
+  await admin.patch(`/api/admin/bug-reports/${target.id}/status`).send({ status: '瞎写' }).expect(400);
+  await admin.patch('/api/admin/bug-reports/999999/status').send({ status: '已处理' }).expect(404);
+  context.db.close();
+});
