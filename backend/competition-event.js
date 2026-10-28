@@ -15,7 +15,7 @@
 // 参数全部来自 config，代码里不写死任何时长。
 
 const crypto = require('node:crypto');
-const { textAt, speedTextAt } = require('./competition-texts');
+const { textAt, speedTextAt, passageCatalog, passagesByIds, speedTextFromPassage, SPEED_TARGET_CHARS } = require('./competition-texts');
 
 const DEFAULT_CONFIG = Object.freeze({
   registrationMs: 10 * 60_000, // 检录时长
@@ -29,7 +29,9 @@ const DEFAULT_CONFIG = Object.freeze({
   capacity: 60, // 报名上限
   maxBatch: 16, // 单次提交上限
   teamSize: 5, // 多 v 多每方固定出场人数
-  series: 'single' // team: single / league
+  series: 'single', // team: single / league
+  passageIds: [], // 老师指定的候选文章（练习文章 id），空数组 = 按轮次自动取题
+  textMinLength: SPEED_TARGET_CHARS // 速度赛抽中文章后补足到的中文字数
 });
 
 const FINAL_ROUND_SIZE = 3; // 剩 3 人及以下进决赛轮
@@ -49,9 +51,10 @@ function csvCell(value) {
 }
 
 class CompetitionEvent {
-  constructor(db, { now = Date.now } = {}) {
+  constructor(db, { now = Date.now, random = Math.random } = {}) {
     this.db = db;
     this.now = now;
+    this.random = random;
     this.ensureSchema();
   }
 
@@ -161,6 +164,19 @@ class CompetitionEvent {
     if (mode === 'team' && (merged.series === 'league'
       ? normalizedSides.length < 2 || normalizedSides.length > 8
       : normalizedSides.length !== 2)) fail(merged.series === 'league' ? '循环赛需要 2–8 个参赛方' : '多 v 多必须设置两个参赛方');
+    // 老师指定的候选文章：来自「练习文章」表，必须存在且语言与赛事一致。
+    const idInput = Array.isArray(merged.passageIds) ? merged.passageIds : [];
+    if (idInput.length > 40) fail('最多指定 40 篇文章');
+    const wantedIds = [...new Set(idInput.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+    const picked = passagesByIds(this.db, wantedIds);
+    if (picked.length !== wantedIds.length) fail('指定的文章已被删除或停用，请重新选择');
+    const expectedLanguage = mode === 'speed' ? merged.language : 'zh';
+    if (picked.some((passage) => passage.language !== expectedLanguage)) fail('指定的文章语言与比赛语言不一致');
+    merged.passageIds = picked.map((passage) => passage.id);
+    const minLength = Number(merged.textMinLength);
+    merged.textMinLength = Number.isFinite(minLength)
+      ? Math.min(2000, Math.max(100, Math.round(minLength)))
+      : SPEED_TARGET_CHARS;
     const create = this.db.transaction(() => {
       this.db.prepare(`INSERT INTO competitions (id, name, kind, schedule, status, config_json, created_at)
         VALUES (?, ?, ?, ?, 'draft', ?, ?)`)
@@ -290,6 +306,33 @@ class CompetitionEvent {
     return round;
   }
 
+  // 本轮题面：老师指定了候选文章就从候选里随机抽（优先抽本场还没用过的），
+  // 否则沿用原来的按轮次自动取题。速度赛抽中的文章只作开头，后面自动衔接同分类篇目补足长度。
+  pickText(row, config, roundNo) {
+    const automatic = () => ({
+      text: row.kind === 'speed' ? speedTextAt(config.language, roundNo - 1) : textAt(config.level, roundNo - 1),
+      level: row.kind === 'speed' ? 'standard' : config.level
+    });
+    const ids = Array.isArray(config.passageIds) ? config.passageIds : [];
+    if (!ids.length) return automatic();
+    // 停用不拦：老师停用某篇只是不想它出现在新赛事里，已排好的赛事照旧用它。
+    // 真的被删掉才报错——静默换成内置题库会让老师以为在打自己选的文章。
+    const passages = passagesByIds(this.db, ids, { includeInactive: true });
+    if (!passages.length) fail('指定的文章已被删除，请重新建赛并重新选择文章');
+    const built = passages.map((passage) => ({
+      level: config.level,
+      text: row.kind === 'speed'
+        ? speedTextFromPassage(this.db, passage, { minLength: config.textMinLength })
+        : passage.content
+    }));
+    // 同一场尽量不重复出同一篇；候选都用过了才允许重复。
+    const used = new Set(this.db.prepare('SELECT text FROM competition_rounds WHERE competition_id = ?')
+      .all(row.id).map((item) => item.text));
+    const fresh = built.filter((item) => !used.has(item.text));
+    const source = fresh.length ? fresh : built;
+    return source[Math.min(source.length - 1, Math.floor(this.random() * source.length))];
+  }
+
   beginRound(id, { plannedAt = null } = {}) {
     const row = this.get(id);
     if (row.status === 'finished') fail('赛事已结束');
@@ -312,7 +355,8 @@ class CompetitionEvent {
     const roundNo = (previous?.round_no || 0) + 1;
     const isFinal = row.kind === 'team' || row.kind === 'speed' || active.length <= FINAL_ROUND_SIZE ? 1 : 0;
     const keepCount = isFinal ? active.length : Math.max(MIN_PLAYERS, Math.ceil(active.length * config.keepRatio));
-    const text = row.kind === 'speed' ? speedTextAt(config.language, roundNo - 1) : textAt(config.level, roundNo - 1);
+    const picked = this.pickText(row, config, roundNo);
+    const text = picked.text;
     const roundId = crypto.randomUUID();
     const now = this.now();
 
@@ -323,7 +367,7 @@ class CompetitionEvent {
     this.db.prepare(`INSERT INTO competition_rounds
       (id, competition_id, round_no, text, level, duration_ms, keep_count, is_final, status, planned_at, started_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(roundId, id, roundNo, text, config.level, config.roundMs, keepCount, isFinal, scheduled ? 'scheduled' : countdown ? 'countdown' : 'running', scheduled ? planned : null, startsAt);
+      .run(roundId, id, roundNo, text, picked.level || config.level, config.roundMs, keepCount, isFinal, scheduled ? 'scheduled' : countdown ? 'countdown' : 'running', scheduled ? planned : null, startsAt);
 
     if (row.kind === 'team') {
       const pairings = this.seriesOf(row) === 'league' ? this.pairingsFor(sides, roundNo) : [{ sideA: sides[0], sideB: sides[1] }];
@@ -857,6 +901,12 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
       sides: request.body?.sides || []
     });
   }));
+
+  // 后台「指定文章」列表：直接读「练习文章」表，带语言标记供前端按中/英文过滤。
+  // 必须注册在 /api/competitions/:id 之前，否则会被当成赛事 id。
+  app.get('/api/competitions/text-catalog', requireAdmin, route(() => ({
+    rows: passageCatalog(db)
+  })));
 
   app.get('/api/competitions/:id', requireUser, route((request) =>
     engine.state(request.params.id, request.user.id)));

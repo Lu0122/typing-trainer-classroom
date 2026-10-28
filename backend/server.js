@@ -13,6 +13,7 @@ const app = createApp({
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
   secureCookies: process.env.COOKIE_SECURE === 'true',
   requireAccountApproval: process.env.REQUIRE_ACCOUNT_APPROVAL !== 'false'
+  ,studentRegistrationEnabled: process.env.STUDENT_REGISTRATION_ENABLED === 'true'
 });
 
 if (!process.env.ADMIN_PASSWORD) {

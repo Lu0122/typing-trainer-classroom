@@ -74,4 +74,125 @@ function textAt(level, index) {
   return bank[((index % size) + size) % size];
 }
 
-module.exports = { BANKS, LEVELS, LEVEL_LABELS, textsFor, textAt, speedTextAt };
+// ------------------------------------------------------------ 老师指定文章（来自「练习文章」）
+//
+// 候选项来自后台「练习文章」表（passages），不是代码里写死的题库：
+// 老师只维护一份文章，练习和比赛共用。赛事配置里存 passage id，
+// 老师事后改了文章内容，已建赛事自动用新版。
+
+// 速度赛的题面长度目标（中文字符数）。按 100 字/分钟的高手算，2 分钟能打 200 字，
+// 400 字保证时限内没人打完，比赛仍是「限时比正确字数」而不是「比谁先打完」。
+const SPEED_TARGET_CHARS = 400;
+// 英文按字符数算，同样时长下约为中文的 2 倍。
+const SPEED_ENGLISH_FACTOR = 2;
+// 拼接上限，防止目标长度被配置成天文数字时把题面拼到几万字。
+const SPEED_MAX_PARTS = 8;
+
+// 语言判定：
+// - 含汉字 → 中文；
+// - 不含汉字但用了全角标点 → 拼音（如「ni hao tong xue，huan ying…」），拼音输入不是打文章，比赛里不列；
+// - 其余含拉丁字母 → 英文。
+function passageLanguage(passage) {
+  const text = String(passage?.content || '');
+  if (!text) return 'zh';
+  if (/[\u4e00-\u9fff]/.test(text)) return 'zh';
+  if (/[，。！？；：、“”‘’（）]/.test(text)) return 'pinyin';
+  return /[A-Za-z]/.test(text) ? 'en' : 'zh';
+}
+
+// 题面清洗：中文必须没有空格（输入法空格上屏会多打一个空格被判错），
+// 英文保留词间单个空格。
+function typingText(text, language) {
+  const value = String(text || '').replace(/\r\n?/g, '\n');
+  return language === 'en' ? value.replace(/\s+/g, ' ').trim() : value.replace(/\s+/g, '');
+}
+
+function toPassage(row) {
+  const language = passageLanguage(row);
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    language,
+    content: typingText(row.content, language)
+  };
+}
+
+// 后台「指定文章」列表：按分类分组用，只给标题、字数和预览，不下发全文。
+// 拼音文章（内容是拼音音节）不进候选：比赛打的是文章，不是拼音练习。
+function passageCatalog(db) {
+  return db.prepare(`SELECT id, title, category, content FROM passages
+    WHERE is_active = 1 ORDER BY category, id`).all()
+    .map((row) => toPassage(row))
+    .filter((passage) => passage.language !== 'pinyin')
+    .map((passage) => ({
+      id: passage.id,
+      title: passage.title,
+      category: passage.category,
+      language: passage.language,
+      length: passage.content.length,
+      preview: passage.content.slice(0, 30)
+    }));
+}
+
+// 按 id 取文章。includeInactive 用于「已建赛事继续用」：
+// 老师停用某篇只是为了它不再出现在新建赛事的候选里，不该把已经排好的比赛弄坏。
+function passagesByIds(db, ids, { includeInactive = false } = {}) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!list.length) return [];
+  const activeOnly = includeInactive ? '' : ' AND is_active = 1';
+  const rows = db.prepare(`SELECT id, title, category, content FROM passages
+    WHERE id IN (${list.map(() => '?').join(',')})${activeOnly}`).all(...list);
+  // 保持老师勾选的顺序
+  const byId = new Map(rows.map((row) => [row.id, toPassage(row)]));
+  return list.map((id) => byId.get(id)).filter(Boolean);
+}
+
+// 以指定文章开头补足题面：同分类的其它文章优先往后接，不够再用其它同语言文章。
+// 分类里只有一篇时也能接上，不会因为凑不够长度把比赛变短。
+function speedTextFromPassage(db, passage, { minLength = SPEED_TARGET_CHARS, maxParts = SPEED_MAX_PARTS } = {}) {
+  const english = passage.language === 'en';
+  const separator = english ? ' ' : '';
+  const target = english ? minLength * SPEED_ENGLISH_FACTOR : minLength;
+  const parts = [passage.content];
+  let length = passage.content.length;
+  const others = db.prepare(`SELECT id, title, category, content FROM passages
+    WHERE is_active = 1 AND id <> ? ORDER BY id`).all(passage.id).map(toPassage)
+    .filter((item) => item.language === passage.language && item.content);
+  const ordered = [
+    ...others.filter((item) => item.category === passage.category),
+    ...others.filter((item) => item.category !== passage.category)
+  ];
+  for (let index = 0; index < ordered.length && length < target && parts.length < maxParts; index += 1) {
+    parts.push(ordered[index].content);
+    length += ordered[index].content.length + separator.length;
+  }
+  return parts.join(separator);
+}
+
+// 团队阵营赛的题面是「一段一段」打的（每打完一段攻占 1% 领地），所以指定文章要切成段。
+// 按中文句末标点断句，再把短句合并到不超过 max 字；单句超长时硬切，避免出现一整段两百字。
+const SEGMENT_MAX_CHARS = 48;
+
+function segmentText(text, { max = SEGMENT_MAX_CHARS } = {}) {
+  const sentences = String(text || '').split(/(?<=[。！？；：!?;])/).filter(Boolean);
+  const segments = [];
+  let buffer = '';
+  for (const sentence of sentences) {
+    if (sentence.length > max) {
+      if (buffer) { segments.push(buffer); buffer = ''; }
+      for (let index = 0; index < sentence.length; index += max) segments.push(sentence.slice(index, index + max));
+      continue;
+    }
+    if (buffer && buffer.length + sentence.length > max) { segments.push(buffer); buffer = ''; }
+    buffer += sentence;
+  }
+  if (buffer) segments.push(buffer);
+  return segments.filter(Boolean);
+}
+
+module.exports = {
+  BANKS, LEVELS, LEVEL_LABELS, textsFor, textAt, speedTextAt,
+  SPEED_TARGET_CHARS, SEGMENT_MAX_CHARS, segmentText,
+  passageLanguage, passageCatalog, passagesByIds, speedTextFromPassage
+};

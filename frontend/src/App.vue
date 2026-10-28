@@ -23,6 +23,7 @@ const user = ref(null);
 const authOpen = ref(false);
 const returnAfterLogin = ref(null);
 const authView = ref('login');
+const studentRegistrationEnabled = ref(false);
 const authBusy = ref(false);
 const authMessage = ref('');
 const avatarFileEl = ref(null);
@@ -429,6 +430,9 @@ async function loadCurrentUser() {
     user.value = null;
   }
 }
+async function loadAuthConfig() {
+  try { studentRegistrationEnabled.value = (await requestJSON('/api/auth/config')).studentRegistrationEnabled === true; } catch { studentRegistrationEnabled.value = false; }
+}
 async function loadLearningData() {
   if (!user.value) { learningSummary.value = null; learningDiagnostics.value = null; assignments.value = []; return; }
   learningLoading.value = true;
@@ -786,6 +790,7 @@ onMounted(async () => {
   if (savedPage === 'practice') loadPassage();
   if (pinyinCopy[savedPage]) resetPinyinLesson(savedPage, false);
   if (savedPage === 'challenge-home') loadChallengeLeaderboards();
+  await loadAuthConfig();
   await loadCurrentUser();
   await loadLearningData();
   restoreChallenge();
@@ -990,7 +995,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
     </template>
     <template v-else>
       <h2>学生账号</h2><p class="auth-intro">使用姓名和密码登录，登录后保存竞速成绩并进入班级排行榜。</p>
-      <div class="auth-tabs"><button type="button" :class="{active:authView==='login'}" @click="authView='login';authMessage=''">登录</button><button type="button" :class="{active:authView==='register'}" @click="authView='register';authMessage=''">注册</button></div>
+      <div class="auth-tabs"><button type="button" :class="{active:authView==='login'}" @click="authView='login';authMessage=''">登录</button><button v-if="studentRegistrationEnabled" type="button" :class="{active:authView==='register'}" @click="authView='register';authMessage=''">注册</button></div>
       <form v-if="authView === 'login'" @submit.prevent="submitLogin"><label>姓名或用户名<input v-model.trim="loginForm.username" autocomplete="username" required maxlength="32"/></label><label>密码<input v-model="loginForm.password" type="password" autocomplete="current-password" required/></label><button class="auth-primary" :disabled="authBusy">{{ authBusy ? '登录中…' : '登录' }}</button></form>
       <form v-else @submit.prevent="submitRegister"><label>姓名<input v-model.trim="registerForm.displayName" autocomplete="name" required maxlength="12"/></label><label>密码<input v-model="registerForm.password" type="password" minlength="6" maxlength="12" pattern="(?:[0-9]{6,12}|(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,12})" autocomplete="new-password" required placeholder="6-12 位纯数字，或字母数字组合"/></label><button class="auth-primary" :disabled="authBusy">{{ authBusy ? '提交中…' : '提交注册申请' }}</button></form>
       <p class="auth-message" :class="{success:authMessage.includes('成功') || authMessage.includes('提交')}">{{ authMessage }}</p>

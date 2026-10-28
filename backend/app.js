@@ -6,6 +6,7 @@ const {
   FAKE_PASSWORD_RECORD,
   createSessionToken,
   hashPassword,
+  hashPasswordSync,
   hashSessionToken,
   normalizeDisplayName,
   normalizeUsername,
@@ -77,12 +78,20 @@ function assignmentIncludesStudent(assignment, userId, db = null) {
   }
 }
 
-function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), secureCookies = false, requireAccountApproval = true }) {
+function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), secureCookies = false, requireAccountApproval = true, studentRegistrationEnabled = true }) {
   const app = express();
   const adminSessions = new Map();
   const loginFailures = new Map();
   const registrationAttempts = new Map();
   const adminLoginFailures = new Map();
+
+  const adminCount = db.prepare('SELECT COUNT(*) AS count FROM admin_accounts').get().count;
+  if (!adminCount) {
+    db.prepare(`INSERT INTO admin_accounts
+      (username, display_name, password_hash, role, is_active, created_at)
+      VALUES ('admin', '超级管理员', ?, 'superadmin', 1, ?)`)
+      .run(hashPasswordSync(adminPassword), now());
+  }
 
   app.disable('x-powered-by');
   app.use(express.json({ limit: '256kb' }));
@@ -212,12 +221,30 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
 
   function requireAdmin(request, response, next) {
     const token = parseCookies(request.headers.cookie).typing_admin;
-    const expiresAt = token && adminSessions.get(token);
+    const session = token && adminSessions.get(token);
+    const expiresAt = typeof session === 'number' ? session : session?.expiresAt;
     if (!expiresAt || expiresAt < now()) {
       if (token) adminSessions.delete(token);
       return response.status(401).json({ message: '请先登录后台' });
     }
+    request.admin = typeof session === 'number' ? { id: 0, username: 'admin', role: 'superadmin' } : session;
+    if (request.admin.id > 0) {
+      const account = db.prepare('SELECT id, username, display_name AS displayName, role, is_active AS isActive FROM admin_accounts WHERE id = ?').get(request.admin.id);
+      if (!account?.isActive) {
+        adminSessions.delete(token);
+        response.setHeader('Set-Cookie', sessionCookie('typing_admin', '', 0));
+        return response.status(401).json({ message: '后台账号已停用，请联系超级管理员' });
+      }
+      request.admin = account;
+      adminSessions.set(token, { ...account, expiresAt });
+    }
     return next();
+  }
+
+  function requireSuperAdmin(request, response, next) {
+    return requireAdmin(request, response, () => request.admin?.role === 'superadmin'
+      ? next()
+      : response.status(403).json({ message: '只有超级管理员可以管理后台账号' }));
   }
 
   function trainingRowsForUsers(userIds = null) {
@@ -335,6 +362,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   }
 
   app.post('/api/auth/register', async (request, response, next) => {
+    if (!studentRegistrationEnabled) return response.status(404).json({ message: '学生注册已关闭，请联系老师导入账号' });
     try {
       const retryAfter = consumeLimit(registrationAttempts, requestIp(request), 5, 60 * 60 * 1000);
       if (retryAfter) return rateLimited(response, retryAfter);
@@ -371,6 +399,10 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     } catch (error) {
       return next(error);
     }
+  });
+
+  app.get('/api/auth/config', (request, response) => {
+    response.json({ studentRegistrationEnabled });
   });
 
   app.post('/api/auth/login', async (request, response, next) => {
@@ -808,22 +840,25 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     response.json({ period, mode, rows, totals });
   });
 
-  app.post('/api/admin/login', (request, response) => {
-    const limitKey = requestIp(request);
+  app.post('/api/admin/login', async (request, response, next) => {
+    const username = normalizeUsername(request.body.username || 'admin');
+    const limitKey = `${requestIp(request)}:${username}`;
     const retryAfter = isFailureLimited(adminLoginFailures, limitKey, 5, 15 * 60 * 1000);
     if (retryAfter) return rateLimited(response, retryAfter);
-    const supplied = Buffer.from(String(request.body.password ?? ''));
-    const expected = Buffer.from(String(adminPassword));
-    const valid = supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+    const account = db.prepare(`SELECT id, username, display_name AS displayName,
+      password_hash AS passwordHash, role, is_active AS isActive
+      FROM admin_accounts WHERE username = ?`).get(username);
+    const valid = account && account.isActive && await verifyPassword(String(request.body.password ?? ''), account.passwordHash);
     if (!valid) {
       recordFailure(adminLoginFailures, limitKey, 15 * 60 * 1000);
-      return response.status(401).json({ message: '管理密码不正确' });
+      return response.status(401).json({ message: '后台账号或密码不正确' });
     }
     adminLoginFailures.delete(limitKey);
+    db.prepare('UPDATE admin_accounts SET last_login_at = ? WHERE id = ?').run(now(), account.id);
     const token = crypto.randomBytes(32).toString('hex');
-    adminSessions.set(token, now() + ADMIN_SESSION_TTL_MS);
+    adminSessions.set(token, { id: account.id, username: account.username, displayName: account.displayName, role: account.role, expiresAt: now() + ADMIN_SESSION_TTL_MS });
     response.setHeader('Set-Cookie', sessionCookie('typing_admin', token, ADMIN_SESSION_TTL_MS / 1000));
-    return response.json({ ok: true });
+    return response.json({ ok: true, admin: { id: account.id, username: account.username, displayName: account.displayName, role: account.role } });
   });
 
   app.post('/api/admin/logout', requireAdmin, (request, response) => {
@@ -835,10 +870,70 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
 
   app.get('/api/admin/me', (request, response) => {
     const token = parseCookies(request.headers.cookie).typing_admin;
-    const expiresAt = token && adminSessions.get(token);
+    const session = token && adminSessions.get(token);
+    const expiresAt = typeof session === 'number' ? session : session?.expiresAt;
     const authenticated = Boolean(expiresAt && expiresAt >= now());
     if (token && !authenticated) adminSessions.delete(token);
-    response.json({ authenticated });
+    response.json({ authenticated, admin: authenticated && typeof session !== 'number' ? {
+      id: session.id, username: session.username, displayName: session.displayName, role: session.role
+    } : (authenticated ? { id: 0, username: 'admin', displayName: '超级管理员', role: 'superadmin' } : null) });
+  });
+
+  app.get('/api/admin/admins', requireSuperAdmin, (request, response) => {
+    const rows = db.prepare(`SELECT id, username, display_name AS displayName, role,
+      is_active AS isActive, created_at AS createdAt, last_login_at AS lastLoginAt
+      FROM admin_accounts ORDER BY created_at ASC`).all();
+    response.json({ rows });
+  });
+
+  app.post('/api/admin/admins', requireSuperAdmin, async (request, response, next) => {
+    try {
+      const username = normalizeUsername(request.body.username);
+      const displayName = normalizeDisplayName(request.body.displayName);
+      const password = String(request.body.password || '');
+      const usernameError = validateUsername(username);
+      const passwordError = validatePassword(password);
+      if (usernameError || passwordError || !displayName || Array.from(displayName).length > 20) {
+        return response.status(400).json({ message: usernameError || passwordError || '管理员姓名需为 2 至 20 个字符' });
+      }
+      const role = request.body.role === 'superadmin' ? 'superadmin' : 'manager';
+      const result = db.prepare(`INSERT INTO admin_accounts
+        (username, display_name, password_hash, role, is_active, created_at)
+        VALUES (?, ?, ?, ?, 1, ?)`).run(username, displayName, await hashPassword(password), role, now());
+      response.status(201).json({ id: Number(result.lastInsertRowid), username, displayName, role, isActive: 1 });
+    } catch (error) {
+      if (String(error.code).startsWith('SQLITE_CONSTRAINT')) return response.status(409).json({ message: '管理员账号已存在' });
+      next(error);
+    }
+  });
+
+  app.patch('/api/admin/admins/:id/status', requireSuperAdmin, (request, response) => {
+    const id = Number(request.params.id);
+    if (id === request.admin.id) return response.status(400).json({ message: '不能停用当前登录账号' });
+    const account = db.prepare('SELECT id, role, is_active AS isActive FROM admin_accounts WHERE id = ?').get(id);
+    if (!account) return response.status(404).json({ message: '管理员不存在' });
+    const active = request.body.isActive ? 1 : 0;
+    if (!active && account.role === 'superadmin' && db.prepare("SELECT COUNT(*) AS count FROM admin_accounts WHERE role = 'superadmin' AND is_active = 1").get().count <= 1) {
+      return response.status(400).json({ message: '至少保留一个启用中的超级管理员' });
+    }
+    db.prepare('UPDATE admin_accounts SET is_active = ? WHERE id = ?').run(active, id);
+    if (!active) {
+      for (const [token, session] of adminSessions) if (session?.id === id) adminSessions.delete(token);
+    }
+    response.json({ ok: true, isActive: active });
+  });
+
+  app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, async (request, response, next) => {
+    try {
+      const password = String(request.body.password || '');
+      const passwordError = validatePassword(password);
+      if (passwordError) return response.status(400).json({ message: passwordError });
+      const result = db.prepare('UPDATE admin_accounts SET password_hash = ?, is_active = 1 WHERE id = ?')
+        .run(await hashPassword(password), Number(request.params.id));
+      if (!result.changes) return response.status(404).json({ message: '管理员不存在' });
+      for (const [token, session] of adminSessions) if (session?.id === Number(request.params.id)) adminSessions.delete(token);
+      response.json({ ok: true });
+    } catch (error) { next(error); }
   });
 
   app.get('/api/admin/stats', requireAdmin, (request, response) => {
@@ -1068,6 +1163,41 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const result = db.prepare('DELETE FROM scores WHERE id = ?').run(request.params.id);
     if (!result.changes) return response.status(404).json({ message: '成绩不存在' });
     response.json({ ok: true });
+  });
+
+  app.post('/api/admin/users/import', requireAdmin, async (request, response, next) => {
+    try {
+      const rawRows = Array.isArray(request.body?.rows) ? request.body.rows : String(request.body?.text || '')
+        .split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+          const parts = line.split(/[\t,，;；]/).map((item) => item.trim());
+          return { displayName: parts[0], studentId: parts[1] };
+        }).filter((row) => !['姓名', '姓名/姓名'].includes(String(row.displayName).replace(/\s/g, '')));
+      if (!rawRows.length) return response.status(400).json({ message: '请粘贴“姓名,学号”数据后再导入' });
+      if (rawRows.length > 2000) return response.status(400).json({ message: '单次最多导入 2000 名学生' });
+      const errors = [], prepared = [], seen = new Set();
+      for (let index = 0; index < rawRows.length; index += 1) {
+        const displayName = normalizeDisplayName(rawRows[index]?.displayName);
+        const studentId = String(rawRows[index]?.studentId || '').trim();
+        const line = index + 1;
+        const nameError = validateDisplayName(displayName);
+        if (nameError || !/^[A-Za-z0-9_-]{4,32}$/.test(studentId)) {
+          errors.push({ line, message: nameError || '学号需为 4-32 位字母、数字、下划线或短横线' }); continue;
+        }
+        const key = displayName.toLowerCase();
+        if (seen.has(key)) { errors.push({ line, message: '本次数据中姓名重复' }); continue; }
+        seen.add(key);
+        if (db.prepare('SELECT 1 FROM users WHERE lower(display_name) = lower(?) OR lower(username) = lower(?)').get(displayName, displayName)) {
+          errors.push({ line, message: '姓名已存在，请先处理已有账号' }); continue;
+        }
+        prepared.push({ displayName, studentId, passwordHash: await hashPassword(studentId) });
+      }
+      const insert = db.prepare(`INSERT INTO users
+        (username, display_name, password_hash, is_active, last_login_at)
+        VALUES (?, ?, ?, 1, NULL)`);
+      const add = db.transaction(() => prepared.map((item) => insert.run(item.displayName, item.displayName, item.passwordHash).lastInsertRowid));
+      const ids = add();
+      response.status(201).json({ imported: ids.length, failed: errors.length, errors });
+    } catch (error) { next(error); }
   });
 
   app.get('/api/admin/users', requireAdmin, (request, response) => {

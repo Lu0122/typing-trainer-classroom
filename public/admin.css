@@ -1,11 +1,30 @@
 .admin-body { min-height: 100vh; background: #eef0eb; }
 
-.login-view { position: relative; display: grid; place-items: center; min-height: 100vh; padding: 90px 24px; overflow: hidden; }
-.login-view::before { position: fixed; top: -10vh; left: -4vw; z-index: -1; color: rgba(31, 157, 97, 0.09); font-family: SimSun, serif; font-size: min(62vw, 780px); font-weight: 900; line-height: 1; content: "字"; }
-.login-brand { position: absolute; top: 28px; left: clamp(24px, 5vw, 72px); }
-.login-panel { width: min(430px, 100%); padding: 42px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
-.login-panel h1 { margin: 0; font-family: SimSun, serif; font-size: 38px; letter-spacing: 0; }
-.login-panel > p:not(.eyebrow, .login-error) { margin: 10px 0 28px; color: var(--ink-soft); font-size: 13px; }
+.login-view { position: relative; display: grid; grid-template-columns: minmax(360px, 1fr) minmax(400px, 520px); min-height: 100vh; padding: 0; overflow: hidden; background: #f5f7f3; }
+.login-showcase { position: relative; display: flex; flex-direction: column; min-height: 100vh; padding: clamp(28px, 5vw, 72px); overflow: hidden; color: #f5fff8; background: linear-gradient(145deg, #10291f 0%, #1b4a35 54%, #287052 100%); }
+.login-showcase::before,.login-showcase::after { position: absolute; border: 1px solid #ffffff19; border-radius: 50%; content: ""; pointer-events: none; }
+.login-showcase::before { width: min(44vw, 660px); aspect-ratio: 1; right: -18%; bottom: -20%; box-shadow: 0 0 0 28px #ffffff05, 0 0 0 58px #ffffff03; }
+.login-showcase::after { width: min(24vw, 360px); aspect-ratio: 1; right: 10%; top: 20%; opacity: .45; }
+.login-brand { position: relative; z-index: 2; display: inline-flex; align-self: flex-start; color: #fff; }
+.login-brand .brand-mark { color: #163b2a; background: #e7f5eb; }
+.login-brand small { color: #a8d5ba; }
+.login-showcase-copy { position: relative; z-index: 2; max-width: 520px; margin: auto 0; padding-bottom: 10vh; }
+.login-showcase-kicker { color: #a8d5ba; font-size: 11px; font-weight: 800; letter-spacing: .18em; }
+.login-showcase-copy h2 { margin: 22px 0 18px; font-size: clamp(38px, 4.3vw, 66px); font-weight: 750; letter-spacing: -.06em; line-height: 1.08; }
+.login-showcase-copy h2 em { color: #bce9c8; font-style: normal; }
+.login-showcase-copy p { max-width: 360px; margin: 0; color: #c0dfcb; font-size: 15px; line-height: 1.9; }
+.login-showcase-orbit { position: absolute; right: 16%; bottom: 23%; z-index: 1; display: flex; gap: 12px; transform: rotate(-12deg); opacity: .28; }
+.login-showcase-orbit span { display: grid; place-items: center; width: 72px; height: 72px; border: 2px solid #d2f1da; border-radius: 16px; color: #d2f1da; font-size: 34px; font-weight: 800; }
+.login-showcase-orbit span:nth-child(2) { transform: translateY(-28px) rotate(10deg); }
+.login-showcase-orbit span:nth-child(3) { transform: rotate(19deg); }
+.login-showcase-foot { position: relative; z-index: 2; color: #9bcdb0; font-size: 11px; letter-spacing: .16em; }
+.login-panel { align-self: center; width: min(430px, calc(100% - 56px)); margin: auto; padding: clamp(32px, 5vw, 58px); border: 1px solid #dfe7df; border-radius: 20px; background: #ffffff; box-shadow: 0 24px 70px #183c2a12; }
+.login-panel h1 { margin: 0; font-size: 36px; font-weight: 750; letter-spacing: -.04em; }
+.login-panel-subtitle { margin: 10px 0 32px; color: var(--ink-soft); font-size: 13px; }
+.login-panel-hint { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 18px 0 0; color: #819087; font-size: 11px; }
+.login-panel-hint svg { width: 14px; color: #2c9561; }
+.login-panel > label > input:not([type="password"]) { width: 100%; height: 48px; padding: 0 14px; border: 1px solid #d6e2d9; border-radius: 10px; color: var(--ink); background: #fbfdfb; font-size: 14px; outline: none; }
+.login-panel > label > input:not([type="password"]):focus { border-color: #2c9561; box-shadow: 0 0 0 4px #2c95611c; }
 .login-panel label > span { display: block; margin-bottom: 8px; color: var(--ink-soft); font-size: 12px; font-weight: 800; }
 .password-wrap { position: relative; display: flex; align-items: center; }
 .password-wrap > svg { position: absolute; left: 13px; width: 17px; color: var(--ink-soft); }
@@ -13,9 +32,47 @@
 .password-wrap button { position: absolute; right: 4px; display: grid; place-items: center; width: 40px; height: 40px; border: 0; color: var(--ink-soft); background: transparent; }
 .password-wrap button svg { width: 17px; }
 .login-panel .primary-button { width: 100%; margin-top: 16px; }
+.login-panel > label + label { margin-top: 14px; }
+.admin-account-section .form-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.admin-account-section .form-actions p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.admin-account-section { overflow: hidden; }
+.admin-account-section form { padding: 26px 28px; gap: 18px 22px; }
+.admin-account-section label { display: grid; gap: 8px; }
+.admin-account-section label > span { color: #46594e; font-size: 12px; font-weight: 750; }
+.admin-account-section input, .admin-account-section select { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #d3ddd5; border-radius: 8px; color: var(--ink); background: #fbfcfa; font-size: 13px; }
+.admin-account-section input:focus, .admin-account-section select:focus { outline: 3px solid #1b8a5530; outline-offset: 1px; border-color: #278354; }
+#view-admins .table-toolbar { padding: 20px 28px; }
+#view-admins .table-scroll { padding: 0 28px 22px; }
+#view-admins table { min-width: 760px; }
+#view-admins .table-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; min-height: 34px; height: auto; margin: 3px 0 3px 6px; padding: 7px 10px; color: #3b5d49; font-size: 12px; text-decoration: none; }
+#view-admins .table-action svg { width: 14px; }
+.student-import-section { margin-top: 24px; overflow: hidden; }
+.student-import-section > header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:22px 28px; border-bottom:1px solid var(--line); }
+.student-import-section h2 { margin:0 0 6px; font-size:18px; }
+.student-import-section header p:last-child { margin:0; color:var(--ink-soft); font-size:12px; }
+.student-import-format { padding:7px 10px; border-radius:7px; color:#24744e; background:#edf6ef; font:700 12px Consolas,monospace; white-space:nowrap; }
+.student-import-body { display:grid; grid-template-columns:minmax(0,1fr) 210px; gap:18px; padding:22px 28px; }
+.student-import-body textarea { width:100%; min-height:126px; padding:12px; resize:vertical; border:1px solid #d3ddd5; border-radius:8px; color:var(--ink); background:#fbfcfa; font:13px/1.8 Consolas,"Microsoft YaHei",sans-serif; }
+.student-import-body textarea:focus { outline:3px solid #1b8a5530; border-color:#278354; }
+.student-import-actions { display:flex; flex-direction:column; align-items:stretch; gap:12px; }
+.student-import-actions p { margin:0; color:var(--ink-soft); font-size:11px; line-height:1.7; }
+@media(max-width:700px){.student-import-section>header{padding:18px 16px;flex-direction:column;gap:10px}.student-import-body{grid-template-columns:1fr;padding:18px 16px}.student-import-actions .primary-button{width:100%}}
 .login-error { min-height: 18px; margin: 10px 0 0; color: var(--red); font-size: 12px; text-align: center; }
-.back-link { position: absolute; bottom: 30px; display: flex; align-items: center; gap: 7px; color: var(--ink-soft); font-size: 12px; font-weight: 700; text-decoration: none; }
+.back-link { position: absolute; bottom: 30px; left: clamp(28px, 5vw, 72px); display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid #ffffff35; border-radius: 999px; color: #d2efda; background: #ffffff0d; font-size: 12px; font-weight: 700; text-decoration: none; }
+.back-link:hover { color: #fff; background: #ffffff18; }
 .back-link svg { width: 15px; }
+@media (max-width: 760px) {
+  .login-view { grid-template-columns: 1fr; min-height: 100dvh; padding: 28px 0 56px; }
+  .login-showcase { min-height: 260px; padding: 24px; border-radius: 0 0 28px 28px; }
+  .login-showcase-copy { margin-top: 58px; padding: 0; }
+  .login-showcase-copy h2 { margin: 12px 0 8px; font-size: 34px; }
+  .login-showcase-copy p { font-size: 12px; line-height: 1.6; }
+  .login-showcase-orbit { right: 10%; bottom: 12%; transform: scale(.58) rotate(-12deg); transform-origin: right bottom; }
+  .login-showcase-foot { display: none; }
+  .login-panel { width: min(430px, calc(100% - 32px)); margin: -20px auto 0; padding: 30px 24px; }
+  .back-link { bottom: 16px; left: 16px; color: #2b6f50; border-color: #cfe2d5; background: #ffffffaa; }
+  .back-link:hover { color: #174832; background: #fff; }
+}
 
 .admin-shell { min-height: 100vh; padding-left: 244px; }
 .admin-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; display: flex; flex-direction: column; width: 244px; padding: 24px 18px; border-right: 1px solid #29342d; color: #fff; background: var(--ink); }
@@ -312,3 +369,23 @@ tbody tr:hover { background: #f8faf6; }
 @media (max-width: 1200px) { .competition-workspace { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { #view-competitions .view-heading h1 { font-size: 25px; } .competition-panel-heading { padding: 18px 16px; gap: 9px; flex-wrap: wrap; } .competition-panel-heading p { font-size: 11px; } .competition-room-status { margin-left: 0; } #competition-form { padding: 18px 16px; } .competition-referee-controls { padding: 18px 16px; } .competition-steps { margin: 18px 16px 0; padding: 10px 8px; } .competition-steps li { gap: 4px; font-size: 11px; } .competition-room-config { flex-wrap: wrap; } .competition-room-config label { min-width: 100px; } .competition-team-roster { gap: 8px; } .competition-side { padding: 12px; } }
 #view-competitions .view-heading > button { flex-shrink: 0; white-space: nowrap; }
+
+/* 指定文章：建赛时从题库里勾选候选篇目 */
+.competition-pool { grid-column: 1 / -1; border: 1px solid #e3ebe4; border-radius: 10px; background: #fbfdfb; }
+.competition-pool > summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px; color: #2a4a38; font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.competition-pool > summary::-webkit-details-marker { display: none; }
+.competition-pool > summary::before { color: #7fa08c; font-size: 11px; content: "▸"; }
+.competition-pool[open] > summary::before { content: "▾"; }
+.competition-pool > summary span { flex: 1; }
+.competition-pool > summary small { color: #6b8377; font-size: 11px; font-weight: 600; }
+.competition-pool-hint { margin: 0 14px 10px; color: #6b8377; font-size: 11px; line-height: 1.7; }
+.competition-pool-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 14px 8px; color: #7d968a; font-size: 11px; }
+.competition-pool-list { display: grid; gap: 12px; max-height: 280px; padding: 0 14px 14px; overflow-y: auto; }
+.competition-pool-group { display: grid; gap: 6px; }
+.competition-pool-group > strong { color: #4d6b5a; font-size: 11px; letter-spacing: .04em; }
+.competition-pool-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid #e8efea; border-radius: 8px; background: #fff; color: #3d5a49; font-size: 12px; cursor: pointer; }
+.competition-pool-item:hover { border-color: #b9d6c4; background: #f6fbf7; }
+.competition-pool-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.competition-pool-item small { color: #8ba396; font: 11px Consolas, monospace; }
+.text-button { padding: 4px 8px; border: 1px solid #d8e4d9; border-radius: 7px; background: #fff; color: #24744e; font-size: 11px; font-weight: 700; cursor: pointer; }
+.text-button:hover { border-color: #b9d6c4; background: #f2f9f4; }

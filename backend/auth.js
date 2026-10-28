@@ -49,6 +49,12 @@ async function hashPassword(password) {
   return `scrypt$${SCRYPT_OPTIONS.N}$${SCRYPT_OPTIONS.r}$${SCRYPT_OPTIONS.p}$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
 }
 
+function hashPasswordSync(password) {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.scryptSync(String(password), salt, KEY_LENGTH, SCRYPT_OPTIONS);
+  return `scrypt$${SCRYPT_OPTIONS.N}$${SCRYPT_OPTIONS.r}$${SCRYPT_OPTIONS.p}$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
+}
+
 async function verifyPassword(password, record) {
   try {
     const [algorithm, n, r, p, saltHex, hashHex] = String(record).split('$');
@@ -80,6 +86,7 @@ module.exports = {
   FAKE_PASSWORD_RECORD,
   createSessionToken,
   hashPassword,
+  hashPasswordSync,
   hashSessionToken,
   normalizeDisplayName,
   normalizeUsername,

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createDatabase } = require('../backend/database');
 const { CompetitionEvent, DEFAULT_CONFIG } = require('../backend/competition-event');
-
+const { passageCatalog, passagesByIds, speedTextAt } = require('../backend/competition-texts');
 function setup(config = {}) {
   let currentTime = 1_000_000;
   const db = createDatabase(':memory:');
@@ -209,4 +209,96 @@ test('Chinese and English speed events use one shared text and settle only at th
     assert.equal(finished.ranking[0].speed, 40);
     db.close();
   }
+});
+
+// ------------------------------------------------------------ 指定文章（来自「练习文章」）
+
+function engineWith(db, { mode = 'individual', config = {}, players = 4, random = () => 0 } = {}) {
+  let now = 1_000_000;
+  const engine = new CompetitionEvent(db, { now: () => now, random });
+  const insertUser = db.prepare('INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, ?)');
+  const ids = Array.from({ length: players }, (_, index) => index + 1);
+  for (const id of ids) insertUser.run(id, `pool${id}`, `选手${id}`, 'hash');
+  const event = engine.create({ name: '指定文章赛', mode, config });
+  engine.openRegistration(event.id);
+  for (const id of ids) engine.join(event.id, { id });
+  return { engine, event, advance: (ms) => { now += ms; } };
+}
+
+test('a teacher-picked article opens the speed text and is padded to the target length', () => {
+  const db = createDatabase(':memory:');
+  const target = passageCatalog(db).find((item) => item.language === 'zh' && item.category === '校园生活');
+  const passage = passagesByIds(db, [target.id])[0];
+  const { engine, event } = engineWith(db, { mode: 'speed', config: { language: 'zh', passageIds: [target.id] } });
+  const started = engine.beginRound(event.id);
+  assert.ok(started.round.text.startsWith(passage.content.slice(0, 20)), '抽中的文章必须出现在题面开头');
+  assert.ok(started.round.text.length >= 400, '题面要补足到速度赛的目标长度');
+  assert.deepEqual(started.config.passageIds, [target.id]);
+  db.close();
+});
+
+test('teacher-picked articles rotate so the same article is not reused while others remain', () => {
+  const db = createDatabase(':memory:');
+  const picked = passageCatalog(db).filter((item) => item.language === 'zh').slice(0, 2);
+  const [first, second] = passagesByIds(db, picked.map((item) => item.id));
+  const { engine, event, advance } = engineWith(db, { config: { passageIds: [first.id, second.id] } });
+  assert.equal(engine.beginRound(event.id).round.text, first.content);
+  advance(DEFAULT_CONFIG.roundMs + 1);
+  assert.equal(engine.state(event.id).round.status, 'settled');
+  assert.equal(engine.beginRound(event.id).round.text, second.content, '本场还没用过的那篇优先');
+  db.close();
+});
+
+test('rejects deleted or wrong-language passages when creating an event', () => {
+  const db = createDatabase(':memory:');
+  const engine = new CompetitionEvent(db, { now: () => 1 });
+  assert.throws(
+    () => engine.create({ mode: 'speed', config: { language: 'zh', passageIds: [999_999] } }),
+    /删除或停用/
+  );
+  const english = passageCatalog(db).find((item) => item.language === 'en');
+  assert.throws(
+    () => engine.create({ mode: 'speed', config: { language: 'zh', passageIds: [english.id] } }),
+    /语言/
+  );
+  const created = engine.create({ mode: 'speed', config: { language: 'en', passageIds: [english.id, english.id] } });
+  assert.deepEqual(created.config.passageIds, [english.id], '重复的候选项要去重');
+  db.close();
+});
+
+test('without picked passages the speed event keeps the automatic text', () => {
+  const db = createDatabase(':memory:');
+  const { engine, event } = engineWith(db, { mode: 'speed', config: { language: 'zh' } });
+  assert.equal(engine.beginRound(event.id).round.text, speedTextAt('zh', 0));
+  assert.deepEqual(engine.state(event.id).config.passageIds, []);
+  db.close();
+});
+
+test('pinyin passages are not offered as competition articles', () => {
+  const db = createDatabase(':memory:');
+  db.prepare("INSERT INTO passages (title, category, content, is_active) VALUES ('拼音基础', '拼音打字', 'ni hao tong xue，huan ying lai dao', 1)").run();
+  const catalog = passageCatalog(db);
+  assert.equal(catalog.some((item) => item.title === '拼音基础'), false, '拼音文章不进候选列表');
+  assert.ok(catalog.every((item) => item.language === 'zh' || item.language === 'en'));
+  db.close();
+});
+
+test('a deactivated passage keeps working for the event that already picked it', () => {
+  const db = createDatabase(':memory:');
+  const target = passageCatalog(db).find((item) => item.language === 'zh');
+  const passage = passagesByIds(db, [target.id])[0];
+  const { engine, event } = engineWith(db, { mode: 'speed', config: { language: 'zh', passageIds: [target.id] } });
+  db.prepare('UPDATE passages SET is_active = 0 WHERE id = ?').run(target.id);
+  const started = engine.beginRound(event.id);
+  assert.ok(started.round.text.startsWith(passage.content.slice(0, 20)), '停用只是为了不在新赛事里出现，已建赛事照旧用');
+  db.close();
+});
+
+test('deleting a picked passage blocks the round instead of silently swapping texts', () => {
+  const db = createDatabase(':memory:');
+  const target = passageCatalog(db).find((item) => item.language === 'zh');
+  const { engine, event } = engineWith(db, { mode: 'speed', config: { language: 'zh', passageIds: [target.id] } });
+  db.prepare('DELETE FROM passages WHERE id = ?').run(target.id);
+  assert.throws(() => engine.beginRound(event.id), /已被删除/);
+  db.close();
 });

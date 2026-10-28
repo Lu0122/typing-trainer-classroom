@@ -184,6 +184,17 @@ function createDatabase(databasePath) {
     CREATE INDEX IF NOT EXISTS idx_typing_key_stats_session ON typing_key_stats(training_session_id);
     CREATE INDEX IF NOT EXISTS idx_assignments_active_due ON assignments(is_active, due_at);
     CREATE INDEX IF NOT EXISTS idx_assignment_progress_user ON assignment_progress(user_id, status, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS admin_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'manager',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      last_login_at INTEGER
+    );
   `);
 
   const challengeColumns = db.pragma('table_info(challenge_sessions)');

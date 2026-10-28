@@ -187,3 +187,29 @@ test('competition completes paragraphs containing errors without awarding mistak
  assert.equal(advanced.me.correct,before+next.text.length-1);
  assert.equal(b.task(1).sequence,3);
 });
+
+test('team competition can use a teacher-picked passage split into segments',()=>{
+ const {createDatabase}=require('../backend/database');
+ const {passageCatalog,passagesByIds,segmentText}=require('../backend/competition-texts');
+ const db=createDatabase(':memory:');
+ let time=100000;
+ const b=new Battle({now:()=>time,save:()=>{},competition:true,random:()=>0,db});
+ const target=passageCatalog(db).find(item=>item.language==='zh'&&item.category==='校园生活');
+ const passage=passagesByIds(db,[target.id])[0];
+ const prepared=b.prepareCompetition(120000,{passageIds:[target.id]});
+ assert.equal(prepared.article.id,target.id);
+ assert.equal(prepared.article.title,passage.title);
+ assert.ok(prepared.article.segments>5,'补足后要切成多段');
+ b.join({id:1,displayName:'甲'},'red');
+ b.join({id:2,displayName:'乙'},'blue');
+ b.start(null,{referee:true});time+=5000;
+ const ticket=b.task(1);
+ assert.equal(ticket.kind,'比赛文章');
+ assert.ok(ticket.text.length<=48,'单段不超过 48 字');
+ assert.ok(passage.content.includes(segmentText(ticket.text)[0]));
+ // 不带 passageIds 时回到内置短句
+ const plain=new Battle({now:()=>time,save:()=>{},competition:true,db});
+ assert.equal(plain.prepareCompetition(60000).article,null);
+ assert.throws(()=>plain.prepareCompetition(60000,{passageIds:[999999]}),/已被删除/);
+ db.close();
+});

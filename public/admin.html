@@ -14,14 +14,27 @@
 </head>
 <body class="admin-body">
   <section class="login-view" id="login-view" hidden>
-    <a class="brand login-brand" href="/">
-      <span class="brand-mark" aria-hidden="true">字</span>
-      <span><strong>字练场</strong><small>管理后台</small></span>
-    </a>
+    <div class="login-showcase" aria-hidden="true">
+      <a class="brand login-brand" href="/">
+        <span class="brand-mark">字</span>
+        <span><strong>字练场</strong><small>管理后台</small></span>
+      </a>
+      <div class="login-showcase-copy">
+        <span class="login-showcase-kicker">CLASSROOM CONTROL CENTER</span>
+        <h2>让每一次练习，<br><em>都有迹可循。</em></h2>
+        <p>统一管理学生账号、班级、练习内容与现场比赛。</p>
+      </div>
+      <div class="login-showcase-orbit"><span>字</span><span>练</span><span>场</span></div>
+      <small class="login-showcase-foot">教学 · 练习 · 比赛 · 成长</small>
+    </div>
     <form class="login-panel" id="login-form">
       <p class="eyebrow">管理员验证</p>
       <h1>欢迎回来</h1>
-      <p>登录后可维护中文练习文章与竞速成绩。</p>
+      <p class="login-panel-subtitle">登录后台，继续管理今天的课堂。</p>
+      <label>
+        <span>后台账号</span>
+        <input id="admin-username-input" type="text" required autocomplete="username" value="admin" placeholder="请输入后台账号">
+      </label>
       <label>
         <span>管理密码</span>
         <div class="password-wrap">
@@ -31,6 +44,7 @@
         </div>
       </label>
       <button class="primary-button" type="submit"><i data-lucide="log-in"></i><span>进入后台</span></button>
+      <p class="login-panel-hint"><i data-lucide="shield-check"></i> 后台账号由超级管理员统一创建和维护</p>
       <p class="login-error" id="login-error" role="alert"></p>
     </form>
     <a class="back-link" href="/"><i data-lucide="arrow-left"></i>返回练习前台</a>
@@ -46,6 +60,7 @@
           <button class="admin-nav-item is-active" type="button" data-view="overview"><i data-lucide="layout-dashboard"></i><span>概览</span></button>
           <button class="admin-nav-item" type="button" data-view="passages"><i data-lucide="notebook-tabs"></i><span>练习文章</span></button>
           <button class="admin-nav-item" type="button" data-view="users"><i data-lucide="users-round"></i><span>学生账号</span></button>
+          <button class="admin-nav-item" type="button" data-view="admins"><i data-lucide="shield-check"></i><span>后台账号</span></button>
           <button class="admin-nav-item" type="button" data-view="classes"><i data-lucide="school"></i><span>班级分组</span></button>
           <button class="admin-nav-item" type="button" data-view="progress"><i data-lucide="trending-up"></i><span>学习进步</span></button>
           <button class="admin-nav-item" type="button" data-view="assignments"><i data-lucide="clipboard-check"></i><span>教学任务</span></button>
@@ -90,6 +105,26 @@
         </section>
       </section>
 
+      <section class="admin-view" id="view-admins" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">权限与协作</p><h1>后台账号</h1><p>超级管理员可以创建、停用和重置其他后台管理员。</p></div>
+        </header>
+        <section class="admin-section form-section admin-account-section">
+          <form id="admin-account-form" class="form-grid">
+            <label><span>账号</span><input id="admin-account-username" type="text" maxlength="24" required placeholder="例如：teacher01"></label>
+            <label><span>姓名/昵称</span><input id="admin-account-display-name" type="text" maxlength="20" required placeholder="例如：张老师"></label>
+            <label><span>初始密码</span><input id="admin-account-password" type="password" maxlength="12" required placeholder="6-12 位字母或数字"></label>
+            <label><span>角色</span><select id="admin-account-role"><option value="manager">普通管理员</option><option value="superadmin">超级管理员</option></select></label>
+            <div class="form-actions"><p>普通管理员可以管理学生、文章、班级和比赛；超级管理员额外可以管理后台账号。</p><button class="primary-button" type="submit"><i data-lucide="user-plus"></i><span>创建管理员</span></button></div>
+          </form>
+        </section>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>管理员列表</strong><span id="admin-account-count">共 0 个</span></div>
+          <div class="table-scroll"><table><thead><tr><th>账号</th><th>角色</th><th>状态</th><th>最后登录</th><th>创建时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="admin-account-table"></tbody></table></div>
+          <p class="table-empty" id="admin-account-empty" hidden>暂无管理员账号。</p>
+        </section>
+      </section>
+
       <section class="admin-view" id="view-passages" hidden>
         <header class="view-heading">
           <div><p class="eyebrow">内容管理</p><h1>练习文章</h1><p>“一分钟挑战”分类的文章只会用于竞速模式。</p></div>
@@ -130,6 +165,10 @@
           </div>
           <p class="table-empty" id="user-empty" hidden>没有找到匹配的学生账号。</p>
           <div class="pagination" id="user-pagination" hidden><button class="icon-button" id="user-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="user-page-label">第 1 / 1 页</span><button class="icon-button" id="user-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+        <section class="admin-section student-import-section">
+          <header><div><p class="eyebrow">实名账号</p><h2>批量导入学生</h2><p>每行填写：姓名，学号。导入后学生使用姓名登录，密码默认为学号。</p></div><span class="student-import-format">姓名,学号</span></header>
+          <div class="student-import-body"><textarea id="student-import-text" rows="6" placeholder="张三,20250101\n李四,20250102"></textarea><div class="student-import-actions"><button class="primary-button" id="student-import-submit" type="button"><i data-lucide="upload"></i><span>导入学生</span></button><p id="student-import-result">支持换行、逗号、制表符分隔，单次最多 2000 人。</p></div></div>
         </section>
       </section>
 
@@ -258,6 +297,15 @@
             <label class="competition-team-field" hidden><span>乙方名称</span><input id="competition-side-b-input" type="text" maxlength="40" placeholder="例如：二班"></label>
             <label class="competition-team-field competition-league-field" hidden><span>循环赛参赛方</span><input id="competition-side-names-input" type="text" maxlength="300" placeholder="例如：一班、二班、三班、四班"></label>
             <label class="competition-team-field" hidden><span>每方出场人数</span><input id="competition-team-size-input" type="number" min="1" max="30" value="5"></label>
+            <details class="competition-pool" id="competition-pool">
+              <summary><span>指定文章（可选）</span><small id="competition-pool-count">未指定 · 按轮次自动取题</small></summary>
+              <p class="competition-pool-hint">候选项就是「练习文章」里的文章，按分类分组，不用另外维护。勾选后每轮从选中的文章里随机抽一篇（优先抽本场没用过的）。速度赛抽中的那篇作为开头，系统会自动衔接同分类的其它文章补足到 400 字左右，保证时限内打不完。不勾选则按内置题库自动取题。事后停用文章不影响已建赛事，但删除会让该赛事开赛时报错。</p>
+              <div class="competition-pool-toolbar">
+                <span id="competition-pool-tip">正在读取题库…</span>
+                <button class="text-button" id="competition-pool-clear" type="button">清空选择</button>
+              </div>
+              <div class="competition-pool-list" id="competition-pool-list" role="group" aria-label="可选文章"></div>
+            </details>
             <div class="form-actions"><p>创建后在下方开启检录，等学生到齐再开始。</p><button class="primary-button" type="submit"><i data-lucide="plus"></i><span>创建个人赛</span></button></div>
           </form>
           </section>
@@ -265,6 +313,15 @@
             <header class="competition-panel-heading"><span class="competition-panel-icon"><i data-lucide="flag"></i></span><div><h2>团队阵营赛</h2><p>红蓝对抗 · 时间结束，占领更多的一方获胜</p></div><span id="battle-competition-status" class="competition-room-status">读取中</span></header>
             <div class="competition-referee-controls">
               <div class="competition-room-config"><label><span>每局时长</span><select id="battle-competition-duration"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option></select></label><button class="secondary-button" id="battle-competition-prepare" type="button"><i data-lucide="plus"></i>新建比赛房间</button></div>
+              <details class="competition-pool" id="battle-pool">
+                <summary><span>指定文章（可选）</span><small id="battle-pool-count">未指定 · 用默认短句</small></summary>
+                <p class="competition-pool-hint">候选项就是「练习文章」里的中文文章。勾选后建房间时随机抽一篇，补足长度后按句末标点切成 30–48 字的段，全场共用这套段序列（每打完一段攻占 1% 领地）。不勾选则用内置的 12 条短句。</p>
+                <div class="competition-pool-toolbar">
+                  <span id="battle-pool-tip">正在读取题库…</span>
+                  <button class="text-button" id="battle-pool-clear" type="button">清空选择</button>
+                </div>
+                <div class="competition-pool-list" id="battle-pool-list" role="group" aria-label="团队赛可选文章"></div>
+              </details>
               <div id="battle-competition-roster" class="competition-team-roster" aria-live="polite">正在读取阵营名单…</div>
               <p id="battle-competition-summary" class="competition-room-summary">选手选好红蓝阵营后，裁判再开始。</p>
               <div class="competition-room-actions"><button class="primary-button" id="battle-competition-start" type="button"><i data-lucide="play"></i>裁判开始本局</button><a class="secondary-button" href="/#battle-competition" target="_blank" rel="noopener"><i data-lucide="monitor-up"></i>投影战况</a></div>

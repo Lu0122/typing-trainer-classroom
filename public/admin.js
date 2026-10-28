@@ -1,8 +1,8 @@
-const adminState = { passages: [], users: [], progress: [], assignments: [], competitions: [], assignmentUsers: [], assignmentClasses: [], classes: [], unassignedStudents: [], page: 1, pages: 1, passagePage: 1, passagePages: 1, userPage: 1, userPages: 1, progressPage: 1, progressPages: 1, assignmentPage: 1, assignmentPages: 1, classPage: 1, classPages: 1, unassignedPage: 1, unassignedPages: 1, classMembersPage: 1, classMembersPages: 1, classMembersClassId: null, activeView: 'overview' };
+const adminState = { passages: [], users: [], progress: [], assignments: [], competitions: [], assignmentUsers: [], assignmentClasses: [], classes: [], unassignedStudents: [], page: 1, pages: 1, passagePage: 1, passagePages: 1, userPage: 1, userPages: 1, progressPage: 1, progressPages: 1, assignmentPage: 1, assignmentPages: 1, classPage: 1, classPages: 1, unassignedPage: 1, unassignedPages: 1, classMembersPage: 1, classMembersPages: 1, classMembersClassId: null, activeView: 'overview', admin: null };
 
 const el = {
   loginView: document.querySelector('#login-view'), adminShell: document.querySelector('#admin-shell'),
-  loginForm: document.querySelector('#login-form'), password: document.querySelector('#password-input'),
+  loginForm: document.querySelector('#login-form'), username: document.querySelector('#admin-username-input'), password: document.querySelector('#password-input'),
   togglePassword: document.querySelector('#toggle-password'), loginError: document.querySelector('#login-error'),
   logout: document.querySelector('#logout-button'), navItems: document.querySelectorAll('.admin-nav-item'),
   views: document.querySelectorAll('.admin-view'), currentDate: document.querySelector('#current-date'),
@@ -12,6 +12,7 @@ const el = {
   passageSearch: document.querySelector('#passage-search'), passageCount: document.querySelector('#passage-count'),
   passageTable: document.querySelector('#passage-table'), passageEmpty: document.querySelector('#passage-empty'), addPassage: document.querySelector('#add-passage'), passagePagination: document.querySelector('#passage-pagination'), passagePageLabel: document.querySelector('#passage-page-label'), passagePreviousPage: document.querySelector('#passage-previous-page'), passageNextPage: document.querySelector('#passage-next-page'),
   userSearch: document.querySelector('#user-search'), userClassFilter: document.querySelector('#user-class-filter'), userCount: document.querySelector('#user-count'), userTable: document.querySelector('#user-table'), userEmpty: document.querySelector('#user-empty'), refreshUsers: document.querySelector('#refresh-users'), userPagination: document.querySelector('#user-pagination'), userPageLabel: document.querySelector('#user-page-label'), userPreviousPage: document.querySelector('#user-previous-page'), userNextPage: document.querySelector('#user-next-page'),
+  studentImportText: document.querySelector('#student-import-text'), studentImportSubmit: document.querySelector('#student-import-submit'), studentImportResult: document.querySelector('#student-import-result'),
   progressSearch: document.querySelector('#progress-search'), progressCount: document.querySelector('#progress-count'), progressTable: document.querySelector('#progress-table'), progressEmpty: document.querySelector('#progress-empty'), refreshProgress: document.querySelector('#refresh-progress'), progressPagination: document.querySelector('#progress-pagination'), progressPageLabel: document.querySelector('#progress-page-label'), progressPreviousPage: document.querySelector('#progress-previous-page'), progressNextPage: document.querySelector('#progress-next-page'),
   progressMonitored: document.querySelector('#progress-monitored'), progressImproving: document.querySelector('#progress-improving'), progressSpeedChange: document.querySelector('#progress-speed-change'), progressWeekSessions: document.querySelector('#progress-week-sessions'),
   assignments: document.querySelector('#assignment-table'), assignmentCount: document.querySelector('#assignment-count'), assignmentEmpty: document.querySelector('#assignment-empty'), assignmentPagination: document.querySelector('#assignment-pagination'), assignmentPageLabel: document.querySelector('#assignment-page-label'), assignmentPreviousPage: document.querySelector('#assignment-previous-page'), assignmentNextPage: document.querySelector('#assignment-next-page'), refreshAssignments: document.querySelector('#refresh-assignments'), assignmentForm: document.querySelector('#assignment-form'), assignmentId: document.querySelector('#assignment-id-input'), assignmentTitle: document.querySelector('#assignment-title-input'), assignmentMode: document.querySelector('#assignment-mode-input'), assignmentLesson: document.querySelector('#assignment-lesson-input'), assignmentAudience: document.querySelector('#assignment-audience-input'), assignmentClassField: document.querySelector('#assignment-class-field'), assignmentClass: document.querySelector('#assignment-class-input'), assignmentStudentsField: document.querySelector('#assignment-students-field'), assignmentStudents: document.querySelector('#assignment-students-input'), assignmentAccuracy: document.querySelector('#assignment-accuracy-input'), assignmentSpeed: document.querySelector('#assignment-speed-input'), assignmentDue: document.querySelector('#assignment-due-input'), assignmentDescription: document.querySelector('#assignment-description-input'), assignmentSubmit: document.querySelector('#assignment-submit'), assignmentCancelEdit: document.querySelector('#assignment-cancel-edit'),
@@ -28,6 +29,27 @@ const el = {
   progressDialog: document.querySelector('#progress-dialog'), closeProgressDialog: document.querySelector('#close-progress-dialog'), progressStudentName: document.querySelector('#progress-student-name'), progressDialogSummary: document.querySelector('#progress-dialog-summary'), progressChart: document.querySelector('#progress-chart'), progressModeList: document.querySelector('#progress-mode-list'), progressRecentList: document.querySelector('#progress-recent-list'),
   mobileMenu: document.querySelector('#mobile-menu-button'), sidebar: document.querySelector('.admin-sidebar'), toast: document.querySelector('#admin-toast')
 };
+
+el.adminAccountForm = document.querySelector('#admin-account-form');
+el.adminAccountUsername = document.querySelector('#admin-account-username');
+el.adminAccountDisplayName = document.querySelector('#admin-account-display-name');
+el.adminAccountPassword = document.querySelector('#admin-account-password');
+el.adminAccountRole = document.querySelector('#admin-account-role');
+el.adminAccountTable = document.querySelector('#admin-account-table');
+el.adminAccountCount = document.querySelector('#admin-account-count');
+el.adminAccountEmpty = document.querySelector('#admin-account-empty');
+
+el.competitionPool = document.querySelector('#competition-pool');
+el.competitionPoolList = document.querySelector('#competition-pool-list');
+el.competitionPoolCount = document.querySelector('#competition-pool-count');
+el.competitionPoolTip = document.querySelector('#competition-pool-tip');
+el.competitionPoolClear = document.querySelector('#competition-pool-clear');
+
+el.battlePool = document.querySelector('#battle-pool');
+el.battlePoolList = document.querySelector('#battle-pool-list');
+el.battlePoolCount = document.querySelector('#battle-pool-count');
+el.battlePoolTip = document.querySelector('#battle-pool-tip');
+el.battlePoolClear = document.querySelector('#battle-pool-clear');
 
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
@@ -57,8 +79,40 @@ function toast(message, error = false) {
 function setAuthenticated(authenticated) {
   el.loginView.hidden = authenticated;
   el.adminShell.hidden = !authenticated;
+  const adminNav = [...el.navItems].find((item) => item.dataset.view === 'admins');
+  if (adminNav) adminNav.hidden = authenticated && adminState.admin?.role !== 'superadmin';
   if (!authenticated) setTimeout(() => el.password.focus(), 0);
 }
+
+function renderAdminAccounts(rows) {
+  el.adminAccountCount.textContent = `共 ${rows.length} 个`;
+  el.adminAccountEmpty.hidden = rows.length > 0;
+  el.adminAccountTable.replaceChildren(...rows.map((item) => {
+    const row = document.createElement('tr');
+    const name = document.createElement('td'); name.className = 'student-cell';
+    const strong = document.createElement('strong'); strong.textContent = item.displayName;
+    const small = document.createElement('span'); small.textContent = item.username; name.append(strong, small);
+    const role = document.createElement('td'); role.textContent = item.role === 'superadmin' ? '超级管理员' : '普通管理员';
+    const status = document.createElement('td'); const pill = document.createElement('span');
+    pill.className = `status-pill ${item.isActive ? '' : 'is-inactive'}`; pill.textContent = item.isActive ? '启用中' : '已停用'; status.append(pill);
+    const last = document.createElement('td'); last.textContent = formatDate(item.lastLoginAt);
+    const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
+    const actions = document.createElement('td'); actions.className = 'table-actions';
+    if (item.id !== adminState.admin?.id) {
+      actions.append(actionButton(item.isActive ? 'user-round-x' : 'user-round-check', item.isActive ? '停用账号' : '启用账号', '', async () => {
+        try { await api(`/api/admin/admins/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive: !item.isActive }) }); toast(item.isActive ? '管理员已停用' : '管理员已启用'); await loadAdminAccounts(); } catch (error) { toast(error.message, true); }
+      }));
+      actions.append(actionButton('key-round', '重置密码', '', async () => {
+        const password = window.prompt(`请输入 ${item.username} 的新密码（6-12 位字母或数字）`);
+        if (!password) return;
+        try { await api(`/api/admin/admins/${item.id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }); toast('密码已重置'); } catch (error) { toast(error.message, true); }
+      }));
+    }
+    row.append(name, role, status, last, created, actions); return row;
+  }));
+  window.lucide?.createIcons();
+}
+async function loadAdminAccounts() { const data = await api('/api/admin/admins'); renderAdminAccounts(data.rows || []); }
 
 function formatDate(value) {
   if (!value) return '--';
@@ -718,7 +772,7 @@ async function loadBattleCompetition() {
   el.battleCompetitionStatus.textContent = ({ waiting: '等待选手', countdown: '开赛倒计时', running: '比赛中', finished: '本局已结束' })[state.phase] || state.phase;
   el.battleCompetitionSummary.textContent = state.phase === 'finished'
     ? `红方 ${state.result.red.toFixed(1)}% · 蓝方 ${(100 - state.result.red).toFixed(1)}% · ${state.result.winner ? (state.result.winner === 'red' ? '红方' : '蓝方') + '获胜' : '平局'}`
-    : `红方 ${state.teams.red.count} 人 · 蓝方 ${state.teams.blue.count} 人 · ${Math.round(state.durationMs / 1000)} 秒/局`;
+    : `红方 ${state.teams.red.count} 人 · 蓝方 ${state.teams.blue.count} 人 · ${Math.round(state.durationMs / 1000)} 秒/局${state.article ? ` · 题面「${state.article.preview}…」共 ${state.article.segments} 段` : ''}`;
   el.battleCompetitionStart.disabled = state.phase !== 'waiting' || !state.teams.red.count || !state.teams.blue.count;
   el.battleCompetitionPrepare.disabled = ['countdown', 'running'].includes(state.phase);
   const redNames = state.players.filter((player) => player.team === 'red').map((player) => player.name).join('、') || '暂无';
@@ -744,7 +798,7 @@ async function prepareBattleCompetition() {
   try {
     const current = await api('/api/battle/competition/referee');
     if (current.phase === 'waiting' && current.online > 0 && !window.confirm('新建房间会清空当前已加入选手，确定继续吗？')) return;
-    await api('/api/battle/competition/referee/prepare', { method: 'POST', body: JSON.stringify({ durationMs: Number(el.battleCompetitionDuration.value) }) });
+    await api('/api/battle/competition/referee/prepare', { method: 'POST', body: JSON.stringify({ durationMs: Number(el.battleCompetitionDuration.value), passageIds: [...battlePoolSelection] }) });
     toast('团队比赛房间已准备，选手可以选择阵营'); await loadBattleCompetition();
   } catch (error) { toast(error.message, true); }
 }
@@ -754,6 +808,94 @@ async function startBattleCompetition() {
     await api('/api/battle/competition/referee/start', { method: 'POST' });
     toast('团队比赛已开始'); await loadBattleCompetition();
   } catch (error) { toast(error.message, true); }
+}
+
+// ------------------------------------------------------------ 指定文章
+//
+// 候选项来自后台「练习文章」表（不是代码里写死的题库），按分类分组。
+// 个人赛按语言分开存选择（切中/英文时各留各的），团队阵营赛只有中文。
+
+const competitionPoolSelections = { zh: new Set(), en: new Set() };
+const battlePoolSelection = new Set();
+let textCatalog = [];
+
+function competitionPoolLanguage() {
+  return el.competitionMode.value === 'speed-en' ? 'en' : 'zh';
+}
+function competitionPoolSelection() {
+  return competitionPoolSelections[competitionPoolLanguage()];
+}
+
+function updatePoolSummary(countEl, selection) {
+  const count = selection.size;
+  countEl.textContent = count ? `已选 ${count} 篇 · 开赛随机抽一篇` : '未指定 · 自动取题';
+}
+
+function renderPoolPicker({ listEl, tipEl, countEl, selection, language }) {
+  const rows = textCatalog.filter((item) => item.language === language);
+  listEl.replaceChildren();
+  const groups = new Map();
+  for (const item of rows) {
+    if (!groups.has(item.category)) groups.set(item.category, []);
+    groups.get(item.category).push(item);
+  }
+  for (const group of groups.values()) {
+    const block = document.createElement('div');
+    block.className = 'competition-pool-group';
+    const heading = document.createElement('strong');
+    heading.textContent = `${group[0].category} · ${group.length} 篇`;
+    block.append(heading);
+    for (const item of group) {
+      const label = document.createElement('label');
+      label.className = 'competition-pool-item';
+      label.title = item.preview;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = String(item.id);
+      box.checked = selection.has(item.id);
+      box.addEventListener('change', () => {
+        if (box.checked) selection.add(item.id);
+        else selection.delete(item.id);
+        updatePoolSummary(countEl, selection);
+      });
+      const preview = document.createElement('span');
+      preview.textContent = item.title;
+      const length = document.createElement('small');
+      length.textContent = `${item.length} 字`;
+      label.append(box, preview, length);
+      block.append(label);
+    }
+    listEl.append(block);
+  }
+  const empty = language === 'en' ? '还没有英文文章，请先到「练习文章」添加' : '还没有文章，请先到「练习文章」添加';
+  tipEl.textContent = rows.length ? `共 ${rows.length} 篇可选，点标题可收起` : empty;
+  updatePoolSummary(countEl, selection);
+}
+
+function renderCompetitionPool() {
+  renderPoolPicker({
+    listEl: el.competitionPoolList, tipEl: el.competitionPoolTip,
+    countEl: el.competitionPoolCount, selection: competitionPoolSelection(), language: competitionPoolLanguage()
+  });
+}
+
+function renderBattlePool() {
+  renderPoolPicker({
+    listEl: el.battlePoolList, tipEl: el.battlePoolTip,
+    countEl: el.battlePoolCount, selection: battlePoolSelection, language: 'zh'
+  });
+}
+
+async function loadTextCatalog() {
+  try {
+    const data = await api('/api/competitions/text-catalog');
+    textCatalog = Array.isArray(data.rows) ? data.rows : [];
+  } catch (error) {
+    textCatalog = [];
+    toast(error.message, true);
+  }
+  renderCompetitionPool();
+  renderBattlePool();
 }
 
 function updateCompetitionModeFields() {
@@ -789,7 +931,8 @@ async function saveCompetition(event) {
           capacity: speed ? 60 : team ? Number(el.competitionTeamSize.value) * names.length : 2,
           ...(speed ? { language: el.competitionMode.value === 'speed-en' ? 'en' : 'zh' } : {}),
           teamSize: Number(el.competitionTeamSize.value),
-          series: team ? el.competitionSeries.value : 'single'
+          series: team ? el.competitionSeries.value : 'single',
+          passageIds: [...competitionPoolSelection()]
         },
         sides: team ? names.map((name, index) => ({ name, color: ['#e05b5b', '#4a8fe0', '#3fae74', '#d9a93a', '#8d6fd4', '#dd8442'][index] || '#4a8fe0' })) : []
       })
@@ -797,6 +940,8 @@ async function saveCompetition(event) {
     el.competitionForm.reset();
     el.competitionDuration.value = '120000';
     updateCompetitionModeFields();
+    competitionPoolSelection().clear();
+    renderCompetitionPool();
     toast('赛事已创建');
     await loadCompetitions();
   } catch (error) { toast(error.message, true); }
@@ -883,18 +1028,23 @@ async function decideCompetitionResult(item) {
 }
 
 async function switchView(view) {
+  const allowedViews = ['overview', 'admins', 'passages', 'users', 'classes', 'progress', 'assignments', 'competitions', 'scores'];
+  if (!allowedViews.includes(view)) view = 'overview';
   adminState.activeView = view;
+  try { localStorage.setItem('typing-admin-view', view); } catch { /* private mode */ }
+  if (location.hash !== `#${view}`) history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
   el.navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
   el.views.forEach((section) => { section.hidden = section.id !== `view-${view}`; });
   el.sidebar.classList.remove('is-open');
   try {
     if (view === 'overview') await Promise.all([loadStats(), loadProgressOverview()]);
+    if (view === 'admins') await loadAdminAccounts();
     if (view === 'passages') await loadPassages();
     if (view === 'users') await Promise.all([loadUsers(), loadUserClassFilter()]);
     if (view === 'classes') await loadClasses();
     if (view === 'progress') await loadProgress();
     if (view === 'assignments') await Promise.all([loadAssignments(), loadAssignmentUsers(), loadAssignmentClasses()]);
-    if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition()]);
+    if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition(), loadTextCatalog()]);
     if (view === 'scores') await loadScores();
   } catch (error) {
     if (error.status === 401) setAuthenticated(false);
@@ -906,10 +1056,12 @@ el.loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   el.loginError.textContent = '';
   try {
-    await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: el.password.value }) });
+    const result = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ username: el.username.value.trim(), password: el.password.value }) });
+    adminState.admin = result.admin || { id: 0, username: el.username.value.trim(), role: 'superadmin' };
     setAuthenticated(true);
+    el.username.value = adminState.admin.username;
     el.password.value = '';
-  await Promise.all([loadStats(), loadProgressOverview()]);
+    await switchView((location.hash.slice(1) || localStorage.getItem('typing-admin-view') || 'overview'));
   } catch (error) { el.loginError.textContent = error.message; }
 });
 el.togglePassword.addEventListener('click', () => {
@@ -919,6 +1071,16 @@ el.togglePassword.addEventListener('click', () => {
   window.lucide?.createIcons();
 });
 el.logout.addEventListener('click', async () => { try { await api('/api/admin/logout', { method: 'POST' }); } finally { setAuthenticated(false); } });
+el.adminAccountForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    await api('/api/admin/admins', { method: 'POST', body: JSON.stringify({
+      username: el.adminAccountUsername.value.trim(), displayName: el.adminAccountDisplayName.value.trim(),
+      password: el.adminAccountPassword.value, role: el.adminAccountRole.value
+    }) });
+    toast('管理员已创建'); el.adminAccountForm.reset(); await loadAdminAccounts();
+  } catch (error) { toast(error.message, true); }
+});
 el.navItems.forEach((item) => item.addEventListener('click', () => switchView(item.dataset.view)));
 document.querySelectorAll('.jump-button').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
 el.passageSearch.addEventListener('input', debounce(() => { adminState.passagePage = 1; loadPassages(); }));
@@ -930,6 +1092,20 @@ el.passageForm.addEventListener('submit', savePassage);
 el.userSearch.addEventListener('input', debounce(() => { adminState.userPage = 1; loadUsers(); }));
 el.userClassFilter.addEventListener('change', () => { adminState.userPage = 1; loadUsers(); });
 el.refreshUsers.addEventListener('click', () => { adminState.userPage = 1; loadUsers(); });
+el.studentImportSubmit?.addEventListener('click', async () => {
+  const text = el.studentImportText.value.trim();
+  if (!text) { toast('请先粘贴姓名和学号', true); return; }
+  el.studentImportSubmit.disabled = true;
+  try {
+    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ text }) });
+    el.studentImportResult.textContent = `已导入 ${result.imported} 人${result.failed ? `，${result.failed} 行失败` : ''}`;
+    if (result.errors?.length) el.studentImportResult.title = result.errors.map((item) => `第 ${item.line} 行：${item.message}`).join('\n');
+    toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
+    el.studentImportText.value = '';
+    await loadUsers();
+  } catch (error) { toast(error.message, true); }
+  finally { el.studentImportSubmit.disabled = false; }
+});
 el.refreshClasses.addEventListener('click', loadClasses);
 el.classForm.addEventListener('submit', saveClass);
 el.classCancelEdit.addEventListener('click', resetClassForm);
@@ -953,7 +1129,9 @@ el.refreshScores.addEventListener('click', loadScores);
 el.competitionForm.addEventListener('submit', saveCompetition);
 el.battleCompetitionPrepare.addEventListener('click', prepareBattleCompetition);
 el.battleCompetitionStart.addEventListener('click', startBattleCompetition);
-el.competitionMode.addEventListener('change', updateCompetitionModeFields);
+el.competitionMode.addEventListener('change', () => { updateCompetitionModeFields(); renderCompetitionPool(); });
+el.competitionPoolClear.addEventListener('click', () => { competitionPoolSelection().clear(); renderCompetitionPool(); });
+el.battlePoolClear.addEventListener('click', () => { battlePoolSelection.clear(); renderBattlePool(); });
 el.competitionSeries.addEventListener('change', updateCompetitionModeFields);
 el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetitions(), loadBattleCompetition()]));
 el.passagePreviousPage.addEventListener('click', () => { adminState.passagePage -= 1; loadPassages(); });
@@ -980,8 +1158,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       setAuthenticated(false);
       return;
     }
+    adminState.admin = session.admin;
     setAuthenticated(true);
-    await loadStats();
+    const remembered = location.hash.slice(1) || localStorage.getItem('typing-admin-view') || 'overview';
+    await switchView(remembered);
   } catch {
     setAuthenticated(false);
   }

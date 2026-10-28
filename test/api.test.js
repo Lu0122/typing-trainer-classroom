@@ -19,6 +19,47 @@ async function registerStudent(app, suffix = '001', displayName = '小林') {
   return { agent, username, displayName };
 }
 
+test('supports multiple independent administrator accounts with role protection', async () => {
+  const context = setup();
+  const superAdmin = request.agent(context.app);
+  await superAdmin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const created = await superAdmin.post('/api/admin/admins').send({
+    username: 'teacher01', displayName: '张老师', password: 'Teacher123', role: 'manager'
+  }).expect(201);
+  assert.equal(created.body.role, 'manager');
+  const manager = request.agent(context.app);
+  const login = await manager.post('/api/admin/login').send({ username: 'teacher01', password: 'Teacher123' }).expect(200);
+  assert.equal(login.body.admin.username, 'teacher01');
+  assert.equal(login.body.admin.role, 'manager');
+  await manager.get('/api/admin/users').expect(200);
+  await manager.get('/api/admin/admins').expect(403);
+  const list = await superAdmin.get('/api/admin/admins').expect(200);
+  assert.equal(list.body.rows.length, 2);
+  await superAdmin.patch(`/api/admin/admins/${created.body.id}/status`).send({ isActive: false }).expect(200);
+  await manager.get('/api/admin/users').expect(401);
+  await request(context.app).post('/api/admin/login').send({ username: 'teacher01', password: 'Teacher123' }).expect(401);
+  await superAdmin.post(`/api/admin/admins/${created.body.id}/reset-password`).send({ password: 'Teacher456' }).expect(200);
+  await request(context.app).post('/api/admin/login').send({ username: 'teacher01', password: 'Teacher456' }).expect(200);
+  context.db.close();
+});
+
+test('imports real-name student accounts and can disable self-registration', async () => {
+  const db = createDatabase(':memory:');
+  const app = createApp({ db, adminPassword: 'test-pass', requireAccountApproval: false, studentRegistrationEnabled: false });
+  const admin = request.agent(app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const imported = await admin.post('/api/admin/users/import').send({ text: '张三,20250101\n李四,20250102' }).expect(201);
+  assert.equal(imported.body.imported, 2);
+  await request(app).post('/api/auth/register').send({ displayName: '王五', password: '20250103' }).expect(404);
+  const student = request.agent(app);
+  await student.post('/api/auth/login').send({ username: '张三', password: '20250101' }).expect(200);
+  await request(app).post('/api/auth/login').send({ username: '李四', password: '20250101' }).expect(401);
+  const duplicate = await admin.post('/api/admin/users/import').send({ rows: [{ displayName: '张三', studentId: '20250109' }] }).expect(201);
+  assert.equal(duplicate.body.imported, 0);
+  assert.equal(duplicate.body.failed, 1);
+  db.close();
+});
+
 test('registers with name and password only, logs in by name, and blocks duplicate or sensitive names', async () => {
   const context = setup();
   const registration = await request(context.app).post('/api/auth/register').send({

@@ -32,6 +32,10 @@ npm start
 
 打开 `http://localhost:3000`，管理后台位于 `http://localhost:3000/admin`。
 
+后台支持多个管理员账号。首次启动会把 `.env` 中的 `ADMIN_PASSWORD` 迁移为超级管理员账号 `admin`；登录后台后进入“后台账号”创建其他管理员。普通管理员可以维护学生、文章、班级和比赛，超级管理员还可以创建、停用和重置管理员账号。已有数据库会自动创建 `admin_accounts` 表。
+
+学生账号可以在后台“学生账号”页面批量导入，格式为每行“姓名,学号”。导入后使用姓名登录、学号作为初始密码。`.env` 中 `STUDENT_REGISTRATION_ENABLED=false` 时，学生端注册入口和注册接口都会关闭。
+
 `npm run dev` 会先构建前端页面，再启动后端，默认监听 `0.0.0.0:3000`，同一局域网设备可使用启动日志中显示的 `http://本机IP:3000` 访问。若 Windows 防火墙首次询问是否允许 Node.js 访问专用网络，需要选择允许。开发模式采用稳定启动方式；修改前端或后端代码后停止并重新运行一次 `npm run dev` 即可加载更新。首次运行前请先执行 `npm install`。`public/index.html` 和前端构建文件不纳入 Git，直接运行 `node backend/server.js` 前需要先执行 `npm run build`，否则首页会显示 `Cannot GET /`。
 
 代码目录：`frontend/` 是 Vue 前端源码，`backend/` 是 Node.js + Express 后端源码，`public/` 是前端构建输出和静态管理页面，`data/` 是运行时数据库与日志，`scripts/` 是检查和打包脚本，`test/` 是自动化测试。
@@ -93,3 +97,14 @@ npm start
 ```bash
 npm test
 ```
+
+## 开源协议
+
+本项目以 [MIT 协议](LICENSE) 开源，Copyright (c) 2026 lulu。
+
+简单说：你可以自由使用、修改、二次开发、商用，甚至闭源发布，只要保留 `LICENSE` 里的版权声明和许可声明。软件按「现状」提供，不附带任何担保。
+
+需要注意的两点：
+
+- **第三方依赖**各自遵循原协议：Vue、Three.js、Express、better-sqlite3、Vite 为 MIT，ECharts 为 Apache-2.0，Lucide 为 ISC。二次开发时请一并遵守。
+- **美术素材**（`public/assets/chase`、`public/assets/runner` 下的 PNG）由项目内 ImageGen 生成并随仓库保存，原始提示词见各自目录的 `README.md`。三维场景、角色和特效均由项目内 Three.js 代码绘制，不依赖外部模型。

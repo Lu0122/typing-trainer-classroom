@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { passagesByIds, speedTextFromPassage, segmentText } = require('./competition-texts');
 
 const GRID_COLUMNS = 36;
 const GRID_ROWS = 18;
@@ -30,9 +31,11 @@ const TEXTS = [
 ];
 
 class Battle {
-  constructor({ now = Date.now, save = () => {}, recordProgress = () => {}, competition = false } = {}) {
+  constructor({ now = Date.now, save = () => {}, recordProgress = () => {}, competition = false, random = Math.random, db = null } = {}) {
     this.now = now; this.save = save; this.recordProgress = recordProgress; this.players = new Map();
+    this.random = random; this.db = db;
     this.competition = competition; this.durationMs = 120_000;
+    this.texts = TEXTS; this.article = null;
     this.round = crypto.randomUUID(); this.phase = 'waiting'; this.red = 50;
     this.host = null; this.started = null; this.balanceAt = now() + 30000;
     this.notice = competition ? '选择阵营，等待裁判统一开赛。' : '选择阵营，两人加入后自动开始。'; this.result = null; this.event = 0;
@@ -41,12 +44,35 @@ class Battle {
   }
   online() { return [...this.players.values()].filter(p => this.now() - p.seen < 15000); }
   fail(message) { throw Object.assign(new Error(message), { status: 400 }); }
-  prepareCompetition(durationMs) {
+  // 老师指定的文章（练习文章 id）：抽一篇 → 补足长度 → 按句末标点切成 30~48 字的段。
+  // 阵营赛是「打完一段攻一次」，所以不能整篇当一段，否则一场只攻一两次。
+  pickArticle(passageIds) {
+    const ids = Array.isArray(passageIds) ? passageIds : [];
+    if (!ids.length) return null;
+    if (!this.db) this.fail('当前房间未连接文章库，无法使用指定文章');
+    // 停用不拦（已建房间照旧用），真的被删掉才报错。
+    const passages = passagesByIds(this.db, ids, { includeInactive: true })
+      .filter((passage) => passage.language === 'zh' && passage.content);
+    if (!passages.length) this.fail('指定的文章已被删除，请重新选择');
+    const passage = passages[Math.min(passages.length - 1, Math.floor(this.random() * passages.length))];
+    const segments = segmentText(speedTextFromPassage(this.db, passage)).map((text) => ({ kind: '比赛文章', text }));
+    return {
+      id: passage.id,
+      title: passage.title,
+      category: passage.category,
+      preview: passage.content.slice(0, 20),
+      segments
+    };
+  }
+  prepareCompetition(durationMs, { passageIds = [] } = {}) {
     if (!this.competition) this.fail('不是正式比赛房间');
     this.tick();
     if (this.phase === 'running' || this.phase === 'countdown') this.fail('本局还在进行中');
     if (!Number.isInteger(durationMs) || durationMs < 30_000 || durationMs > 10 * 60_000) this.fail('比赛时长应为 30 秒到 10 分钟');
+    const article = this.pickArticle(passageIds);
     this.durationMs = durationMs;
+    this.texts = article ? article.segments : TEXTS;
+    this.article = article ? { id: article.id, title: article.title, category: article.category, preview: article.preview, segments: article.segments.length } : null;
     this.players.clear(); this.host = null; this.started = null; this.result = null;
     this.round = crypto.randomUUID(); this.phase = 'waiting'; this.red = 50;
     this.frontier = [...INITIAL_FRONTIER]; this.lastAttack = null; this.events = [];
@@ -158,7 +184,7 @@ class Battle {
     this.tick(); const p = this.players.get(id);
     if (!p || this.phase !== 'running') this.fail('请先加入正在进行的对局');
     p.seen = this.now();
-    if (!p.ticket) { const sequenceIndex = Number.isInteger(p.taskIndex) ? p.taskIndex : 0; const lesson = TEXTS[sequenceIndex % TEXTS.length]; p.ticket = { id:crypto.randomUUID(), text:lesson.text, kind:lesson.kind, progress:0, sequence:sequenceIndex + 1, total:null, typed:'', correct:0, issued:this.now(), round:this.round }; }
+    if (!p.ticket) { const sequenceIndex = Number.isInteger(p.taskIndex) ? p.taskIndex : 0; const lesson = this.texts[sequenceIndex % this.texts.length]; p.ticket = { id:crypto.randomUUID(), text:lesson.text, kind:lesson.kind, progress:0, sequence:sequenceIndex + 1, total:null, typed:'', correct:0, issued:this.now(), round:this.round }; }
     return { id:p.ticket.id, text:p.ticket.text, kind:p.ticket.kind, progress:p.ticket.progress||0, ...(this.competition ? {typed:p.ticket.typed||''}:{}), sequence:p.ticket.sequence, total:p.ticket.total, round:this.round, team:p.team };
   }
   attack(id, body) {
@@ -300,7 +326,7 @@ class Battle {
       const correct=all.reduce((s,p)=>s+p.correct,0), attempted=all.reduce((s,p)=>s+p.attempted,0);
       teams[team]={ count:members.length, speed:members.length?Math.round(correct*60/duration/members.length):0, accuracy:attempted?Math.round(correct/attempted*100):100, attacks:all.reduce((s,p)=>s+p.attacks,0), area:this.competition ? Math.round((team==='red'?this.red:100-this.red)*10)/10 : Math.round(team==='red'?this.red:100-this.red) };
     }
-    return { room:'1024', competition:this.competition, inputRules:{allowMistakes:this.competition}, durationMs:this.competition?this.durationMs:null, startsAt:this.competition?this.started:null, endsAt:this.competition&&this.started?this.started+this.durationMs:null, serverNow:this.now(), round:this.round, phase:this.phase, host:this.host, online:online.length, elapsed:this.started?Math.max(0,Math.floor((this.now()-this.started)/1000)):0, balanceIn:Math.max(0,Math.ceil((this.balanceAt-this.now())/1000)), teams, territory:{columns:GRID_COLUMNS,rows:GRID_ROWS,frontier:[...this.frontier],redCells:this.frontier.reduce((sum,columns)=>sum+columns,0),totalCells:GRID_COLUMNS*GRID_ROWS}, players:online.map(p=>({ id:p.id,name:p.name,avatarUrl:p.avatarUrl || null,team:p.team,correct:p.correct,attacks:p.attacks,speed:Math.round(p.correct*60/duration),accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,sequence:(Number.isInteger(p.taskIndex)?p.taskIndex:0)+1,progress:p.ticket?.progress||0,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0) })), me:p?{id:p.id,team:p.team,attacks:p.attacks,correct:p.correct,attempted:p.attempted,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0),progress:p.ticket?.progress||0}:null, comboPower:{tiers:COMBO_TIERS,base:CHARACTER_ATTACK_POWER}, notice:this.notice, broadcasts:this.broadcasts.map((item)=>({...item})), event:this.event, lastAttack:this.lastAttack, events:this.events.map(event=>({...event,impact:event.impact?{...event.impact}:null,captured:event.captured.map(cell=>({...cell}))})), result:this.result };
+    return { room:'1024', competition:this.competition, inputRules:{allowMistakes:this.competition}, durationMs:this.competition?this.durationMs:null, startsAt:this.competition?this.started:null, endsAt:this.competition&&this.started?this.started+this.durationMs:null, serverNow:this.now(), round:this.round, phase:this.phase, host:this.host, article:this.article, online:online.length, elapsed:this.started?Math.max(0,Math.floor((this.now()-this.started)/1000)):0, balanceIn:Math.max(0,Math.ceil((this.balanceAt-this.now())/1000)), teams, territory:{columns:GRID_COLUMNS,rows:GRID_ROWS,frontier:[...this.frontier],redCells:this.frontier.reduce((sum,columns)=>sum+columns,0),totalCells:GRID_COLUMNS*GRID_ROWS}, players:online.map(p=>({ id:p.id,name:p.name,avatarUrl:p.avatarUrl || null,team:p.team,correct:p.correct,attacks:p.attacks,speed:Math.round(p.correct*60/duration),accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,sequence:(Number.isInteger(p.taskIndex)?p.taskIndex:0)+1,progress:p.ticket?.progress||0,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0) })), me:p?{id:p.id,team:p.team,attacks:p.attacks,correct:p.correct,attempted:p.attempted,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0),progress:p.ticket?.progress||0}:null, comboPower:{tiers:COMBO_TIERS,base:CHARACTER_ATTACK_POWER}, notice:this.notice, broadcasts:this.broadcasts.map((item)=>({...item})), event:this.event, lastAttack:this.lastAttack, events:this.events.map(event=>({...event,impact:event.impact?{...event.impact}:null,captured:event.captured.map(cell=>({...cell}))})), result:this.result };
   }
 }
 
@@ -331,8 +357,8 @@ function installBattle(app, { db, requireUser, requireAdmin, now }) {
       }
     }
   });
-  const battle = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress });
-  const competition = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress, competition: true });
+  const battle = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress, db });
+  const competition = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress, competition: true, db });
   const route = fn => (req,res,next) => { try { res.json(fn(req)); } catch(e) { if(e.status) res.status(e.status).json({message:e.message}); else next(e); } };
   app.get('/api/battle',requireUser,route(req=>battle.state(req.user.id, req.user)));
   app.post('/api/battle/join',requireUser,route(req=>battle.join(req.user,req.body.team)));
@@ -350,7 +376,7 @@ function installBattle(app, { db, requireUser, requireAdmin, now }) {
   app.post('/api/battle/competition/advance', requireUser, route(req => competition.advance(req.user.id, req.body)));
   app.post('/api/battle/competition/leave', requireUser, route(req => ({ ok: competition.leave(req.user.id) })));
   app.get('/api/battle/competition/referee', requireAdmin, route(() => competition.state(null)));
-  app.post('/api/battle/competition/referee/prepare', requireAdmin, route(req => competition.prepareCompetition(req.body.durationMs)));
+  app.post('/api/battle/competition/referee/prepare', requireAdmin, route(req => competition.prepareCompetition(req.body.durationMs, { passageIds: req.body.passageIds })));
   app.post('/api/battle/competition/referee/start', requireAdmin, route(() => competition.start(null, { referee: true })));
 }
 module.exports = { Battle, installBattle, comboPower, comboLabel, COMBO_TIERS, CHARACTER_ATTACK_POWER };
