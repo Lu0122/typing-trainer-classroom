@@ -129,6 +129,10 @@ el.classAssignResult = document.querySelector('#class-assign-result');
 el.classAssignCount = document.querySelector('#class-assign-count');
 el.classMembersDialog = document.querySelector('#class-members-dialog');
 
+el.progressClassFilter = document.querySelector('#progress-class-filter');
+// 学习进步表的排序状态：默认按速度变化降序，与改造前的固定排序一致。
+adminState.progressSort = { key: 'speedChange', order: 'desc' };
+
 el.bugReportSearch = document.querySelector('#bug-report-search');
 el.bugReportStatusFilter = document.querySelector('#bug-report-status-filter');
 el.bugReportPriorityFilter = document.querySelector('#bug-report-priority-filter');
@@ -498,7 +502,13 @@ function renderProgress() {
 }
 
 async function loadProgress(page = pagers.progress?.page || 1) {
-  const query = filterQuery({ page, q: el.progressSearch.value.trim() });
+  const query = filterQuery({
+    page,
+    q: el.progressSearch.value.trim(),
+    classId: el.progressClassFilter.value,
+    sort: adminState.progressSort.key,
+    order: adminState.progressSort.order
+  });
   const [overview, students] = await Promise.all([api('/api/admin/progress/overview'), api(`/api/admin/progress/students?${query}`)]);
   renderOverviewCharts(overview);
   adminState.progress = students.rows;
@@ -508,7 +518,35 @@ async function loadProgress(page = pagers.progress?.page || 1) {
   el.progressSpeedChange.textContent = changeText(overview.averageSpeedChange);
   el.progressWeekSessions.textContent = overview.sessionsLast7Days;
   pagers.progress?.render(students);
+  renderProgressSortIndicators();
   renderProgress();
+}
+
+// 表头排序：点一次按该列排，再点一次反向；学生列默认升序，其它列默认降序。
+function renderProgressSortIndicators() {
+  const { key, order } = adminState.progressSort;
+  document.querySelectorAll('#view-progress .sort-button').forEach((button) => {
+    const active = button.dataset.sort === key;
+    button.classList.toggle('is-active', active);
+    button.dataset.order = active ? order : '';
+    button.setAttribute('aria-sort', active ? (order === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+}
+
+async function loadProgressClassFilter() {
+  const current = el.progressClassFilter.value;
+  try {
+    const data = await api('/api/admin/classes?all=true');
+    const options = (data.rows || []).filter((item) => item.isActive);
+    el.progressClassFilter.replaceChildren(
+      new Option('全部班级', ''),
+      new Option('待分班', 'unassigned'),
+      ...options.map((item) => new Option(item.term ? `${item.name} · ${item.term}` : item.name, String(item.id)))
+    );
+    if ([...el.progressClassFilter.options].some((option) => option.value === current)) el.progressClassFilter.value = current;
+  } catch {
+    el.progressClassFilter.replaceChildren(new Option('全部班级', ''), new Option('待分班', 'unassigned'));
+  }
 }
 
 const assignmentModeNames = { all: '所有课程', beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章' };
@@ -1455,7 +1493,7 @@ async function switchView(view) {
     if (view === 'passages') await loadPassages();
     if (view === 'users') await Promise.all([loadUsers(), loadUserClassFilter()]);
     if (view === 'classes') await Promise.all([loadClasses(), loadClassTermOptions()]);
-    if (view === 'progress') await loadProgress();
+    if (view === 'progress') await Promise.all([loadProgress(), loadProgressClassFilter()]);
     if (view === 'assignments') await Promise.all([loadAssignments(), loadAssignmentUsers(), loadAssignmentClasses()]);
     if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition(), loadTextCatalog()]);
     if (view === 'scores') await Promise.all([loadScores(), loadScoreCategories()]);
@@ -1759,6 +1797,16 @@ el.classAssignClear.addEventListener('click', () => {
 });
 el.closeClassMembers.addEventListener('click', () => el.classMembersDialog.close());
 el.progressSearch.addEventListener('input', debounce(() => loadProgress(1)));
+el.progressClassFilter.addEventListener('change', () => loadProgress(1));
+document.querySelectorAll('#view-progress .sort-button').forEach((button) => {
+  button.addEventListener('click', () => {
+    const key = button.dataset.sort;
+    const sort = adminState.progressSort;
+    if (sort.key === key) sort.order = sort.order === 'asc' ? 'desc' : 'asc';
+    else { sort.key = key; sort.order = key === 'name' ? 'asc' : 'desc'; }
+    loadProgress(1);
+  });
+});
 el.refreshProgress.addEventListener('click', () => loadProgress(1));
 el.closeProgressDialog.addEventListener('click', () => el.progressDialog.close());
 el.resetForm.addEventListener('submit', submitPasswordReset);

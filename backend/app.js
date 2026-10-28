@@ -1120,19 +1120,47 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     });
   });
 
+  // 学习进步列表：支持按班级筛选 + 按列排序（内存排序，因为指标是算出来的不是表字段）。
+  const PROGRESS_SORTERS = {
+    name: (a, b) => a.displayName.localeCompare(b.displayName, 'zh-CN'),
+    sessions: (a, b) => a.sessions - b.sessions,
+    dailyHours: (a, b) => (a.dailyHours || 0) - (b.dailyHours || 0),
+    firstSpeed: (a, b) => (a.firstSpeed || 0) - (b.firstSpeed || 0),
+    recentSpeed: (a, b) => (a.recentSpeed || 0) - (b.recentSpeed || 0),
+    speedChange: (a, b) => (a.speedChange ?? -Infinity) - (b.speedChange ?? -Infinity),
+    accuracyChange: (a, b) => (a.accuracyChange ?? -Infinity) - (b.accuracyChange ?? -Infinity),
+    latestAt: (a, b) => String(a.latestAt || '').localeCompare(String(b.latestAt || ''))
+  };
+
   app.get('/api/admin/progress/students', requireAdmin, (request, response) => {
     const keyword = cleanText(request.query.q, 80);
-    const filter = keyword ? 'WHERE display_name LIKE ? OR username LIKE ?' : '';
-    const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : [];
-    const users = db.prepare(`SELECT id, username, display_name AS displayName, is_active AS isActive, created_at AS createdAt, last_login_at AS lastLoginAt FROM users ${filter} ORDER BY created_at DESC, id DESC`).all(...params);
+    const classId = String(request.query.classId || '');
+    const filters = [];
+    const params = [];
+    if (keyword) {
+      filters.push('(users.display_name LIKE ? OR users.username LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    if (classId === 'unassigned') {
+      filters.push('NOT EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = users.id AND cm.left_at IS NULL)');
+    } else if (/^\d+$/.test(classId)) {
+      filters.push('EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = users.id AND cm.class_id = ? AND cm.left_at IS NULL)');
+      params.push(Number(classId));
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const users = db.prepare(`SELECT id, username, display_name AS displayName, is_active AS isActive, created_at AS createdAt, last_login_at AS lastLoginAt FROM users ${where} ORDER BY created_at DESC, id DESC`).all(...params);
+    const sortKey = PROGRESS_SORTERS[request.query.sort] ? request.query.sort : 'speedChange';
+    const descending = request.query.order !== 'asc';
+    const compare = PROGRESS_SORTERS[sortKey];
     const allRows = adminStudentProgress(users).sort((a, b) => {
-      const speedA = a.speedChange === null ? -Infinity : a.speedChange;
-      const speedB = b.speedChange === null ? -Infinity : b.speedChange;
-      return speedB - speedA || (b.accuracyChange ?? -Infinity) - (a.accuracyChange ?? -Infinity) || b.recentSpeed - a.recentSpeed || a.displayName.localeCompare(b.displayName, 'zh-CN');
+      const result = compare(a, b);
+      if (result) return descending ? -result : result;
+      // 次级排序固定按姓名，保证翻页顺序稳定
+      return a.displayName.localeCompare(b.displayName, 'zh-CN');
     });
     const total = allRows.length;
     const pagination = listPage(request.query, total);
-    response.json({ rows: allRows.slice(pagination.offset, pagination.offset + pagination.pageSize), total, ...pagination });
+    response.json({ rows: allRows.slice(pagination.offset, pagination.offset + pagination.pageSize), total, sort: sortKey, order: descending ? 'desc' : 'asc', ...pagination });
   });
 
   app.get('/api/admin/progress/students/:id', requireAdmin, (request, response) => {

@@ -633,3 +633,33 @@ test('lists assignable candidates for a class', async () => {
   await admin.get('/api/admin/classes/999999/candidates').expect(404);
   context.db.close();
 });
+
+test('filters the progress list by class and echoes the chosen sort', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const insertUser = context.db.prepare("INSERT INTO users (username, display_name, password_hash, is_active) VALUES (?, ?, 'x', 1)");
+  const inClassId = insertUser.run('p1', '进步甲').lastInsertRowid;
+  insertUser.run('p2', '进步乙');
+  const classId = context.db.prepare(`INSERT INTO classes (name, term, description, is_active, created_at, updated_at)
+    VALUES ('一班', '', '', 1, 1000, 1000)`).run().lastInsertRowid;
+  context.db.prepare('INSERT INTO class_members (class_id, user_id, joined_at, left_at) VALUES (?, ?, 1000, NULL)').run(classId, inClassId);
+
+  const all = await admin.get('/api/admin/progress/students').expect(200);
+  assert.equal(all.body.total, 2);
+  assert.equal(all.body.sort, 'speedChange', '默认按速度变化排');
+  assert.equal(all.body.order, 'desc');
+
+  const filtered = await admin.get(`/api/admin/progress/students?classId=${classId}`).expect(200);
+  assert.equal(filtered.body.total, 1);
+  assert.equal(filtered.body.rows[0].displayName, '进步甲');
+
+  const unassigned = await admin.get('/api/admin/progress/students?classId=unassigned').expect(200);
+  assert.equal(unassigned.body.total, 1);
+  assert.equal(unassigned.body.rows[0].displayName, '进步乙');
+
+  const sorted = await admin.get('/api/admin/progress/students?sort=sessions&order=asc').expect(200);
+  assert.equal(sorted.body.sort, 'sessions');
+  assert.equal(sorted.body.order, 'asc');
+  context.db.close();
+});

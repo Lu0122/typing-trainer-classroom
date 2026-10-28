@@ -481,3 +481,9 @@ tbody tr:hover { background: #f8faf6; }
 .class-overview-details { margin: 14px 0 0; }
 .class-overview-details > summary { padding: 6px 0; color: var(--ink-soft); font-size: 12px; font-weight: 700; cursor: pointer; }
 .class-overview-details[open] > summary { margin-bottom: 12px; }
+
+/* 学习进步：表头排序按钮 */
+.sort-button { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.sort-button:hover, .sort-button.is-active { color: var(--green-dark); }
+.sort-button.is-active::after { content: '↓'; font-size: 10px; }
+.sort-button.is-active[data-order="asc"]::after { content: '↑'; }
