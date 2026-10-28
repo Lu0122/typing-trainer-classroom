@@ -606,3 +606,30 @@ test('lists, filters and updates student bug reports', async () => {
   await admin.patch('/api/admin/bug-reports/999999/status').send({ status: '已处理' }).expect(404);
   context.db.close();
 });
+
+test('lists assignable candidates for a class', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const insertUser = context.db.prepare("INSERT INTO users (username, display_name, password_hash, is_active) VALUES (?, ?, 'x', 1)");
+  const jia = insertUser.run('c1', '候选甲').lastInsertRowid;
+  const yi = insertUser.run('c2', '候选乙').lastInsertRowid;
+  const insertClass = context.db.prepare(`INSERT INTO classes (name, term, description, is_active, created_at, updated_at)
+    VALUES (?, '', '', 1, 1000, 1000)`);
+  const classA = insertClass.run('一班').lastInsertRowid;
+  const classB = insertClass.run('二班').lastInsertRowid;
+  context.db.prepare('INSERT INTO class_members (class_id, user_id, joined_at, left_at) VALUES (?, ?, 1000, NULL)').run(classB, yi);
+
+  const unassigned = await admin.get(`/api/admin/classes/${classA}/candidates`).expect(200);
+  assert.equal(unassigned.body.total, 1, '默认只看未分班');
+  assert.equal(unassigned.body.rows[0].displayName, '候选甲');
+
+  const all = await admin.get(`/api/admin/classes/${classA}/candidates?scope=all`).expect(200);
+  assert.equal(all.body.total, 2);
+  assert.equal(all.body.rows.find((row) => row.displayName === '候选乙').className, '二班', '全部范围带当前班级名');
+
+  context.db.prepare('INSERT INTO class_members (class_id, user_id, joined_at, left_at) VALUES (?, ?, 1000, NULL)').run(classA, jia);
+  assert.equal((await admin.get(`/api/admin/classes/${classA}/candidates?scope=all`).expect(200)).body.total, 1, '已在目标班级的不再出现');
+  await admin.get('/api/admin/classes/999999/candidates').expect(404);
+  context.db.close();
+});

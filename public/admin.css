@@ -214,22 +214,7 @@ tbody tr:hover { background: #f8faf6; }
 .progress-recent-list div { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 11px 13px; background: var(--surface); }
 .progress-recent-list strong { font-size: 12px; }.progress-recent-list span, .progress-recent-list small { color: var(--ink-soft); font-size: 11px; }
 
-.class-group-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-bottom: 18px; }
-.class-create-section, .class-assign-section { min-width: 0; }
-.class-create-section > header, .class-assign-section > header { padding: 20px 22px 0; }
-.class-create-section > header h2, .class-assign-section > header h2 { margin: 0; font-family: SimSun, serif; font-size: 21px; }
-.class-create-section > header p, .class-assign-section > header p { margin: 6px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }
-.class-form { padding: 18px 22px 22px; }
-.class-form label > span { display: block; margin-bottom: 7px; color: var(--ink-soft); font-size: 11px; font-weight: 800; }
-.class-form input, .class-form select, .class-form textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--paper); font-size: 12px; }
-.class-form input, .class-form select { height: 40px; padding: 0 10px; }
-.class-form textarea { padding: 10px; resize: vertical; line-height: 1.6; }
-.class-form label:has(select[multiple]) { grid-column: 1 / -1; }
-.class-form select[multiple] { min-height: 156px; padding: 8px; }
-.class-form select[multiple] option { padding: 5px 7px; }
-.class-form footer { display: flex; justify-content: flex-end; gap: 8px; grid-column: 1 / -1; padding-top: 4px; }
 .class-list-section, .unassigned-section { margin-bottom: 18px; }
-.class-members-section { margin-bottom: 18px; }
 .class-overview-content { padding: 0 20px 18px; }
 .class-overview-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: 18px; border: 1px solid var(--line); background: var(--line); }
 .class-overview-metrics article { display: grid; gap: 5px; min-height: 94px; padding: 16px; background: var(--surface); }
@@ -248,10 +233,8 @@ tbody tr:hover { background: #f8faf6; }
 .class-status.is-inactive { color: var(--ink-soft); background: #eef1f3; }
 .class-member-count { color: var(--green-dark); font-family: Consolas, monospace; font-weight: 800; }
 .class-description-cell { max-width: 260px; color: var(--ink-soft); font-size: 11px; }
-.class-assign-section .class-form { grid-template-columns: 1fr; }
 
 @media (max-width: 900px) {
-  .class-group-grid { grid-template-columns: 1fr; }
   .class-overview-metrics { grid-template-columns: 1fr 1fr; }
   .class-overview-columns { grid-template-columns: 1fr; }
 }
@@ -463,3 +446,38 @@ tbody tr:hover { background: #f8faf6; }
 .account-dialog-fields input:focus, .account-dialog-fields select:focus { outline: 3px solid #1b8a5530; outline-offset: 1px; border-color: #278354; }
 .admin-account-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
 @media (max-width: 520px) { .account-dialog-fields { grid-template-columns: 1fr; } }
+
+/* 班级：新建/编辑弹框、分班弹框、成员弹框 */
+.class-dialog, .class-assign-dialog, .class-members-dialog { padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.class-dialog { width: min(560px, calc(100vw - 32px)); }
+.class-assign-dialog { width: min(620px, calc(100vw - 32px)); }
+.class-members-dialog { width: min(880px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.class-dialog::backdrop, .class-assign-dialog::backdrop, .class-members-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.class-dialog .dialog-close, .class-assign-dialog .dialog-close, .class-members-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.class-dialog h2, .class-assign-dialog h2, .class-members-dialog h2 { margin: 0; font-family: SimSun, serif; font-size: 26px; }
+.class-dialog-intro, .class-assign-intro { margin: 10px 0 18px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.class-dialog-note { display: grid; gap: 6px; margin-top: 14px; color: #46594e; font-size: 12px; font-weight: 700; }
+.class-dialog-note textarea { width: 100%; padding: 10px 12px; border: 1px solid #d3ddd5; border-radius: 8px; background: #fbfcfa; font: 12px/1.7 inherit; resize: vertical; }
+.class-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.class-assign-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.class-assign-toolbar .search-field { flex: 1; min-width: 180px; }
+.class-assign-toolbar .search-field input { width: 100%; }
+.class-assign-list { display: grid; gap: 2px; max-height: 320px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfb; }
+.class-assign-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.class-assign-item:hover { background: #f0f6f2; }
+.class-assign-item input { flex: none; }
+.class-assign-item strong { font-size: 12px; }
+.class-assign-item small { color: var(--ink-soft); font-size: 11px; }
+.class-assign-tag { margin-left: auto; padding: 2px 7px; border-radius: 20px; background: #eef2f6; color: #51697f; font-size: 10px; }
+.class-assign-empty { margin: 10px 0 0; color: var(--ink-soft); font-size: 12px; }
+.class-assign-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; }
+.class-assign-actions { display: flex; gap: 8px; }
+.class-members-toolbar { margin: 16px 0 10px; }
+.class-members-toolbar .search-field input { width: 100%; }
+.class-members-dialog .table-scroll { max-height: 46vh; overflow: auto; }
+.class-members-dialog .class-overview-content { padding: 16px 0 0; }
+
+/* 班级概览在成员弹框里默认收起，避免把成员列表挤到视口外 */
+.class-overview-details { margin: 14px 0 0; }
+.class-overview-details > summary { padding: 6px 0; color: var(--ink-soft); font-size: 12px; font-weight: 700; cursor: pointer; }
+.class-overview-details[open] > summary { margin-bottom: 12px; }

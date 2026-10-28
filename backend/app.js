@@ -1426,6 +1426,39 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     response.json({ rows, total, ...pagination });
   });
 
+  // 分班弹框的候选学生：默认只看未分班，scope=all 时列出全部（带当前班级名，方便调班）。
+  // 已经在目标班级里的学生不再出现。
+  app.get('/api/admin/classes/:id/candidates', requireAdmin, (request, response) => {
+    const classId = Number.parseInt(request.params.id, 10);
+    if (!Number.isInteger(classId) || classId <= 0) return response.status(400).json({ message: '班级参数不正确' });
+    if (!db.prepare('SELECT 1 FROM classes WHERE id = ?').get(classId)) return response.status(404).json({ message: '班级不存在' });
+    const scope = request.query.scope === 'all' ? 'all' : 'unassigned';
+    const keyword = cleanText(request.query.q, 80);
+    const filters = [
+      'users.is_active = 1',
+      'NOT EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = users.id AND cm.class_id = ? AND cm.left_at IS NULL)'
+    ];
+    const params = [classId];
+    if (scope === 'unassigned') {
+      filters.push('NOT EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = users.id AND cm.left_at IS NULL)');
+    }
+    if (keyword) {
+      filters.push('(users.display_name LIKE ? OR users.username LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    const rows = db.prepare(`
+      SELECT users.id, users.display_name AS displayName, users.username,
+             (SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
+              WHERE cm.user_id = users.id AND cm.left_at IS NULL
+              ORDER BY cm.joined_at DESC LIMIT 1) AS className
+      FROM users
+      WHERE ${filters.join(' AND ')}
+      ORDER BY users.display_name COLLATE NOCASE, users.id
+      LIMIT 500
+    `).all(...params);
+    response.json({ rows, total: rows.length, scope });
+  });
+
   app.get('/api/admin/classes/:id/members', requireAdmin, (request, response) => {
     const classId = Number.parseInt(request.params.id, 10);
     if (!Number.isInteger(classId) || classId <= 0) return response.status(400).json({ message: '班级参数不正确' });

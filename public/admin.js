@@ -16,7 +16,7 @@ const el = {
   progressSearch: document.querySelector('#progress-search'), progressCount: document.querySelector('#progress-count'), progressTable: document.querySelector('#progress-table'), progressEmpty: document.querySelector('#progress-empty'), refreshProgress: document.querySelector('#refresh-progress'), progressPagination: document.querySelector('#progress-pagination'), progressPageLabel: document.querySelector('#progress-page-label'), progressPreviousPage: document.querySelector('#progress-previous-page'), progressNextPage: document.querySelector('#progress-next-page'),
   progressMonitored: document.querySelector('#progress-monitored'), progressImproving: document.querySelector('#progress-improving'), progressSpeedChange: document.querySelector('#progress-speed-change'), progressWeekSessions: document.querySelector('#progress-week-sessions'),
   assignments: document.querySelector('#assignment-table'), assignmentCount: document.querySelector('#assignment-count'), assignmentEmpty: document.querySelector('#assignment-empty'), assignmentPagination: document.querySelector('#assignment-pagination'), assignmentPageLabel: document.querySelector('#assignment-page-label'), assignmentPreviousPage: document.querySelector('#assignment-previous-page'), assignmentNextPage: document.querySelector('#assignment-next-page'), refreshAssignments: document.querySelector('#refresh-assignments'), assignmentForm: document.querySelector('#assignment-form'), assignmentId: document.querySelector('#assignment-id-input'), assignmentTitle: document.querySelector('#assignment-title-input'), assignmentMode: document.querySelector('#assignment-mode-input'), assignmentLesson: document.querySelector('#assignment-lesson-input'), assignmentAudience: document.querySelector('#assignment-audience-input'), assignmentClassField: document.querySelector('#assignment-class-field'), assignmentClass: document.querySelector('#assignment-class-input'), assignmentStudentsField: document.querySelector('#assignment-students-field'), assignmentStudents: document.querySelector('#assignment-students-input'), assignmentAccuracy: document.querySelector('#assignment-accuracy-input'), assignmentSpeed: document.querySelector('#assignment-speed-input'), assignmentDue: document.querySelector('#assignment-due-input'), assignmentDescription: document.querySelector('#assignment-description-input'), assignmentSubmit: document.querySelector('#assignment-submit'), assignmentCancelEdit: document.querySelector('#assignment-cancel-edit'),
-  classes: document.querySelector('#class-table'), classCount: document.querySelector('#class-count'), classEmpty: document.querySelector('#class-empty'), classPagination: document.querySelector('#class-pagination'), classPageLabel: document.querySelector('#class-page-label'), classPreviousPage: document.querySelector('#class-previous-page'), classNextPage: document.querySelector('#class-next-page'), refreshClasses: document.querySelector('#refresh-classes'), classForm: document.querySelector('#class-form'), classId: document.querySelector('#class-id-input'), className: document.querySelector('#class-name-input'), classTerm: document.querySelector('#class-term-input'), classDescription: document.querySelector('#class-description-input'), classSubmit: document.querySelector('#class-submit'), classCancelEdit: document.querySelector('#class-cancel-edit'), classTarget: document.querySelector('#class-target-input'), classAssignForm: document.querySelector('#class-assign-form'), classStudents: document.querySelector('#class-students-input'), classMembersPanel: document.querySelector('#class-members-panel'), classMembersTitle: document.querySelector('#class-members-title'), classMembersTable: document.querySelector('#class-members-table'), classMembersEmpty: document.querySelector('#class-members-empty'), classMembersPagination: document.querySelector('#class-members-pagination'), classMembersPageLabel: document.querySelector('#class-members-page-label'), classMembersPreviousPage: document.querySelector('#class-members-previous-page'), classMembersNextPage: document.querySelector('#class-members-next-page'), classOverviewContent: document.querySelector('#class-overview-content'), classMetricMembers: document.querySelector('#class-metric-members'), classMetricActive: document.querySelector('#class-metric-active'), classMetricSessions: document.querySelector('#class-metric-sessions'), classMetricMinutes: document.querySelector('#class-metric-minutes'), classMetricSpeed: document.querySelector('#class-metric-speed'), classMetricAccuracy: document.querySelector('#class-metric-accuracy'), classOverviewTasks: document.querySelector('#class-overview-tasks'), classOverviewTasksEmpty: document.querySelector('#class-overview-tasks-empty'), classOverviewRisks: document.querySelector('#class-overview-risks'), classOverviewRisksEmpty: document.querySelector('#class-overview-risks-empty'), classOverviewRanking: document.querySelector('#class-overview-ranking'), classOverviewRankingEmpty: document.querySelector('#class-overview-ranking-empty'), closeClassMembers: document.querySelector('#close-class-members'), unassignedTable: document.querySelector('#unassigned-table'), unassignedCount: document.querySelector('#unassigned-count'), unassignedEmpty: document.querySelector('#unassigned-empty'), unassignedPagination: document.querySelector('#unassigned-pagination'), unassignedPageLabel: document.querySelector('#unassigned-page-label'), unassignedPreviousPage: document.querySelector('#unassigned-previous-page'), unassignedNextPage: document.querySelector('#unassigned-next-page'),
+  classes: document.querySelector('#class-table'), classCount: document.querySelector('#class-count'), classEmpty: document.querySelector('#class-empty'), classPagination: document.querySelector('#class-pagination'), classPageLabel: document.querySelector('#class-page-label'), classPreviousPage: document.querySelector('#class-previous-page'), classNextPage: document.querySelector('#class-next-page'), refreshClasses: document.querySelector('#refresh-classes'), classForm: document.querySelector('#class-form'), classId: document.querySelector('#class-id-input'), className: document.querySelector('#class-name-input'), classTerm: document.querySelector('#class-term-input'), classDescription: document.querySelector('#class-description-input'), classSubmit: document.querySelector('#class-submit'), classMembersTitle: document.querySelector('#class-members-title'), classMembersTable: document.querySelector('#class-members-table'), classMembersEmpty: document.querySelector('#class-members-empty'), classMembersPagination: document.querySelector('#class-members-pagination'), classMembersPageLabel: document.querySelector('#class-members-page-label'), classMembersPreviousPage: document.querySelector('#class-members-previous-page'), classMembersNextPage: document.querySelector('#class-members-next-page'), classOverviewContent: document.querySelector('#class-overview-content'), classMetricMembers: document.querySelector('#class-metric-members'), classMetricActive: document.querySelector('#class-metric-active'), classMetricSessions: document.querySelector('#class-metric-sessions'), classMetricMinutes: document.querySelector('#class-metric-minutes'), classMetricSpeed: document.querySelector('#class-metric-speed'), classMetricAccuracy: document.querySelector('#class-metric-accuracy'), classOverviewTasks: document.querySelector('#class-overview-tasks'), classOverviewTasksEmpty: document.querySelector('#class-overview-tasks-empty'), classOverviewRisks: document.querySelector('#class-overview-risks'), classOverviewRisksEmpty: document.querySelector('#class-overview-risks-empty'), classOverviewRanking: document.querySelector('#class-overview-ranking'), classOverviewRankingEmpty: document.querySelector('#class-overview-ranking-empty'), closeClassMembers: document.querySelector('#close-class-members'), unassignedTable: document.querySelector('#unassigned-table'), unassignedCount: document.querySelector('#unassigned-count'), unassignedEmpty: document.querySelector('#unassigned-empty'), unassignedPagination: document.querySelector('#unassigned-pagination'), unassignedPageLabel: document.querySelector('#unassigned-page-label'), unassignedPreviousPage: document.querySelector('#unassigned-previous-page'), unassignedNextPage: document.querySelector('#unassigned-next-page'),
   scoreTable: document.querySelector('#score-table'), scoreCount: document.querySelector('#score-count'), scoreEmpty: document.querySelector('#score-empty'),
   scorePagination: document.querySelector('#score-pagination'), pageLabel: document.querySelector('#page-label'), previousPage: document.querySelector('#previous-page'), nextPage: document.querySelector('#next-page'), refreshScores: document.querySelector('#refresh-scores'),
   competitionForm: document.querySelector('#competition-form'), competitionName: document.querySelector('#competition-name-input'), competitionMode: document.querySelector('#competition-mode-input'), competitionSchedule: document.querySelector('#competition-schedule-input'), competitionDuration: document.querySelector('#competition-duration-input'), competitionSeries: document.querySelector('#competition-series-input'), competitionSideA: document.querySelector('#competition-side-a-input'), competitionSideB: document.querySelector('#competition-side-b-input'), competitionSideNames: document.querySelector('#competition-side-names-input'), competitionTeamSize: document.querySelector('#competition-team-size-input'), competitionTeamFields: document.querySelectorAll('.competition-team-field'), competitionLeagueFields: document.querySelectorAll('.competition-league-field'), competitionTable: document.querySelector('#competition-table'), competitionCount: document.querySelector('#competition-count'), competitionEmpty: document.querySelector('#competition-empty'), refreshCompetitions: document.querySelector('#refresh-competitions'),
@@ -108,6 +108,26 @@ el.studentImportPreview = document.querySelector('#student-import-preview');
 el.studentImportPasteSubmit = document.querySelector('#student-import-paste-submit');
 el.studentImportPasteResult = document.querySelector('#student-import-paste-result');
 el.studentImportClass = document.querySelector('#student-import-class');
+
+el.classCreateOpen = document.querySelector('#class-create-open');
+el.classDialog = document.querySelector('#class-dialog');
+el.classDialogTitle = document.querySelector('#class-dialog-title');
+el.closeClassDialog = document.querySelector('#close-class-dialog');
+el.cancelClassDialog = document.querySelector('#cancel-class-dialog');
+el.classAssignDialog = document.querySelector('#class-assign-dialog');
+el.classAssignTitle = document.querySelector('#class-assign-title');
+el.closeClassAssign = document.querySelector('#close-class-assign');
+el.cancelClassAssign = document.querySelector('#cancel-class-assign');
+el.submitClassAssign = document.querySelector('#submit-class-assign');
+el.classAssignSearch = document.querySelector('#class-assign-search');
+el.classAssignScope = document.querySelector('#class-assign-scope');
+el.classAssignSelectAll = document.querySelector('#class-assign-select-all');
+el.classAssignClear = document.querySelector('#class-assign-clear');
+el.classAssignList = document.querySelector('#class-assign-list');
+el.classAssignEmpty = document.querySelector('#class-assign-empty');
+el.classAssignResult = document.querySelector('#class-assign-result');
+el.classAssignCount = document.querySelector('#class-assign-count');
+el.classMembersDialog = document.querySelector('#class-members-dialog');
 
 el.bugReportSearch = document.querySelector('#bug-report-search');
 el.bugReportStatusFilter = document.querySelector('#bug-report-status-filter');
@@ -616,12 +636,15 @@ function renderClasses() {
     const status = document.createElement('td'); const pill = document.createElement('span'); pill.className = `class-status ${item.isActive ? '' : 'is-inactive'}`; pill.textContent = item.isActive ? '启用' : '停用'; status.append(pill);
     const note = document.createElement('td'); note.className = 'class-description-cell'; note.textContent = item.description || '--';
     const actions = document.createElement('td'); actions.className = 'table-actions';
-    actions.append(actionButton('users', '查看成员', '', () => loadClassMembers(item)), actionButton('pencil', '编辑班级', '', () => openClassEdit(item)), actionButton(item.isActive ? 'pause' : 'play', item.isActive ? '停用班级' : '启用班级', item.isActive ? 'is-danger' : '', () => toggleClass(item)));
+    actions.append(
+      actionButton('user-plus', '添加学生', '', () => openClassAssign(item)),
+      actionButton('users', '查看成员', '', () => loadClassMembers(item)),
+      actionButton('pencil', '编辑班级', '', () => openClassEdit(item)),
+      actionButton(item.isActive ? 'pause' : 'play', item.isActive ? '停用班级' : '启用班级', item.isActive ? 'is-danger' : '', () => toggleClass(item))
+    );
     row.append(title, term, count, status, note, actions);
     return row;
   }));
-  const activeClasses = rows.filter((item) => item.isActive);
-  el.classTarget.replaceChildren(...(activeClasses.length ? activeClasses.map((item) => { const option = document.createElement('option'); option.value = item.id; option.textContent = item.term ? `${item.name} · ${item.term}` : item.name; return option; }) : [Object.assign(document.createElement('option'), { textContent: '请先创建并启用班级', disabled: true })]));
   window.lucide?.createIcons();
 }
 
@@ -650,10 +673,9 @@ async function loadClasses(page = pagers.classes?.page || 1, unassignedPage = pa
     term: el.classTermFilter.value
   });
   const unassignedQuery = filterQuery({ page: unassignedPage, q: el.unassignedSearch.value.trim() });
-  const [classes, unassigned, allUnassigned] = await Promise.all([
+  const [classes, unassigned] = await Promise.all([
     api(`/api/admin/classes?${classQuery}`),
-    api(`/api/admin/classes/unassigned/students?${unassignedQuery}`),
-    api('/api/admin/classes/unassigned/students?all=true')
+    api(`/api/admin/classes/unassigned/students?${unassignedQuery}`)
   ]);
   adminState.classes = classes.rows || [];
   adminState.unassignedStudents = unassigned.rows || [];
@@ -662,7 +684,6 @@ async function loadClasses(page = pagers.classes?.page || 1, unassignedPage = pa
   pagers.classes?.render(classes);
   pagers.unassigned?.render(unassigned);
   renderClasses(); renderUnassignedStudents();
-  el.classStudents.replaceChildren(...(allUnassigned.rows || []).map((user) => { const option = document.createElement('option'); option.value = user.id; option.textContent = `${user.displayName}（${user.username}）`; return option; }));
 }
 
 // 学期下拉从现有班级里去重，不写死值。
@@ -685,7 +706,6 @@ async function loadClassMembers(item, page) {
     await loadClassOverview(item);
     adminState.classMembersClassId = item.id; adminState.classMembersPage = data.page; adminState.classMembersPages = data.pages; adminState.classMembersPageSize = data.pageSize; adminState.classMembersTotal = data.total;
     el.classMembersTitle.textContent = `${data.class.name} · 成员`;
-    el.classMembersPanel.hidden = false;
     el.classMembersEmpty.hidden = data.rows.length > 0;
     pagers.classMembers?.render(data);
     el.classMembersTable.replaceChildren(...data.rows.map((member) => {
@@ -700,7 +720,7 @@ async function loadClassMembers(item, page) {
       return row;
     }));
     window.lucide?.createIcons();
-    el.classMembersPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!el.classMembersDialog.open) el.classMembersDialog.showModal();
   } catch (error) { toast(error.message, true); }
 }
 
@@ -752,14 +772,24 @@ async function removeClassMember(item, member) {
 
 function resetClassForm() {
   el.classForm.reset(); el.classId.value = '';
+  el.classDialogTitle.textContent = '新建班级';
   el.classSubmit.innerHTML = '<i data-lucide="plus"></i><span>创建班级</span>';
-  el.classCancelEdit.hidden = true; window.lucide?.createIcons();
+  window.lucide?.createIcons();
+}
+
+function openClassCreate() {
+  resetClassForm();
+  el.classDialog.showModal();
+  el.className.focus();
 }
 
 function openClassEdit(item) {
+  resetClassForm();
   el.classId.value = item.id; el.className.value = item.name || ''; el.classTerm.value = item.term || ''; el.classDescription.value = item.description || '';
-  el.classSubmit.innerHTML = '<i data-lucide="save"></i><span>保存修改</span>'; el.classCancelEdit.hidden = false;
-  el.classForm.scrollIntoView({ behavior: 'smooth', block: 'start' }); window.lucide?.createIcons();
+  el.classDialogTitle.textContent = '编辑班级';
+  el.classSubmit.innerHTML = '<i data-lucide="save"></i><span>保存修改</span>';
+  el.classDialog.showModal();
+  window.lucide?.createIcons();
 }
 
 async function saveClass(event) {
@@ -767,7 +797,10 @@ async function saveClass(event) {
   const id = el.classId.value;
   try {
     await api(id ? `/api/admin/classes/${id}` : '/api/admin/classes', { method: id ? 'PUT' : 'POST', body: JSON.stringify({ name: el.className.value, term: el.classTerm.value, description: el.classDescription.value }) });
-    resetClassForm(); toast(id ? '班级已更新' : '班级已创建'); await loadClasses();
+    resetClassForm();
+    el.classDialog.close();
+    toast(id ? '班级已更新' : '班级已创建');
+    await Promise.all([loadClasses(), loadClassTermOptions()]);
   } catch (error) { toast(error.message, true); }
 }
 
@@ -776,13 +809,91 @@ async function toggleClass(item) {
   catch (error) { toast(error.message, true); }
 }
 
-async function assignStudents(event) {
-  event.preventDefault();
-  const classId = el.classTarget.value;
-  const studentIds = [...el.classStudents.selectedOptions].map((option) => Number(option.value));
-  if (!classId || !studentIds.length) { toast('请选择班级和至少一名学生', true); return; }
-  try { const result = await api(`/api/admin/classes/${classId}/members`, { method: 'POST', body: JSON.stringify({ studentIds }) }); toast(`已将 ${result.assigned} 名学生加入班级`); el.classStudents.selectedIndex = -1; await loadClasses(); }
-  catch (error) { toast(error.message, true); }
+// ------------------------------------------------------------ 分班弹框
+//
+// 在班级行上点「添加学生」→ 弹框里用复选框勾人，支持搜索、全选、切换「只看未分班 / 全部学生」。
+
+let classAssignTarget = null;
+let classAssignCandidates = [];
+const classAssignSelection = new Set();
+
+async function loadClassAssignCandidates() {
+  if (!classAssignTarget) return;
+  const query = filterQuery({ q: el.classAssignSearch.value.trim(), scope: el.classAssignScope.value });
+  try {
+    const data = await api(`/api/admin/classes/${classAssignTarget.id}/candidates?${query}`);
+    classAssignCandidates = data.rows || [];
+    // 换搜索词后把已经不可见的勾选清掉，避免"看不见却还在提交"
+    const visible = new Set(classAssignCandidates.map((row) => row.id));
+    for (const id of [...classAssignSelection]) if (!visible.has(id)) classAssignSelection.delete(id);
+    renderClassAssignList();
+  } catch (error) { toast(error.message, true); }
+}
+
+function renderClassAssignList() {
+  el.classAssignList.replaceChildren(...classAssignCandidates.map((student) => {
+    const row = document.createElement('label');
+    row.className = 'class-assign-item';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = String(student.id);
+    box.checked = classAssignSelection.has(student.id);
+    box.addEventListener('change', () => {
+      if (box.checked) classAssignSelection.add(student.id);
+      else classAssignSelection.delete(student.id);
+      updateClassAssignCount();
+    });
+    const name = document.createElement('strong'); name.textContent = student.displayName;
+    const meta = document.createElement('small'); meta.textContent = `@${student.username}`;
+    row.append(box, name, meta);
+    if (student.className) {
+      const tag = document.createElement('span'); tag.className = 'class-assign-tag'; tag.textContent = `现在 ${student.className}`;
+      row.append(tag);
+    }
+    return row;
+  }));
+  el.classAssignEmpty.hidden = classAssignCandidates.length > 0;
+  updateClassAssignCount();
+}
+
+function updateClassAssignCount() {
+  el.classAssignCount.textContent = `已选 ${classAssignSelection.size} 人`;
+}
+
+function openClassAssign(item) {
+  classAssignTarget = item;
+  classAssignCandidates = [];
+  classAssignSelection.clear();
+  el.classAssignSearch.value = '';
+  el.classAssignScope.value = 'unassigned';
+  el.classAssignResult.textContent = '';
+  el.classAssignResult.classList.remove('is-error');
+  el.classAssignTitle.textContent = `加入「${item.name}」`;
+  el.classAssignList.replaceChildren();
+  el.classAssignCount.textContent = '已选 0 人';
+  el.classAssignDialog.showModal();
+  window.lucide?.createIcons();
+  loadClassAssignCandidates();
+}
+
+async function submitClassAssign() {
+  if (!classAssignTarget || !classAssignSelection.size) { toast('请至少勾选一名学生', true); return; }
+  el.submitClassAssign.disabled = true;
+  try {
+    const result = await api(`/api/admin/classes/${classAssignTarget.id}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ studentIds: [...classAssignSelection] })
+    });
+    toast(`已将 ${result.assigned} 名学生加入班级`);
+    el.classAssignDialog.close();
+    await loadClasses();
+  } catch (error) {
+    el.classAssignResult.textContent = error.message;
+    el.classAssignResult.classList.add('is-error');
+    toast(error.message, true);
+  } finally {
+    el.submitClassAssign.disabled = false;
+  }
 }
 
 function svgNode(name, attributes = {}) {
@@ -1630,9 +1741,23 @@ el.studentImportPasteSubmit.addEventListener('click', async () => {
 });
 el.refreshClasses.addEventListener('click', () => loadClasses(1, 1));
 el.classForm.addEventListener('submit', saveClass);
-el.classCancelEdit.addEventListener('click', resetClassForm);
-el.classAssignForm.addEventListener('submit', assignStudents);
-el.closeClassMembers.addEventListener('click', () => { el.classMembersPanel.hidden = true; });
+el.classCreateOpen.addEventListener('click', openClassCreate);
+el.closeClassDialog.addEventListener('click', () => { resetClassForm(); el.classDialog.close(); });
+el.cancelClassDialog.addEventListener('click', () => { resetClassForm(); el.classDialog.close(); });
+el.closeClassAssign.addEventListener('click', () => el.classAssignDialog.close());
+el.cancelClassAssign.addEventListener('click', () => el.classAssignDialog.close());
+el.submitClassAssign.addEventListener('click', submitClassAssign);
+el.classAssignSearch.addEventListener('input', debounce(loadClassAssignCandidates));
+el.classAssignScope.addEventListener('change', loadClassAssignCandidates);
+el.classAssignSelectAll.addEventListener('click', () => {
+  for (const row of classAssignCandidates) classAssignSelection.add(row.id);
+  renderClassAssignList();
+});
+el.classAssignClear.addEventListener('click', () => {
+  classAssignSelection.clear();
+  renderClassAssignList();
+});
+el.closeClassMembers.addEventListener('click', () => el.classMembersDialog.close());
 el.progressSearch.addEventListener('input', debounce(() => loadProgress(1)));
 el.refreshProgress.addEventListener('click', () => loadProgress(1));
 el.closeProgressDialog.addEventListener('click', () => el.progressDialog.close());
