@@ -253,12 +253,33 @@
       <section class="admin-view" id="view-competitions" hidden>
         <header class="view-heading">
           <div><p class="eyebrow">赛事主持</p><h1>现场打字比赛</h1><p>个人赛按中文或英文同题限时比速度；团队赛使用阵营占领，由裁判统一开赛。</p></div>
-          <button class="secondary-button" id="refresh-competitions" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+          <div class="view-heading-actions">
+            <button class="primary-button" id="competition-open" type="button"><i data-lucide="plus"></i><span>创建赛事</span></button>
+            <button class="secondary-button" id="refresh-competitions" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+          </div>
         </header>
-        <div class="competition-workspace">
-          <section class="admin-section competition-setup">
-            <header class="competition-panel-heading"><span class="competition-panel-icon"><i data-lucide="keyboard"></i></span><div><h2>个人打字赛</h2><p>中文 / 英文 · 同题限时，比打字速度</p></div></header>
+        <section class="admin-section competition-bar">
+          <div class="competition-bar-main">
+            <span class="competition-panel-icon"><i data-lucide="flag"></i></span>
+            <div>
+              <strong>团队阵营赛</strong>
+              <p id="battle-competition-summary" class="competition-room-summary">选手选好红蓝阵营后，裁判再开始。</p>
+            </div>
+          </div>
+          <div class="competition-bar-side">
+            <span id="battle-competition-status" class="competition-room-status">读取中</span>
+            <button class="secondary-button" id="battle-console-open" type="button"><i data-lucide="settings-2"></i><span>打开控制台</span></button>
+          </div>
+        </section>
+
+        <dialog class="competition-dialog" id="competition-dialog">
+          <button class="dialog-close" id="close-competition" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+          <div class="competition-dialog-head">
+            <p class="eyebrow">赛事主持</p>
+            <h2>创建个人打字赛</h2>
+            <p>中文 / 英文 · 同题限时，比打字速度。创建后在「赛事管理」里开启检录。</p>
             <ol class="competition-steps" aria-label="个人赛流程"><li><b>1</b> 创建赛事</li><li><b>2</b> 开启检录</li><li><b>3</b> 裁判开赛</li></ol>
+          </div>
           <form id="competition-form" class="form-grid">
             <label class="competition-name-field"><span>赛事名称</span><input id="competition-name-input" type="text" maxlength="40" required placeholder="例如：25级中文打字个人赛"></label>
             <label><span>比赛语言</span><select id="competition-mode-input"><option value="speed-zh">中文打字</option><option value="speed-en">英文打字</option></select></label>
@@ -279,11 +300,17 @@
               </div>
               <div class="competition-pool-list" id="competition-pool-list" role="group" aria-label="可选文章"></div>
             </details>
-            <div class="form-actions"><p>创建后在下方开启检录，等学生到齐再开始。</p><button class="primary-button" type="submit"><i data-lucide="plus"></i><span>创建个人赛</span></button></div>
+            <div class="form-actions"><p>创建后在「赛事管理」里开启检录，等学生到齐再开始。</p><div class="form-actions-buttons"><button class="secondary-button" id="cancel-competition" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="plus"></i><span>创建个人赛</span></button></div></div>
           </form>
-          </section>
-          <section class="admin-section competition-team-panel">
-            <header class="competition-panel-heading"><span class="competition-panel-icon"><i data-lucide="flag"></i></span><div><h2>团队阵营赛</h2><p>红蓝对抗 · 时间结束，占领更多的一方获胜</p></div><span id="battle-competition-status" class="competition-room-status">读取中</span></header>
+        </dialog>
+
+        <dialog class="battle-console-dialog" id="battle-console-dialog">
+          <button class="dialog-close" id="close-battle-console" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+          <div class="battle-console-head">
+            <p class="eyebrow">红蓝对抗</p>
+            <h2>团队阵营赛控制台</h2>
+            <p>时间结束，占领更多的一方获胜。学生从首页「打字比赛 → 团队阵营赛」加入。</p>
+          </div>
             <div class="competition-referee-controls">
               <div class="competition-room-config"><label><span>每局时长</span><select id="battle-competition-duration"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option></select></label><button class="secondary-button" id="battle-competition-prepare" type="button"><i data-lucide="plus"></i>新建比赛房间</button></div>
               <details class="competition-pool" id="battle-pool">
@@ -296,12 +323,10 @@
                 <div class="competition-pool-list" id="battle-pool-list" role="group" aria-label="团队赛可选文章"></div>
               </details>
               <div id="battle-competition-roster" class="competition-team-roster" aria-live="polite">正在读取阵营名单…</div>
-              <p id="battle-competition-summary" class="competition-room-summary">选手选好红蓝阵营后，裁判再开始。</p>
               <div class="competition-room-actions"><button class="primary-button" id="battle-competition-start" type="button"><i data-lucide="play"></i>裁判开始本局</button><a class="secondary-button" href="/#battle-competition" target="_blank" rel="noopener"><i data-lucide="monitor-up"></i>投影战况</a></div>
               <p class="competition-room-help">学生从首页「打字比赛 → 团队阵营赛」加入，双方有人后即可开赛。</p>
             </div>
-          </section>
-        </div>
+        </dialog>
         <section class="admin-section table-section">
           <div class="table-toolbar"><div><strong>赛事管理</strong><p class="competition-list-hint">开启检录、统一开赛，结束后可导出成绩。</p></div><span id="competition-count">共 0 场</span></div>
           <div class="table-filters">

@@ -279,13 +279,8 @@ tbody tr:hover { background: #f8faf6; }
 #view-competitions { --competition-muted: #65746c; }
 #view-competitions .view-heading h1 { font-family: "Microsoft YaHei", system-ui, sans-serif; font-size: 30px; font-weight: 750; letter-spacing: -.8px; }
 #view-competitions .view-heading > div > p:last-child { font-size: 13px; line-height: 1.7; }
-.competition-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); gap: 22px; margin-bottom: 26px; }
-.competition-workspace > .admin-section { margin: 0; min-width: 0; box-shadow: 0 6px 22px #19372906; border-radius: 12px; }
-.competition-panel-heading { display: flex; align-items: center; gap: 12px; min-height: 96px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
 .competition-panel-icon { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px; background: #edf5ef; color: #167149; }
 .competition-panel-icon svg { width: 22px; height: 22px; }
-.competition-panel-heading h2 { margin: 0 0 5px; font-size: 18px; line-height: 1.3; }
-.competition-panel-heading p { margin: 0; color: var(--competition-muted); font-size: 12px; line-height: 1.6; }
 .competition-steps { display: flex; align-items: center; justify-content: space-between; list-style: none; margin: 22px 24px 0; padding: 12px; border-radius: 8px; background: #f4f7f3; }
 .competition-steps li { display: flex; align-items: center; gap: 7px; color: #51635a; font-size: 12px; }
 .competition-steps b { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #d8e4d9; border-radius: 50%; color: #24744e; background: #fff; font-size: 11px; }
@@ -326,7 +321,6 @@ tbody tr:hover { background: #f8faf6; }
 #competition-table .table-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; min-height: 34px; height: auto; margin: 3px 0 3px 6px; padding: 7px 10px; color: #3b5d49; font-size: 12px; text-decoration: none; }
 #competition-table .article-cell strong { font-size: 13px; }
 .competition-actions-heading { text-align: right; }
-@media (max-width: 1200px) { .competition-workspace { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { #view-competitions .view-heading h1 { font-size: 25px; } .competition-panel-heading { padding: 18px 16px; gap: 9px; flex-wrap: wrap; } .competition-panel-heading p { font-size: 11px; } .competition-room-status { margin-left: 0; } #competition-form { padding: 18px 16px; } .competition-referee-controls { padding: 18px 16px; } .competition-steps { margin: 18px 16px 0; padding: 10px 8px; } .competition-steps li { gap: 4px; font-size: 11px; } .competition-room-config { flex-wrap: wrap; } .competition-room-config label { min-width: 100px; } .competition-team-roster { gap: 8px; } .competition-side { padding: 12px; } }
 #view-competitions .view-heading > button { flex-shrink: 0; white-space: nowrap; }
 
@@ -492,3 +486,21 @@ tbody tr:hover { background: #f8faf6; }
 .assignment-dialog-head h2 { margin: 4px 0 0; font-family: SimSun, serif; font-size: 26px; }
 .assignment-dialog-intro { margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
 .assignment-dialog footer { display: flex; justify-content: flex-end; gap: 8px; grid-column: 1 / -1; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--line); }
+
+/* 团队阵营赛状态条：常驻显示红蓝人数与房间状态，详细操作在控制台弹框里 */
+.competition-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; padding: 16px 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 6px 22px #19372906; }
+.competition-bar-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.competition-bar-main strong { display: block; font-size: 15px; }
+.competition-bar-side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+/* 比赛：创建弹框与团队控制台弹框 */
+.competition-dialog, .battle-console-dialog { padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.competition-dialog { width: min(760px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.battle-console-dialog { width: min(680px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.competition-dialog::backdrop, .battle-console-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.competition-dialog .dialog-close, .battle-console-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.competition-dialog-head, .battle-console-head { margin-bottom: 18px; }
+.competition-dialog-head h2, .battle-console-head h2 { margin: 4px 0 0; font-family: SimSun, serif; font-size: 26px; }
+.competition-dialog-head > p, .battle-console-head > p { margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.competition-dialog-head .competition-steps { margin-top: 14px; }
+.form-actions-buttons { display: flex; gap: 8px; }

@@ -135,6 +135,14 @@ el.assignmentDialog = document.querySelector('#assignment-dialog');
 el.assignmentDialogTitle = document.querySelector('#assignment-dialog-title');
 el.closeAssignment = document.querySelector('#close-assignment');
 el.cancelAssignment = document.querySelector('#cancel-assignment');
+
+el.competitionOpen = document.querySelector('#competition-open');
+el.competitionDialog = document.querySelector('#competition-dialog');
+el.closeCompetition = document.querySelector('#close-competition');
+el.cancelCompetition = document.querySelector('#cancel-competition');
+el.battleConsoleOpen = document.querySelector('#battle-console-open');
+el.battleConsoleDialog = document.querySelector('#battle-console-dialog');
+el.closeBattleConsole = document.querySelector('#close-battle-console');
 // 学习进步表的排序状态：默认按速度变化降序，与改造前的固定排序一致。
 adminState.progressSort = { key: 'speedChange', order: 'desc' };
 
@@ -1322,6 +1330,7 @@ async function saveCompetition(event) {
     updateCompetitionModeFields();
     competitionPoolSelection().clear();
     renderCompetitionPool();
+    el.competitionDialog.close();
     toast('赛事已创建');
     await loadCompetitions();
   } catch (error) { toast(error.message, true); }
@@ -1835,6 +1844,18 @@ el.closePassagePreview.addEventListener('click', () => el.passagePreviewDialog.c
 el.cancelPassagePreview.addEventListener('click', () => el.passagePreviewDialog.close());
 el.competitionSeries.addEventListener('change', updateCompetitionModeFields);
 el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetitions(1), loadBattleCompetition()]));
+el.competitionOpen.addEventListener('click', () => {
+  updateCompetitionModeFields();
+  el.competitionDialog.showModal();
+  window.lucide?.createIcons();
+});
+el.closeCompetition.addEventListener('click', () => el.competitionDialog.close());
+el.cancelCompetition.addEventListener('click', () => el.competitionDialog.close());
+el.battleConsoleOpen.addEventListener('click', () => {
+  el.battleConsoleDialog.showModal();
+  window.lucide?.createIcons();
+});
+el.closeBattleConsole.addEventListener('click', () => el.battleConsoleDialog.close());
 el.refreshAssignments.addEventListener('click', () => loadAssignments(1));
 el.assignmentForm.addEventListener('submit', saveAssignment);
 el.assignmentAudience.addEventListener('change', () => setAssignmentAudience(el.assignmentAudience.value));
