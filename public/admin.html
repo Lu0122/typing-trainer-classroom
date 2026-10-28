@@ -232,25 +232,11 @@
       <section class="admin-view" id="view-assignments" hidden>
         <header class="view-heading">
           <div><p class="eyebrow">教学闭环 · 1.1</p><h1>教学任务</h1><p>可面向全体或指定学生布置任务，完成记录会自动关联训练结果。</p></div>
-          <button class="secondary-button" id="refresh-assignments" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+          <div class="view-heading-actions">
+            <button class="primary-button" id="assignment-open" type="button"><i data-lucide="plus"></i><span>发布任务</span></button>
+            <button class="secondary-button" id="refresh-assignments" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button>
+          </div>
         </header>
-        <section class="admin-section assignment-create-section">
-          <header><div><h2>新建任务</h2><p>设置课程、目标和截止时间，学生完成对应练习后自动更新状态。</p></div></header>
-          <form id="assignment-form" class="form-grid assignment-form">
-            <input id="assignment-id-input" type="hidden">
-            <label><span>任务名称</span><input id="assignment-title-input" type="text" maxlength="80" required placeholder="例如：第一周键位基础训练"></label>
-            <label><span>课程类型</span><select id="assignment-mode-input"><option value="all">所有课程</option><option value="beginner">新手入门</option><option value="english-word">英文单词</option><option value="english-phrase">英文语句</option><option value="english-article">英文文章</option><option value="pinyin-syllable">拼音音节</option><option value="pinyin-word">拼音词组</option><option value="pinyin-article">拼音文章</option></select></label>
-            <label><span>指定练习（可选）</span><input id="assignment-lesson-input" type="text" maxlength="80" placeholder="留空表示该类型任意练习"></label>
-            <label><span>任务对象</span><select id="assignment-audience-input"><option value="all">全部已启用学生</option><option value="class">指定班级</option><option value="selected">指定学生</option></select></label>
-            <label id="assignment-class-field" class="assignment-class-field"><span>选择班级</span><select id="assignment-class-input"></select></label>
-            <label id="assignment-students-field" class="assignment-students-field"><span>选择学生（可多选）</span><select id="assignment-students-input" multiple size="5"></select></label>
-            <label><span>目标准确率（可选）</span><input id="assignment-accuracy-input" type="number" min="0" max="100" step="1" placeholder="例如 90"></label>
-            <label><span>目标速度（可选）</span><input id="assignment-speed-input" type="number" min="0" max="1000" step="1" placeholder="字 / 分"></label>
-            <label><span>截止时间（可选）</span><input id="assignment-due-input" type="datetime-local"></label>
-            <label class="content-field"><span>任务说明</span><textarea id="assignment-description-input" rows="3" maxlength="300" placeholder="告诉学生本次练习的重点"></textarea></label>
-            <footer><button class="secondary-button" id="assignment-cancel-edit" type="button" hidden>取消编辑</button><button class="primary-button" id="assignment-submit" type="submit"><i data-lucide="plus"></i><span>发布任务</span></button></footer>
-          </form>
-        </section>
         <section class="admin-section table-section">
           <div class="table-toolbar"><strong>任务列表</strong><span id="assignment-count">共 0 个</span></div>
           <div class="table-filters">
@@ -564,6 +550,32 @@
     <div class="table-scroll"><table><thead><tr><th>学生</th><th>加入时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="class-members-table"></tbody></table></div>
     <p class="table-empty" id="class-members-empty" hidden>这个班级暂时没有成员。</p>
     <div class="pagination" id="class-members-pagination" hidden><button class="icon-button" id="class-members-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="class-members-page-label">第 1 / 1 页</span><button class="icon-button" id="class-members-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+  </dialog>
+
+  <dialog class="assignment-dialog" id="assignment-dialog">
+    <button class="dialog-close" id="close-assignment" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <div class="assignment-dialog-head">
+      <p class="eyebrow">教学闭环</p>
+      <h2 id="assignment-dialog-title">发布任务</h2>
+      <p class="assignment-dialog-intro">设置课程、目标和截止时间，学生完成对应练习后自动更新状态。</p>
+    </div>
+    <form id="assignment-form" class="form-grid assignment-form">
+      <input id="assignment-id-input" type="hidden">
+      <label><span>任务名称</span><input id="assignment-title-input" type="text" maxlength="80" required placeholder="例如：第一周键位基础训练"></label>
+      <label><span>课程类型</span><select id="assignment-mode-input"><option value="all">所有课程</option><option value="beginner">新手入门</option><option value="english-word">英文单词</option><option value="english-phrase">英文语句</option><option value="english-article">英文文章</option><option value="pinyin-syllable">拼音音节</option><option value="pinyin-word">拼音词组</option><option value="pinyin-article">拼音文章</option></select></label>
+      <label><span>指定练习（可选）</span><input id="assignment-lesson-input" type="text" maxlength="80" placeholder="留空表示该类型任意练习"></label>
+      <label><span>任务对象</span><select id="assignment-audience-input"><option value="all">全部已启用学生</option><option value="class">指定班级</option><option value="selected">指定学生</option></select></label>
+      <label id="assignment-class-field" class="assignment-class-field"><span>选择班级</span><select id="assignment-class-input"></select></label>
+      <label id="assignment-students-field" class="assignment-students-field"><span>选择学生（可多选）</span><select id="assignment-students-input" multiple size="5"></select></label>
+      <label><span>目标准确率（可选）</span><input id="assignment-accuracy-input" type="number" min="0" max="100" step="1" placeholder="例如 90"></label>
+      <label><span>目标速度（可选）</span><input id="assignment-speed-input" type="number" min="0" max="1000" step="1" placeholder="字 / 分"></label>
+      <label><span>截止时间（可选）</span><input id="assignment-due-input" type="datetime-local"></label>
+      <label class="content-field"><span>任务说明</span><textarea id="assignment-description-input" rows="3" maxlength="300" placeholder="告诉学生本次练习的重点"></textarea></label>
+      <footer>
+        <button class="secondary-button" id="cancel-assignment" type="button">取消</button>
+        <button class="primary-button" id="assignment-submit" type="submit"><i data-lucide="plus"></i><span>发布任务</span></button>
+      </footer>
+    </form>
   </dialog>
 
   <div class="toast" id="admin-toast" role="status" aria-live="polite"></div>

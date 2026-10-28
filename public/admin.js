@@ -15,7 +15,7 @@ const el = {
   studentImportText: document.querySelector('#student-import-text'), studentImportSubmit: document.querySelector('#student-import-submit'), studentImportResult: document.querySelector('#student-import-result'),
   progressSearch: document.querySelector('#progress-search'), progressCount: document.querySelector('#progress-count'), progressTable: document.querySelector('#progress-table'), progressEmpty: document.querySelector('#progress-empty'), refreshProgress: document.querySelector('#refresh-progress'), progressPagination: document.querySelector('#progress-pagination'), progressPageLabel: document.querySelector('#progress-page-label'), progressPreviousPage: document.querySelector('#progress-previous-page'), progressNextPage: document.querySelector('#progress-next-page'),
   progressMonitored: document.querySelector('#progress-monitored'), progressImproving: document.querySelector('#progress-improving'), progressSpeedChange: document.querySelector('#progress-speed-change'), progressWeekSessions: document.querySelector('#progress-week-sessions'),
-  assignments: document.querySelector('#assignment-table'), assignmentCount: document.querySelector('#assignment-count'), assignmentEmpty: document.querySelector('#assignment-empty'), assignmentPagination: document.querySelector('#assignment-pagination'), assignmentPageLabel: document.querySelector('#assignment-page-label'), assignmentPreviousPage: document.querySelector('#assignment-previous-page'), assignmentNextPage: document.querySelector('#assignment-next-page'), refreshAssignments: document.querySelector('#refresh-assignments'), assignmentForm: document.querySelector('#assignment-form'), assignmentId: document.querySelector('#assignment-id-input'), assignmentTitle: document.querySelector('#assignment-title-input'), assignmentMode: document.querySelector('#assignment-mode-input'), assignmentLesson: document.querySelector('#assignment-lesson-input'), assignmentAudience: document.querySelector('#assignment-audience-input'), assignmentClassField: document.querySelector('#assignment-class-field'), assignmentClass: document.querySelector('#assignment-class-input'), assignmentStudentsField: document.querySelector('#assignment-students-field'), assignmentStudents: document.querySelector('#assignment-students-input'), assignmentAccuracy: document.querySelector('#assignment-accuracy-input'), assignmentSpeed: document.querySelector('#assignment-speed-input'), assignmentDue: document.querySelector('#assignment-due-input'), assignmentDescription: document.querySelector('#assignment-description-input'), assignmentSubmit: document.querySelector('#assignment-submit'), assignmentCancelEdit: document.querySelector('#assignment-cancel-edit'),
+  assignments: document.querySelector('#assignment-table'), assignmentCount: document.querySelector('#assignment-count'), assignmentEmpty: document.querySelector('#assignment-empty'), assignmentPagination: document.querySelector('#assignment-pagination'), assignmentPageLabel: document.querySelector('#assignment-page-label'), assignmentPreviousPage: document.querySelector('#assignment-previous-page'), assignmentNextPage: document.querySelector('#assignment-next-page'), refreshAssignments: document.querySelector('#refresh-assignments'), assignmentForm: document.querySelector('#assignment-form'), assignmentId: document.querySelector('#assignment-id-input'), assignmentTitle: document.querySelector('#assignment-title-input'), assignmentMode: document.querySelector('#assignment-mode-input'), assignmentLesson: document.querySelector('#assignment-lesson-input'), assignmentAudience: document.querySelector('#assignment-audience-input'), assignmentClassField: document.querySelector('#assignment-class-field'), assignmentClass: document.querySelector('#assignment-class-input'), assignmentStudentsField: document.querySelector('#assignment-students-field'), assignmentStudents: document.querySelector('#assignment-students-input'), assignmentAccuracy: document.querySelector('#assignment-accuracy-input'), assignmentSpeed: document.querySelector('#assignment-speed-input'), assignmentDue: document.querySelector('#assignment-due-input'), assignmentDescription: document.querySelector('#assignment-description-input'), assignmentSubmit: document.querySelector('#assignment-submit'),
   classes: document.querySelector('#class-table'), classCount: document.querySelector('#class-count'), classEmpty: document.querySelector('#class-empty'), classPagination: document.querySelector('#class-pagination'), classPageLabel: document.querySelector('#class-page-label'), classPreviousPage: document.querySelector('#class-previous-page'), classNextPage: document.querySelector('#class-next-page'), refreshClasses: document.querySelector('#refresh-classes'), classForm: document.querySelector('#class-form'), classId: document.querySelector('#class-id-input'), className: document.querySelector('#class-name-input'), classTerm: document.querySelector('#class-term-input'), classDescription: document.querySelector('#class-description-input'), classSubmit: document.querySelector('#class-submit'), classMembersTitle: document.querySelector('#class-members-title'), classMembersTable: document.querySelector('#class-members-table'), classMembersEmpty: document.querySelector('#class-members-empty'), classMembersPagination: document.querySelector('#class-members-pagination'), classMembersPageLabel: document.querySelector('#class-members-page-label'), classMembersPreviousPage: document.querySelector('#class-members-previous-page'), classMembersNextPage: document.querySelector('#class-members-next-page'), classOverviewContent: document.querySelector('#class-overview-content'), classMetricMembers: document.querySelector('#class-metric-members'), classMetricActive: document.querySelector('#class-metric-active'), classMetricSessions: document.querySelector('#class-metric-sessions'), classMetricMinutes: document.querySelector('#class-metric-minutes'), classMetricSpeed: document.querySelector('#class-metric-speed'), classMetricAccuracy: document.querySelector('#class-metric-accuracy'), classOverviewTasks: document.querySelector('#class-overview-tasks'), classOverviewTasksEmpty: document.querySelector('#class-overview-tasks-empty'), classOverviewRisks: document.querySelector('#class-overview-risks'), classOverviewRisksEmpty: document.querySelector('#class-overview-risks-empty'), classOverviewRanking: document.querySelector('#class-overview-ranking'), classOverviewRankingEmpty: document.querySelector('#class-overview-ranking-empty'), closeClassMembers: document.querySelector('#close-class-members'), unassignedTable: document.querySelector('#unassigned-table'), unassignedCount: document.querySelector('#unassigned-count'), unassignedEmpty: document.querySelector('#unassigned-empty'), unassignedPagination: document.querySelector('#unassigned-pagination'), unassignedPageLabel: document.querySelector('#unassigned-page-label'), unassignedPreviousPage: document.querySelector('#unassigned-previous-page'), unassignedNextPage: document.querySelector('#unassigned-next-page'),
   scoreTable: document.querySelector('#score-table'), scoreCount: document.querySelector('#score-count'), scoreEmpty: document.querySelector('#score-empty'),
   scorePagination: document.querySelector('#score-pagination'), pageLabel: document.querySelector('#page-label'), previousPage: document.querySelector('#previous-page'), nextPage: document.querySelector('#next-page'), refreshScores: document.querySelector('#refresh-scores'),
@@ -130,6 +130,11 @@ el.classAssignCount = document.querySelector('#class-assign-count');
 el.classMembersDialog = document.querySelector('#class-members-dialog');
 
 el.progressClassFilter = document.querySelector('#progress-class-filter');
+el.assignmentOpen = document.querySelector('#assignment-open');
+el.assignmentDialog = document.querySelector('#assignment-dialog');
+el.assignmentDialogTitle = document.querySelector('#assignment-dialog-title');
+el.closeAssignment = document.querySelector('#close-assignment');
+el.cancelAssignment = document.querySelector('#cancel-assignment');
 // 学习进步表的排序状态：默认按速度变化降序，与改造前的固定排序一致。
 adminState.progressSort = { key: 'speedChange', order: 'desc' };
 
@@ -611,9 +616,15 @@ function resetAssignmentForm() {
   el.assignmentClass.value = '';
   [...el.assignmentStudents.options].forEach((option) => { option.selected = false; });
   setAssignmentAudience('all');
+  el.assignmentDialogTitle.textContent = '发布任务';
   el.assignmentSubmit.innerHTML = '<i data-lucide="plus"></i><span>发布任务</span>';
-  el.assignmentCancelEdit.hidden = true;
   window.lucide?.createIcons();
+}
+
+function openAssignmentCreate() {
+  resetAssignmentForm();
+  el.assignmentDialog.showModal();
+  el.assignmentTitle.focus();
 }
 function openAssignmentEdit(item) {
   el.assignmentId.value = item.id;
@@ -629,9 +640,9 @@ function openAssignmentEdit(item) {
   const selectedIds = new Set((item.studentIds || []).map(Number));
   [...el.assignmentStudents.options].forEach((option) => { option.selected = selectedIds.has(Number(option.value)); });
   setAssignmentAudience(el.assignmentAudience.value);
+  el.assignmentDialogTitle.textContent = '编辑任务';
   el.assignmentSubmit.innerHTML = '<i data-lucide="save"></i><span>保存修改</span>';
-  el.assignmentCancelEdit.hidden = false;
-  el.assignmentForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.assignmentDialog.showModal();
   window.lucide?.createIcons();
 }
 async function saveAssignment(event) {
@@ -647,6 +658,7 @@ async function saveAssignment(event) {
       dueAt: dueValue
     }) });
     resetAssignmentForm();
+    el.assignmentDialog.close();
     toast(id ? '教学任务已更新' : '教学任务已发布');
     await loadAssignments();
   } catch (error) { toast(error.message, true); }
@@ -1826,7 +1838,9 @@ el.refreshCompetitions.addEventListener('click', () => Promise.all([loadCompetit
 el.refreshAssignments.addEventListener('click', () => loadAssignments(1));
 el.assignmentForm.addEventListener('submit', saveAssignment);
 el.assignmentAudience.addEventListener('change', () => setAssignmentAudience(el.assignmentAudience.value));
-el.assignmentCancelEdit.addEventListener('click', resetAssignmentForm);
+el.assignmentOpen.addEventListener('click', openAssignmentCreate);
+el.closeAssignment.addEventListener('click', () => { resetAssignmentForm(); el.assignmentDialog.close(); });
+el.cancelAssignment.addEventListener('click', () => { resetAssignmentForm(); el.assignmentDialog.close(); });
 
 // 所有列表的分页控件在这里一次性接上；各页只提供 load(page)，翻页与按钮状态由 createPager 统一处理。
 pagers.passages = createPager({ pagination: el.passagePagination, label: el.passagePageLabel, previous: el.passagePreviousPage, next: el.passageNextPage, load: (page) => loadPassages(page) });

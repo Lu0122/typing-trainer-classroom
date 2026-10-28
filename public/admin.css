@@ -187,11 +187,7 @@ tbody tr:hover { background: #f8faf6; }
 .assignment-class-field.is-visible { display: block; }
 .assignment-students-field select { width: 100%; min-height: 112px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--paper); font-size: 12px; }
 .assignment-students-field option { padding: 5px 7px; }
-.assignment-create-section { margin-bottom: 18px; }
-.assignment-create-section > header { padding: 20px 22px 0; }
-.assignment-create-section > header h2 { margin: 0; font-family: SimSun, serif; font-size: 21px; }
-.assignment-create-section > header p { margin: 6px 0 0; color: var(--ink-soft); font-size: 11px; }
-.assignment-form { padding: 18px 22px 22px; }
+.assignment-form { padding: 0; }
 .assignment-form label > span { display: block; margin-bottom: 7px; color: var(--ink-soft); font-size: 11px; font-weight: 800; }
 .assignment-form input, .assignment-form select, .assignment-form textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--paper); font-size: 12px; }
 .assignment-form input, .assignment-form select { height: 40px; padding: 0 10px; }
@@ -487,3 +483,12 @@ tbody tr:hover { background: #f8faf6; }
 .sort-button:hover, .sort-button.is-active { color: var(--green-dark); }
 .sort-button.is-active::after { content: '↓'; font-size: 10px; }
 .sort-button.is-active[data-order="asc"]::after { content: '↑'; }
+
+/* 教学任务：发布/编辑弹框 */
+.assignment-dialog { width: min(820px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; padding: 30px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--surface); box-shadow: 0 30px 100px rgba(20, 30, 24, 0.28); }
+.assignment-dialog::backdrop { background: rgba(16, 24, 19, 0.55); backdrop-filter: blur(4px); }
+.assignment-dialog .dialog-close { position: absolute; top: 15px; right: 15px; }
+.assignment-dialog-head { margin-bottom: 20px; }
+.assignment-dialog-head h2 { margin: 4px 0 0; font-family: SimSun, serif; font-size: 26px; }
+.assignment-dialog-intro { margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.assignment-dialog footer { display: flex; justify-content: flex-end; gap: 8px; grid-column: 1 / -1; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--line); }
