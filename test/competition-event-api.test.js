@@ -338,3 +338,19 @@ test('paginates the admin competition list', async () => {
   assert.notEqual(second.body.rows[0].id, first.body.rows[0].id, '第二页不重复第一页');
   db.close();
 });
+
+test('filters the admin competition list by status, language and keyword', async () => {
+  const { app, db } = setup();
+  const admin = request.agent(app);
+  await admin.post('/api/admin/login').send({ password: 'test-pass' }).expect(200);
+  await admin.post('/api/competitions').send({ name: '中文初赛', mode: 'speed', config: { language: 'zh', roundMs: 60_000 } }).expect(200);
+  await admin.post('/api/competitions').send({ name: '英文初赛', mode: 'speed', config: { language: 'en', roundMs: 60_000 } }).expect(200);
+  const finished = await admin.post('/api/competitions').send({ name: '中文决赛', mode: 'speed', config: { language: 'zh', roundMs: 60_000 } }).expect(200);
+  await admin.post(`/api/competitions/${finished.body.id}/registration`).expect(200);
+
+  assert.equal((await admin.get('/api/competitions?status=registration').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/competitions?language=en').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/competitions?q=初赛').expect(200)).body.total, 2);
+  assert.equal((await admin.get('/api/competitions?language=zh&q=决赛').expect(200)).body.total, 1);
+  db.close();
+});

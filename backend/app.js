@@ -877,12 +877,21 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.get('/api/admin/admins', requireSuperAdmin, (request, response) => {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM admin_accounts').get().count;
+    const role = cleanText(request.query.role, 20);
+    const active = String(request.query.isActive ?? '');
+    const keyword = cleanText(request.query.q, 80);
+    const filters = [];
+    const params = [];
+    if (['superadmin', 'manager'].includes(role)) { filters.push('role = ?'); params.push(role); }
+    if (active === '1' || active === '0') { filters.push('is_active = ?'); params.push(Number(active)); }
+    if (keyword) { filters.push('(username LIKE ? OR display_name LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`); }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM admin_accounts ${where}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`SELECT id, username, display_name AS displayName, role,
       is_active AS isActive, created_at AS createdAt, last_login_at AS lastLoginAt
-      FROM admin_accounts ORDER BY created_at ASC LIMIT ? OFFSET ?`)
-      .all(pagination.pageSize, pagination.offset);
+      FROM admin_accounts ${where} ORDER BY created_at ASC LIMIT ? OFFSET ?`)
+      .all(...params, pagination.pageSize, pagination.offset);
     response.json({ rows, total, ...pagination });
   });
 
@@ -974,7 +983,16 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   }
 
   app.get('/api/admin/assignments', requireAdmin, (request, response) => {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM assignments').get().count;
+    const active = String(request.query.isActive ?? '');
+    const mode = cleanText(request.query.mode, 30);
+    const keyword = cleanText(request.query.q, 80);
+    const filters = [];
+    const params = [];
+    if (active === '1' || active === '0') { filters.push('assignments.is_active = ?'); params.push(Number(active)); }
+    if (mode && assignmentModes.has(mode)) { filters.push('assignments.mode = ?'); params.push(mode); }
+    if (keyword) { filters.push('(assignments.title LIKE ? OR assignments.description LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`); }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM assignments ${where}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT assignments.id, assignments.title, assignments.description,
@@ -989,10 +1007,11 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
       FROM assignments
       LEFT JOIN assignment_progress ON assignment_progress.assignment_id = assignments.id
       LEFT JOIN classes ON classes.id = assignments.class_id
+      ${where}
       GROUP BY assignments.id
       ORDER BY assignments.is_active DESC, assignments.due_at ASC, assignments.id DESC
       LIMIT ? OFFSET ?
-    `).all(pagination.pageSize, pagination.offset).map((row) => {
+    `).all(...params, pagination.pageSize, pagination.offset).map((row) => {
       let studentIds = [];
       try { studentIds = JSON.parse(row.studentIdsJson || '[]').map(Number).filter((id) => id > 0); } catch { studentIds = []; }
       const eligibleIds = row.audience === 'all'
@@ -1143,8 +1162,33 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     response.json({ ok: true });
   });
 
+  app.get('/api/admin/score-categories', requireAdmin, (request, response) => {
+    const rows = db.prepare('SELECT DISTINCT category FROM passages WHERE is_active = 1 ORDER BY category').all();
+    response.json({ categories: rows.map((row) => row.category) });
+  });
+
   app.get('/api/admin/scores', requireAdmin, (request, response) => {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM scores').get().count;
+    const range = String(request.query.range || '');
+    const keyword = cleanText(request.query.q, 80);
+    const category = cleanText(request.query.category, 40);
+    const filters = [];
+    const params = [];
+    // created_at 有 ISO 和 "YYYY-MM-DD HH:MM:SS" 两种写法，用 julianday 才能都解析。
+    if (range === 'today') filters.push("julianday(scores.created_at) >= julianday('now', 'start of day')");
+    else if (range === '7d') filters.push("julianday(scores.created_at) >= julianday('now', '-7 days')");
+    else if (range === '30d') filters.push("julianday(scores.created_at) >= julianday('now', '-30 days')");
+    if (keyword) {
+      filters.push('(COALESCE(users.display_name, scores.nickname) LIKE ? OR users.username LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    if (category) { filters.push('passages.category = ?'); params.push(category); }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const total = db.prepare(`
+      SELECT COUNT(*) AS count FROM scores
+      LEFT JOIN users ON users.id = scores.user_id
+      LEFT JOIN passages ON passages.id = scores.passage_id
+      ${where}
+    `).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT scores.id, COALESCE(users.display_name, scores.nickname) AS nickname, users.username,
@@ -1152,8 +1196,9 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
              scores.created_at AS createdAt, passages.title AS passageTitle
       FROM scores LEFT JOIN passages ON passages.id = scores.passage_id
       LEFT JOIN users ON users.id = scores.user_id
+      ${where}
       ORDER BY scores.created_at DESC LIMIT ? OFFSET ?
-    `).all(pagination.pageSize, pagination.offset);
+    `).all(...params, pagination.pageSize, pagination.offset);
     response.json({ rows, total, ...pagination });
   });
 
@@ -1254,7 +1299,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   }
 
   app.get('/api/admin/classes', requireAdmin, (request, response) => {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM classes').get().count;
+    // all=true 给下拉用，不分页也不套筛选（否则"选班级"下拉会跟着列表筛选一起变少）
     if (request.query.all === 'true') {
       const rows = db.prepare(`
         SELECT classes.id, classes.name, classes.term, classes.description,
@@ -1267,8 +1312,18 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
         GROUP BY classes.id
         ORDER BY classes.is_active DESC, classes.created_at DESC, classes.id DESC
       `).all().map((row) => ({ ...row, memberCount: Number(row.memberCount || 0) }));
-      return response.json({ rows, total, page: 1, pageSize: total, pages: 1 });
+      return response.json({ rows, total: rows.length, page: 1, pageSize: rows.length || 1, pages: 1 });
     }
+    const active = String(request.query.isActive ?? '');
+    const term = cleanText(request.query.term, 40);
+    const keyword = cleanText(request.query.q, 80);
+    const filters = [];
+    const params = [];
+    if (active === '1' || active === '0') { filters.push('classes.is_active = ?'); params.push(Number(active)); }
+    if (term) { filters.push('classes.term = ?'); params.push(term); }
+    if (keyword) { filters.push('(classes.name LIKE ? OR classes.description LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`); }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM classes ${where}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT classes.id, classes.name, classes.term, classes.description,
@@ -1278,10 +1333,11 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
       FROM classes
       LEFT JOIN class_members ON class_members.class_id = classes.id
       LEFT JOIN users ON users.id = class_members.user_id
+      ${where}
       GROUP BY classes.id
       ORDER BY classes.is_active DESC, classes.created_at DESC, classes.id DESC
       LIMIT ? OFFSET ?
-    `).all(pagination.pageSize, pagination.offset).map((row) => ({ ...row, memberCount: Number(row.memberCount || 0) }));
+    `).all(...params, pagination.pageSize, pagination.offset).map((row) => ({ ...row, memberCount: Number(row.memberCount || 0) }));
     response.json({ rows, total, ...pagination });
   });
 
@@ -1326,19 +1382,23 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     if (!Number.isInteger(classId) || classId <= 0) return response.status(400).json({ message: '班级参数不正确' });
     const classRow = db.prepare('SELECT id, name, term, description, is_active AS isActive FROM classes WHERE id = ?').get(classId);
     if (!classRow) return response.status(404).json({ message: '班级不存在' });
+    const keyword = cleanText(request.query.q, 80);
+    const keywordFilter = keyword ? ' AND (users.display_name LIKE ? OR users.username LIKE ?)' : '';
+    const keywordParams = keyword ? [`%${keyword}%`, `%${keyword}%`] : [];
     const total = db.prepare(`
       SELECT COUNT(*) AS count FROM class_members
-      WHERE class_id = ? AND left_at IS NULL
-    `).get(classId).count;
+      JOIN users ON users.id = class_members.user_id
+      WHERE class_members.class_id = ? AND class_members.left_at IS NULL${keywordFilter}
+    `).get(classId, ...keywordParams).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT users.id, users.username, users.display_name AS displayName,
              class_members.joined_at AS joinedAt
       FROM class_members JOIN users ON users.id = class_members.user_id
-      WHERE class_members.class_id = ? AND class_members.left_at IS NULL
+      WHERE class_members.class_id = ? AND class_members.left_at IS NULL${keywordFilter}
       ORDER BY users.display_name COLLATE NOCASE, users.id
       LIMIT ? OFFSET ?
-    `).all(classId, pagination.pageSize, pagination.offset);
+    `).all(classId, ...keywordParams, pagination.pageSize, pagination.offset);
     response.json({ class: classRow, rows, total, ...pagination });
   });
 

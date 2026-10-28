@@ -492,3 +492,62 @@ test('paginates the administrator list and clamps out-of-range pages', async () 
   assert.equal(beyond.body.rows.length, 6);
   context.db.close();
 });
+
+test('filters administrator, class and assignment lists', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+
+  const insertAdmin = context.db.prepare(`INSERT INTO admin_accounts
+    (username, display_name, password_hash, role, is_active, created_at) VALUES (?, ?, 'x', ?, ?, ?)`);
+  insertAdmin.run('manager1', '张老师', 'manager', 1, 1000);
+  insertAdmin.run('manager2', '李老师', 'manager', 0, 2000);
+  insertAdmin.run('boss', '王校长', 'superadmin', 1, 3000);
+
+  assert.equal((await admin.get('/api/admin/admins?role=manager').expect(200)).body.total, 2);
+  assert.equal((await admin.get('/api/admin/admins?role=manager&isActive=1').expect(200)).body.total, 1);
+  const byName = await admin.get('/api/admin/admins?q=王').expect(200);
+  assert.equal(byName.body.total, 1);
+  assert.equal(byName.body.rows[0].username, 'boss');
+
+  const insertClass = context.db.prepare(`INSERT INTO classes (name, term, description, is_active, created_at, updated_at)
+    VALUES (?, ?, '', ?, 1000, 1000)`);
+  insertClass.run('一班', '2026秋', 1);
+  insertClass.run('二班', '2026秋', 0);
+  insertClass.run('三班', '2025春', 1);
+  assert.equal((await admin.get('/api/admin/classes?isActive=1').expect(200)).body.total, 2);
+  assert.equal((await admin.get('/api/admin/classes?term=2025春').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/admin/classes?q=二班').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/admin/classes?all=true').expect(200)).body.rows.length, 3, '下拉用 all=true 不受筛选影响');
+
+  const insertAssignment = context.db.prepare(`INSERT INTO assignments
+    (title, description, mode, lesson_title, is_active, created_at, updated_at) VALUES (?, '', ?, '', ?, 1000, 1000)`);
+  insertAssignment.run('英文单词练习', 'english-word', 1);
+  insertAssignment.run('拼音文章练习', 'pinyin-article', 0);
+  assert.equal((await admin.get('/api/admin/assignments?isActive=0').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/admin/assignments?mode=pinyin-article').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/admin/assignments?q=英文').expect(200)).body.total, 1);
+  context.db.close();
+});
+
+test('filters scores by keyword, time range and passage category', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+
+  const insertUser = context.db.prepare("INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, 'x')");
+  const mingId = insertUser.run('u1', '小明').lastInsertRowid;
+  const hongId = insertUser.run('u2', '小红').lastInsertRowid;
+  const passage = context.db.prepare("SELECT id, category FROM passages WHERE is_active = 1 LIMIT 1").get();
+  const insertScore = context.db.prepare(`INSERT INTO scores (nickname, score, accuracy, wrong_chars, passage_id, created_at, user_id)
+    VALUES (?, ?, 95, 1, ?, ?, ?)`);
+  insertScore.run('小明', 60, passage.id, new Date().toISOString(), mingId);
+  insertScore.run('小红', 70, passage.id, new Date(Date.now() - 40 * 86_400_000).toISOString(), hongId);
+
+  assert.equal((await admin.get('/api/admin/scores?q=小明').expect(200)).body.total, 1);
+  assert.equal((await admin.get('/api/admin/scores?range=7d').expect(200)).body.total, 1, '只留 7 天内的记录');
+  assert.equal((await admin.get(`/api/admin/scores?category=${encodeURIComponent(passage.category)}`).expect(200)).body.total, 2);
+  const categories = await admin.get('/api/admin/score-categories').expect(200);
+  assert.ok(categories.body.categories.includes(passage.category));
+  context.db.close();
+});

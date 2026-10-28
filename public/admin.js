@@ -60,6 +60,24 @@ el.competitionPageLabel = document.querySelector('#competition-page-label');
 el.competitionPreviousPage = document.querySelector('#competition-previous-page');
 el.competitionNextPage = document.querySelector('#competition-next-page');
 
+el.adminAccountSearch = document.querySelector('#admin-account-search');
+el.adminAccountRoleFilter = document.querySelector('#admin-account-role-filter');
+el.adminAccountStatusFilter = document.querySelector('#admin-account-status-filter');
+el.classSearch = document.querySelector('#class-search');
+el.classStatusFilter = document.querySelector('#class-status-filter');
+el.classTermFilter = document.querySelector('#class-term-filter');
+el.classMembersSearch = document.querySelector('#class-members-search');
+el.unassignedSearch = document.querySelector('#unassigned-search');
+el.assignmentSearch = document.querySelector('#assignment-search');
+el.assignmentStatusFilter = document.querySelector('#assignment-status-filter');
+el.assignmentModeFilter = document.querySelector('#assignment-mode-filter');
+el.competitionSearch = document.querySelector('#competition-search');
+el.competitionStatusFilter = document.querySelector('#competition-status-filter');
+el.competitionLanguageFilter = document.querySelector('#competition-language-filter');
+el.scoreSearch = document.querySelector('#score-search');
+el.scoreRangeFilter = document.querySelector('#score-range-filter');
+el.scoreCategoryFilter = document.querySelector('#score-category-filter');
+
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   const body = await response.json().catch(() => ({}));
@@ -78,6 +96,15 @@ async function api(url, options = {}) {
 
 const pagers = {};
 
+// 只把有值的筛选条件拼进查询串，空字符串 = 不筛选。
+function filterQuery(pairs) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(pairs)) {
+    if (value !== '' && value !== null && value !== undefined) query.set(key, value);
+  }
+  return query;
+}
+
 function createPager({ pagination, label, previous, next, load }) {
   const pager = {
     page: 1,
@@ -89,7 +116,8 @@ function createPager({ pagination, label, previous, next, load }) {
       pager.pages = data.pages;
       pager.total = data.total;
       pager.pageSize = data.pageSize;
-      pagination.hidden = data.total <= data.pageSize;
+      // 始终显示：即使只有一页也让老师看到「第 1 / 1 页」，不会以为分页没生效。
+      pagination.hidden = false;
       label.textContent = `第 ${data.page} / ${data.pages} 页`;
       previous.disabled = data.page <= 1;
       next.disabled = data.page >= data.pages;
@@ -156,7 +184,13 @@ function renderAdminAccounts(rows) {
   window.lucide?.createIcons();
 }
 async function loadAdminAccounts(page = pagers.admins?.page || 1) {
-  const data = await api(`/api/admin/admins?page=${page}`);
+  const query = filterQuery({
+    page,
+    q: el.adminAccountSearch.value.trim(),
+    role: el.adminAccountRoleFilter.value,
+    isActive: el.adminAccountStatusFilter.value
+  });
+  const data = await api(`/api/admin/admins?${query}`);
   adminState.adminAccounts = data.rows || [];
   adminState.adminAccountsTotal = data.total;
   pagers.admins?.render(data);
@@ -399,7 +433,13 @@ function renderAssignments() {
   window.lucide?.createIcons();
 }
 async function loadAssignments(page = pagers.assignments?.page || 1) {
-  const data = await api(`/api/admin/assignments?page=${page}`);
+  const query = filterQuery({
+    page,
+    q: el.assignmentSearch.value.trim(),
+    isActive: el.assignmentStatusFilter.value,
+    mode: el.assignmentModeFilter.value
+  });
+  const data = await api(`/api/admin/assignments?${query}`);
   adminState.assignments = data.rows || [];
   adminState.assignmentPage = data.page; adminState.assignmentPages = data.pages; adminState.assignmentPageSize = data.pageSize; adminState.assignmentTotal = data.total;
   pagers.assignments?.render(data);
@@ -522,9 +562,16 @@ function renderUnassignedStudents() {
 }
 
 async function loadClasses(page = pagers.classes?.page || 1, unassignedPage = pagers.unassigned?.page || 1) {
+  const classQuery = filterQuery({
+    page,
+    q: el.classSearch.value.trim(),
+    isActive: el.classStatusFilter.value,
+    term: el.classTermFilter.value
+  });
+  const unassignedQuery = filterQuery({ page: unassignedPage, q: el.unassignedSearch.value.trim() });
   const [classes, unassigned, allUnassigned] = await Promise.all([
-    api(`/api/admin/classes?page=${page}`),
-    api(`/api/admin/classes/unassigned/students?page=${unassignedPage}`),
+    api(`/api/admin/classes?${classQuery}`),
+    api(`/api/admin/classes/unassigned/students?${unassignedQuery}`),
     api('/api/admin/classes/unassigned/students?all=true')
   ]);
   adminState.classes = classes.rows || [];
@@ -537,11 +584,23 @@ async function loadClasses(page = pagers.classes?.page || 1, unassignedPage = pa
   el.classStudents.replaceChildren(...(allUnassigned.rows || []).map((user) => { const option = document.createElement('option'); option.value = user.id; option.textContent = `${user.displayName}（${user.username}）`; return option; }));
 }
 
+// 学期下拉从现有班级里去重，不写死值。
+async function loadClassTermOptions() {
+  try {
+    const data = await api('/api/admin/classes?all=true');
+    const current = el.classTermFilter.value;
+    const terms = [...new Set((data.rows || []).map((row) => row.term).filter(Boolean))].sort();
+    el.classTermFilter.replaceChildren(new Option('全部学期', ''), ...terms.map((term) => new Option(term, term)));
+    if (terms.includes(current)) el.classTermFilter.value = current;
+  } catch { /* 下拉读取失败不影响列表 */ }
+}
+
 async function loadClassMembers(item, page) {
   try {
     // 换一个班级就回到第 1 页；同一个班级翻页时保留当前页。
     const target = page ?? (item.id === adminState.classMembersClassId ? (pagers.classMembers?.page || 1) : 1);
-    const data = await api(`/api/admin/classes/${item.id}/members?page=${target}`);
+    const memberQuery = filterQuery({ page: target, q: el.classMembersSearch.value.trim() });
+    const data = await api(`/api/admin/classes/${item.id}/members?${memberQuery}`);
     await loadClassOverview(item);
     adminState.classMembersClassId = item.id; adminState.classMembersPage = data.page; adminState.classMembersPages = data.pages; adminState.classMembersPageSize = data.pageSize; adminState.classMembersTotal = data.total;
     el.classMembersTitle.textContent = `${data.class.name} · 成员`;
@@ -726,7 +785,13 @@ async function deleteScore(item) {
 }
 
 async function loadScores(page = pagers.scores?.page || 1) {
-  const data = await api(`/api/admin/scores?page=${page}`);
+  const query = filterQuery({
+    page,
+    q: el.scoreSearch.value.trim(),
+    range: el.scoreRangeFilter.value,
+    category: el.scoreCategoryFilter.value
+  });
+  const data = await api(`/api/admin/scores?${query}`);
   adminState.page = data.page;
   adminState.pages = data.pages;
   el.scoreCount.textContent = `共 ${data.total} 条`;
@@ -791,8 +856,24 @@ function renderCompetitions() {
   window.lucide?.createIcons();
 }
 
+async function loadScoreCategories() {
+  try {
+    const data = await api('/api/admin/score-categories');
+    const current = el.scoreCategoryFilter.value;
+    const categories = data.categories || [];
+    el.scoreCategoryFilter.replaceChildren(new Option('全部分类', ''), ...categories.map((category) => new Option(category, category)));
+    if (categories.includes(current)) el.scoreCategoryFilter.value = current;
+  } catch { /* 分类读取失败不影响列表 */ }
+}
+
 async function loadCompetitions(page = pagers.competitions?.page || 1) {
-  const data = await api(`/api/competitions?page=${page}`);
+  const query = filterQuery({
+    page,
+    q: el.competitionSearch.value.trim(),
+    status: el.competitionStatusFilter.value,
+    language: el.competitionLanguageFilter.value
+  });
+  const data = await api(`/api/competitions?${query}`);
   adminState.competitions = data.rows || [];
   adminState.competitionTotal = data.total;
   pagers.competitions?.render(data);
@@ -1073,11 +1154,11 @@ async function switchView(view) {
     if (view === 'admins') await loadAdminAccounts();
     if (view === 'passages') await loadPassages();
     if (view === 'users') await Promise.all([loadUsers(), loadUserClassFilter()]);
-    if (view === 'classes') await loadClasses();
+    if (view === 'classes') await Promise.all([loadClasses(), loadClassTermOptions()]);
     if (view === 'progress') await loadProgress();
     if (view === 'assignments') await Promise.all([loadAssignments(), loadAssignmentUsers(), loadAssignmentClasses()]);
     if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition(), loadTextCatalog()]);
-    if (view === 'scores') await loadScores();
+    if (view === 'scores') await Promise.all([loadScores(), loadScoreCategories()]);
   } catch (error) {
     if (error.status === 401) setAuthenticated(false);
     else toast(error.message, true);
@@ -1181,6 +1262,28 @@ pagers.classMembers = createPager({
 pagers.scores = createPager({ pagination: el.scorePagination, label: el.pageLabel, previous: el.previousPage, next: el.nextPage, load: (page) => loadScores(page) });
 pagers.competitions = createPager({ pagination: el.competitionPagination, label: el.competitionPageLabel, previous: el.competitionPreviousPage, next: el.competitionNextPage, load: (page) => loadCompetitions(page) });
 pagers.admins = createPager({ pagination: el.adminAccountPagination, label: el.adminAccountPageLabel, previous: el.adminAccountPreviousPage, next: el.adminAccountNextPage, load: (page) => loadAdminAccounts(page) });
+
+// 筛选条件变更一律回到第 1 页，否则会出现「筛选后停在第 3 页但只有 1 页数据」的空列表。
+el.adminAccountSearch.addEventListener('input', debounce(() => loadAdminAccounts(1)));
+el.adminAccountRoleFilter.addEventListener('change', () => loadAdminAccounts(1));
+el.adminAccountStatusFilter.addEventListener('change', () => loadAdminAccounts(1));
+el.classSearch.addEventListener('input', debounce(() => loadClasses(1, pagers.unassigned?.page || 1)));
+el.classStatusFilter.addEventListener('change', () => loadClasses(1, pagers.unassigned?.page || 1));
+el.classTermFilter.addEventListener('change', () => loadClasses(1, pagers.unassigned?.page || 1));
+el.unassignedSearch.addEventListener('input', debounce(() => loadClasses(pagers.classes?.page || 1, 1)));
+el.classMembersSearch.addEventListener('input', debounce(() => {
+  const item = adminState.classes.find((row) => row.id === adminState.classMembersClassId);
+  if (item) loadClassMembers(item, 1);
+}));
+el.assignmentSearch.addEventListener('input', debounce(() => loadAssignments(1)));
+el.assignmentStatusFilter.addEventListener('change', () => loadAssignments(1));
+el.assignmentModeFilter.addEventListener('change', () => loadAssignments(1));
+el.competitionSearch.addEventListener('input', debounce(() => loadCompetitions(1)));
+el.competitionStatusFilter.addEventListener('change', () => loadCompetitions(1));
+el.competitionLanguageFilter.addEventListener('change', () => loadCompetitions(1));
+el.scoreSearch.addEventListener('input', debounce(() => loadScores(1)));
+el.scoreRangeFilter.addEventListener('change', () => loadScores(1));
+el.scoreCategoryFilter.addEventListener('change', () => loadScores(1));
 el.mobileMenu.addEventListener('click', () => el.sidebar.classList.toggle('is-open'));
 
 window.addEventListener('DOMContentLoaded', async () => {

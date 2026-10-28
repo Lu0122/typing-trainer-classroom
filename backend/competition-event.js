@@ -872,13 +872,26 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
   };
 
   app.get('/api/competitions', requireAdmin, route((request) => {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM competitions').get().count;
+    const status = String(request.query.status || '');
+    const language = String(request.query.language || '');
+    const keyword = String(request.query.q || '').trim().slice(0, 80);
+    const filters = [];
+    const params = [];
+    if (['draft', 'registration', 'running', 'paused', 'finished'].includes(status)) {
+      filters.push('status = ?'); params.push(status);
+    }
+    if (['zh', 'en'].includes(language)) {
+      filters.push("json_extract(config_json, '$.language') = ?"); params.push(language);
+    }
+    if (keyword) { filters.push('name LIKE ?'); params.push(`%${keyword}%`); }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM competitions ${where}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
     SELECT id, name, kind AS mode, json_extract(config_json, '$.language') AS language, schedule, status, created_at AS createdAt,
            started_at AS startedAt, ended_at AS endedAt
-    FROM competitions ORDER BY created_at DESC LIMIT ? OFFSET ?
-  `).all(pagination.pageSize, pagination.offset);
+    FROM competitions ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `).all(...params, pagination.pageSize, pagination.offset);
     return { rows, total, ...pagination };
   }));
 

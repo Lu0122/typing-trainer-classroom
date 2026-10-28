@@ -120,6 +120,11 @@
         </section>
         <section class="admin-section table-section">
           <div class="table-toolbar"><strong>管理员列表</strong><span id="admin-account-count">共 0 个</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="admin-account-search" type="search" placeholder="搜索账号或姓名"></label>
+            <select id="admin-account-role-filter" class="admin-filter-select" aria-label="按角色筛选"><option value="">全部角色</option><option value="superadmin">超级管理员</option><option value="manager">普通管理员</option></select>
+            <select id="admin-account-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="1">启用</option><option value="0">停用</option></select>
+          </div>
           <div class="table-scroll"><table><thead><tr><th>账号</th><th>角色</th><th>状态</th><th>最后登录</th><th>创建时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="admin-account-table"></tbody></table></div>
           <p class="table-empty" id="admin-account-empty" hidden>暂无管理员账号。</p>
           <div class="pagination" id="admin-account-pagination" hidden><button class="icon-button" id="admin-account-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="admin-account-page-label">第 1 / 1 页</span><button class="icon-button" id="admin-account-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
@@ -200,12 +205,17 @@
         </div>
         <section class="admin-section table-section class-list-section">
           <div class="table-toolbar"><strong>班级列表</strong><span id="class-count">共 0 个班级</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="class-search" type="search" placeholder="搜索班级名或说明"></label>
+            <select id="class-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="1">启用</option><option value="0">停用</option></select>
+            <select id="class-term-filter" class="admin-filter-select" aria-label="按学期筛选"><option value="">全部学期</option></select>
+          </div>
           <div class="table-scroll"><table><thead><tr><th>班级</th><th>学期/届次</th><th>学生人数</th><th>状态</th><th>说明</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="class-table"></tbody></table></div>
           <p class="table-empty" id="class-empty" hidden>还没有创建班级。</p>
           <div class="pagination" id="class-pagination" hidden><button class="icon-button" id="class-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="class-page-label">第 1 / 1 页</span><button class="icon-button" id="class-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
         </section>
         <section class="admin-section table-section class-members-section" id="class-members-panel" hidden>
-          <div class="table-toolbar"><strong id="class-members-title">班级成员</strong><button class="secondary-button" id="close-class-members" type="button">收起</button></div>
+          <div class="table-toolbar"><strong id="class-members-title">班级成员</strong><label class="search-field"><i data-lucide="search"></i><input id="class-members-search" type="search" placeholder="搜索成员姓名"></label><button class="secondary-button" id="close-class-members" type="button">收起</button></div>
           <div id="class-overview-content" class="class-overview-content" hidden>
             <div class="class-overview-metrics"><article><span>班级人数</span><strong id="class-metric-members">0</strong><small>已启用成员</small></article><article><span>今日活跃</span><strong id="class-metric-active">0</strong><small>今天完成过训练</small></article><article><span>近 7 天训练</span><strong id="class-metric-sessions">0</strong><small id="class-metric-minutes">0 分钟</small></article><article><span>平均速度</span><strong id="class-metric-speed">0</strong><small id="class-metric-accuracy">准确率 0%</small></article></div>
             <div class="class-overview-columns"><section><h3>班级任务</h3><div id="class-overview-tasks" class="class-overview-list"></div><p id="class-overview-tasks-empty" class="class-overview-empty" hidden>暂无班级任务。</p></section><section><h3>需要关注</h3><div id="class-overview-risks" class="class-overview-list"></div><p id="class-overview-risks-empty" class="class-overview-empty" hidden>当前没有明显风险学生。</p></section><section><h3>速度排行</h3><div id="class-overview-ranking" class="class-overview-list"></div><p id="class-overview-ranking-empty" class="class-overview-empty" hidden>暂无训练数据。</p></section></div>
@@ -216,6 +226,9 @@
         </section>
         <section class="admin-section table-section unassigned-section">
           <div class="table-toolbar"><strong>待分班学生</strong><span id="unassigned-count">0 人</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="unassigned-search" type="search" placeholder="搜索姓名或账号"></label>
+          </div>
           <div class="table-scroll"><table><thead><tr><th>学生</th><th>注册时间</th><th>最后登录</th></tr></thead><tbody id="unassigned-table"></tbody></table></div>
           <p class="table-empty" id="unassigned-empty" hidden>所有已启用学生都已分班。</p>
           <div class="pagination" id="unassigned-pagination" hidden><button class="icon-button" id="unassigned-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="unassigned-page-label">第 1 / 1 页</span><button class="icon-button" id="unassigned-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
@@ -273,6 +286,11 @@
         </section>
         <section class="admin-section table-section">
           <div class="table-toolbar"><strong>任务列表</strong><span id="assignment-count">共 0 个</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="assignment-search" type="search" placeholder="搜索任务名称或说明"></label>
+            <select id="assignment-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="1">进行中</option><option value="0">已停用</option></select>
+            <select id="assignment-mode-filter" class="admin-filter-select" aria-label="按课程类型筛选"><option value="">全部课程</option><option value="beginner">新手入门</option><option value="english-word">英文单词</option><option value="english-phrase">英文语句</option><option value="english-article">英文文章</option><option value="pinyin-syllable">拼音音节</option><option value="pinyin-word">拼音词组</option><option value="pinyin-article">拼音文章</option><option value="all">所有课程</option></select>
+          </div>
           <div class="table-scroll"><table><thead><tr><th>任务</th><th>课程</th><th>目标</th><th>截止时间</th><th>完成情况</th><th>状态</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="assignment-table"></tbody></table></div>
           <p class="table-empty" id="assignment-empty" hidden>还没有教学任务。</p>
           <div class="pagination" id="assignment-pagination" hidden><button class="icon-button" id="assignment-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="assignment-page-label">第 1 / 1 页</span><button class="icon-button" id="assignment-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
@@ -332,6 +350,11 @@
         </div>
         <section class="admin-section table-section">
           <div class="table-toolbar"><div><strong>赛事管理</strong><p class="competition-list-hint">开启检录、统一开赛，结束后可导出成绩。</p></div><span id="competition-count">共 0 场</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="competition-search" type="search" placeholder="搜索赛事名称"></label>
+            <select id="competition-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="draft">草稿</option><option value="registration">检录中</option><option value="running">比赛中</option><option value="paused">已暂停</option><option value="finished">已结束</option></select>
+            <select id="competition-language-filter" class="admin-filter-select" aria-label="按语言筛选"><option value="">全部语言</option><option value="zh">中文</option><option value="en">英文</option></select>
+          </div>
           <div class="table-scroll"><table><thead><tr><th>赛事</th><th>模式</th><th>状态</th><th>创建时间</th><th class="competition-actions-heading">操作</th></tr></thead><tbody id="competition-table"></tbody></table></div>
           <p class="table-empty" id="competition-empty" hidden>还没有创建比赛赛事。</p>
           <div class="pagination" id="competition-pagination" hidden><button class="icon-button" id="competition-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="competition-page-label">第 1 / 1 页</span><button class="icon-button" id="competition-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
@@ -345,6 +368,11 @@
         </header>
         <section class="admin-section table-section">
           <div class="table-toolbar"><strong>最近提交</strong><span id="score-count">共 0 条</span></div>
+          <div class="table-filters">
+            <label class="search-field"><i data-lucide="search"></i><input id="score-search" type="search" placeholder="搜索学生姓名或账号"></label>
+            <select id="score-range-filter" class="admin-filter-select" aria-label="按时间筛选"><option value="">全部时间</option><option value="today">今天</option><option value="7d">近 7 天</option><option value="30d">近 30 天</option></select>
+            <select id="score-category-filter" class="admin-filter-select" aria-label="按文章分类筛选"><option value="">全部分类</option></select>
+          </div>
           <div class="table-scroll">
             <table>
               <thead><tr><th>学生账号</th><th>正确字数</th><th>正确率</th><th>错字</th><th>挑战文章</th><th>提交时间</th><th><span class="sr-only">操作</span></th></tr></thead>
