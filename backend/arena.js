@@ -569,12 +569,12 @@ function createHub(mode, opts) {
 function installArena(app, { db, requireUser, now }) {
   db.exec('CREATE TABLE IF NOT EXISTS arena_results (id TEXT PRIMARY KEY, mode TEXT NOT NULL, ended_at INTEGER NOT NULL, result_json TEXT NOT NULL)');
   const record = ({ mode, round, player, finalized, at, durationMs }) => {
-    db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key)
-      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO UPDATE SET
+    db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key, is_finalized)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO UPDATE SET
       lesson_title=excluded.lesson_title, correct_chars=excluded.correct_chars, wrong_chars=excluded.wrong_chars,
-      accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at`)
+      accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at, is_finalized=excluded.is_finalized`)
       .run(player.id, mode, MODES[mode].title + (finalized ? '（已结算）' : '（进行中）'), player.correct, player.attempted - player.correct,
-        mode === 'rhythm' ? accuracyOf(player.counts) : Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `${mode}:${round}:${player.seat}`);
+        mode === 'rhythm' ? accuracyOf(player.counts) : Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `${mode}:${round}:${player.seat}`, finalized ? 1 : 0);
   };
   const save = result => db.prepare('INSERT OR IGNORE INTO arena_results VALUES (?,?,?,?)').run(result.id, result.mode, result.endedAt, JSON.stringify(result));
   const hubs = Object.fromEntries(Object.keys(MODES).map(mode => [mode, createHub(mode, { now, record, save })]));

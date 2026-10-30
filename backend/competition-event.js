@@ -963,12 +963,23 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
       const state = engine.state(request.params.id);
       if (state.status !== 'finished') return response.status(409).json({ message: '赛事尚未结束，暂不能导出' });
       const sideNames = new Map((state.sides || []).map((side) => [side.id, side.name]));
+      const userIds = [...new Set(state.players.map((player) => player.userId).filter((id) => Number.isInteger(id)))];
+      const users = new Map();
+      if (userIds.length) {
+        const rows = db.prepare(`SELECT users.id, users.username, users.student_id AS studentId,
+          COALESCE((SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
+            WHERE cm.user_id = users.id AND cm.left_at IS NULL AND classes.is_active = 1
+            ORDER BY cm.joined_at DESC LIMIT 1), '未分班') AS className
+          FROM users WHERE users.id IN (${userIds.map(() => '?').join(',')})`).all(...userIds);
+        for (const user of rows) users.set(user.id, user);
+      }
       const lines = [
-        ['最终名次', '姓名', '参赛方', '正确字数', '尝试字数', '准确率', '速度(字/分)', '用时(秒)', '状态'].join(',')
+        ['最终名次', '学生姓名', '学号', '班级', '登录账号', '参赛方', '正确字数', '尝试字数', '准确率', '速度(字/分)', '用时(秒)', '状态'].join(',')
       ];
       for (const player of [...state.players].sort((a, b) => (a.finalRank || 999) - (b.finalRank || 999))) {
+        const user = users.get(player.userId) || {};
         lines.push([
-          player.finalRank || '', player.name, sideNames.get(player.sideId) || '', player.correct,
+          player.finalRank || '', player.name, user.studentId || '', user.className || '未分班', user.username || '', sideNames.get(player.sideId) || '', player.correct,
           player.attempted, `${player.accuracy}%`, player.speed ?? '', player.timeMs == null ? (player.elapsedMs == null ? '' : (player.elapsedMs / 1000).toFixed(1)) : (player.timeMs / 1000).toFixed(1),
           player.finished ? '完成' : player.status === 'eliminated' ? '淘汰' : '未完成'
         ].map(csvCell).join(','));

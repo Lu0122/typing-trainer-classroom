@@ -341,11 +341,11 @@ function installBattle(app, { db, requireUser, requireAdmin, now }) {
     const existing = db.prepare('SELECT id FROM training_sessions WHERE source_key = ?').get(sourceKey);
     const lessonTitle = finalized ? '红蓝打字占领战（已结算）' : '红蓝打字占领战（进行中）';
     if (existing) {
-      db.prepare(`UPDATE training_sessions SET lesson_title = ?, correct_chars = ?, wrong_chars = ?, accuracy = ?, speed = ?, duration_ms = ?, completed_at = ? WHERE id = ?`)
-        .run(lessonTitle, player.correct, wrong, accuracy, speed, durationMs, completedAt, existing.id);
+      db.prepare(`UPDATE training_sessions SET lesson_title = ?, correct_chars = ?, wrong_chars = ?, accuracy = ?, speed = ?, duration_ms = ?, completed_at = ?, is_finalized = ? WHERE id = ?`)
+        .run(lessonTitle, player.correct, wrong, accuracy, speed, durationMs, completedAt, finalized ? 1 : 0, existing.id);
     } else {
-      db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key) VALUES (?, 'battle', ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(player.id, lessonTitle, player.correct, wrong, accuracy, speed, durationMs, completedAt, sourceKey);
+      db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key, is_finalized) VALUES (?, 'battle', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(player.id, lessonTitle, player.correct, wrong, accuracy, speed, durationMs, completedAt, sourceKey, finalized ? 1 : 0);
     }
   };
   const saveBattle = db.transaction((result) => {

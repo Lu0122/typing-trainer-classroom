@@ -226,10 +226,10 @@ function installChase(app, { db, requireUser, now = Date.now }) {
       record: (player, outcome) => {
         if (player.bot || !player.attempted) return;
         const duration = Math.max(1000, Math.min(now(), room.endsAt || now()) - (room.startedAt || now()));
-        db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key)
-          VALUES (?, 'chase', ?, ?, ?, ?, ?, ?, ?, ?)
+        db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key, is_finalized)
+          VALUES (?, 'chase', ?, ?, ?, ?, ?, ?, ?, ?, 1)
           ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO UPDATE SET lesson_title=excluded.lesson_title, correct_chars=excluded.correct_chars,
-          wrong_chars=excluded.wrong_chars, accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at`)
+          wrong_chars=excluded.wrong_chars, accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at, is_finalized=1`)
           .run(player.id, `生死时速（${outcome === 'caught' ? '警察获胜' : '小偷逃脱'}）`, player.correct, player.wrong,
             player.attempted ? Math.round(player.correct/player.attempted*100) : 100, Math.round(player.correct/duration*60000), duration, now(), `chase:${room.round}:${player.seat}`);
       }

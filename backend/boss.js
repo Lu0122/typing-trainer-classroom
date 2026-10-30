@@ -304,12 +304,12 @@ class EliminationRoom extends BossRoom {
 function installBoss(app, { db, requireUser, now }) {
   db.exec('CREATE TABLE IF NOT EXISTS boss_results (id TEXT PRIMARY KEY, ended_at INTEGER NOT NULL, result_json TEXT NOT NULL)');
   const record = ({ round, player, finalized, at, durationMs }) => {
-    db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key)
-      VALUES (?, 'boss', ?, ?, ?, ?, ?, ?, ?, ?)
+    db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key, is_finalized)
+      VALUES (?, 'boss', ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO UPDATE SET lesson_title=excluded.lesson_title, correct_chars=excluded.correct_chars,
-      wrong_chars=excluded.wrong_chars, accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at`)
+      wrong_chars=excluded.wrong_chars, accuracy=excluded.accuracy, speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at, is_finalized=excluded.is_finalized`)
       .run(player.id, finalized ? '极速淘汰赛（已结算）' : '极速淘汰赛（进行中）', player.correct, player.attempted - player.correct,
-        Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `boss:${round}:${player.seat}`);
+        Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `boss:${round}:${player.seat}`, finalized ? 1 : 0);
   };
   const room = new EliminationRoom({ now, record, save: result => db.prepare('INSERT OR IGNORE INTO boss_results VALUES (?,?,?)').run(result.id, result.endedAt, JSON.stringify(result)) });
   const route = fn => (req, res, next) => { try { res.json(fn(req)); } catch (error) { if (error.status) res.status(error.status).json({ message: error.message }); else next(error); } };

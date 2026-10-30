@@ -28,7 +28,7 @@ test('runner generates unlimited levels, ramps up difficulty and keeps playable 
   const context = setup(); begin(context);
   const first = context.run.task.id;
   for (let i = 1; i <= 500; i++) clear(context, i);
-  assert.equal(context.run.phase, 'running'); assert.equal(context.run.level, 51);
+  assert.equal(context.run.phase, 'running'); assert.equal(context.run.level, 84);
   assert.equal(context.run.cleared, 500); assert.equal(context.run.lives, 3);
   assert.equal(context.run.accuracy, 100); assert.ok(context.run.task.duration >= 2400);
   assert.notEqual(context.run.task.id, first); assert.equal(context.saves, 0);
@@ -55,7 +55,11 @@ test('runner only loses three lives during a long offline gap and saves once at 
   const context = setup(); begin(context);
   context.advance(3600000); context.run.tick();
   assert.equal(context.run.phase, 'finished'); assert.equal(context.run.passed, 3);
-  assert.ok(context.run.activeMs < 20000); assert.ok(context.run.distance < 200);
+  // 断线的 1 小时不能变成 1 小时的跑图：只应结算掉 3 条命对应的 3 道题。
+  // 每道题的时长取决于抽到的词长（第 1 关是 6~8 字符 → 5.2~6.6 秒），
+  // 所以上界按最坏情况算：3 × (6600 + 350) ≈ 20.9 秒，再留点余量。
+  assert.ok(context.run.activeMs < 25000, `activeMs=${context.run.activeMs}`);
+  assert.ok(context.run.distance < 200, `distance=${context.run.distance}`);
   context.run.state(); context.run.finish(); assert.equal(context.saves, 1);
 });
 test('runner pause freezes distance, lives and deadlines; resume counts down with remaining time', () => {
@@ -71,7 +75,7 @@ test('runner can pause and resume the initial countdown and generates Chinese in
   const context = setup('chinese'); context.run.pause(); context.advance(999999); context.run.resume(); begin(context);
   assert.match(context.run.task.text, /[\u4e00-\u9fff]/);
   for (let i = 1; i <= 100; i++) clear(context, i);
-  assert.equal(context.run.level, 11); assert.ok(context.run.task.duration >= 3300);
+  assert.equal(context.run.level, 17); assert.ok(context.run.task.duration >= 3300);
 });
 
 test('a collision stops the world and input; recovery ends with a fresh full-time obstacle', () => {
@@ -227,4 +231,58 @@ test('runner APIs protect ownership, persist best scores and training, deduplica
     assert.equal(resumed.phase, 'countdown'); assert.equal(resumed.distance, state.distance);
     assert.equal(resumed.lives, state.lives);
   } finally { db.close(); }
+});
+
+test('难度随关卡与已玩时长连续上升，不再三档跳变', () => {
+  const { difficultyOf, targetLength, durationFor } = require('../backend/runner');
+  assert.equal(difficultyOf(1), 0);
+  assert.equal(difficultyOf(15), 1);
+  assert.ok(difficultyOf(8) > 0.4 && difficultyOf(8) < 0.6);
+  // 卡在简单关卡时，时长也会把难度推上去
+  assert.equal(difficultyOf(1, 8 * 60 * 1000), 1);
+  assert.ok(difficultyOf(1, 4 * 60 * 1000) > 0.4);
+  // 长度目标：英文 6→20 字符，中文 3→14 字
+  assert.equal(targetLength('english', 0), 6);
+  assert.equal(targetLength('english', 1), 20);
+  assert.equal(targetLength('chinese', 0), 3);
+  assert.equal(targetLength('chinese', 1), 14);
+  // 同样长度，难度越高给的时间越紧，但不低于保底
+  assert.ok(durationFor('english', 8, 1) < durationFor('english', 8, 0));
+  assert.ok(durationFor('english', 1, 1) >= 2400);
+  assert.ok(durationFor('chinese', 1, 1) >= 3300);
+});
+
+test('实际出的题随关卡和时长变长，起步不再出现 3~4 字母单词', () => {
+  for (let sequence = 1; sequence <= 20; sequence++) {
+    assert.ok([...challengeFor('grow', sequence, 'english', 0).text].length >= 6, `第 ${sequence} 题太短`);
+  }
+  const early = challengeFor('grow', 1, 'english', 0);
+  const late = challengeFor('grow', 1 + 6 * 20, 'english', 0);
+  assert.ok([...late.text].length >= 15, `后期题目只有 ${late.text}`);
+  assert.ok([...late.text].length > [...early.text].length);
+  // 同一题：只把「已玩时长」拉满，也会变长变难
+  const byTime = challengeFor('grow', 1, 'english', 8 * 60 * 1000);
+  assert.ok([...byTime.text].length > [...early.text].length);
+  assert.ok(byTime.duration > 0 && byTime.difficulty === 1);
+  // 中文也随难度变长
+  assert.ok([...challengeFor('grow', 1 + 6 * 20, 'chinese', 0).text].length >= 10);
+});
+
+test('相邻题目不再重复，英文题带中文意思、中文题不带', () => {
+  const { challengeFor } = require('../backend/runner');
+  for (const language of ['english', 'chinese']) {
+    let previous = '';
+    for (let sequence = 1; sequence <= 120; sequence += 1) {
+      const task = challengeFor('repeat-check', sequence, language, 0, previous);
+      assert.notEqual(task.text, previous, `${language} 第 ${sequence} 题与上一题重复`);
+      previous = task.text;
+    }
+  }
+  const english = challengeFor('repeat-check', 1, 'english', 0);
+  assert.match(english.hint, /[\u4e00-\u9fff]/, '英文题应该带中文意思');
+  const chinese = challengeFor('repeat-check', 1, 'chinese', 0);
+  assert.equal(chinese.hint, '', '中文题不需要翻译');
+  const fork = challengeFor('repeat-check', 5, 'english', 0);
+  assert.notEqual(fork.choices[0].text[0], fork.choices[1].text[0]);
+  assert.ok(fork.choices.every((choice) => /[\u4e00-\u9fff]/.test(choice.hint)), '岔路两个选项都要有中文意思');
 });

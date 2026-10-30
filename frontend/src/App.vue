@@ -38,6 +38,9 @@ const challengeInputEl = ref(null);
 const challengeAnchorEl = ref(null);
 const challengeResult = ref(null);
 const challengeSubmitting = ref(false);
+const challengeExitOpen = ref(false);
+const challengeExitRemaining = ref(null);
+const challengeExitStartedAt = ref(null);
 // 点「开始挑战」后先走一段全屏倒计时，服务端也把 startedAt 顺延同样的时长
 const challengeCountdown = ref(0);
 const challengeCountdownMs = 3000;
@@ -45,11 +48,18 @@ let challengeCountdownTimer = null;
 const leaderboardOpen = ref(false);
 const leaderboardRows = ref([]);
 const leaderboardTotals = reactive({ topScore: 0, participants: 0 });
+const leaderboardScope = ref('class');
+const leaderboardMode = ref('all');
+const leaderboardCurrentRank = ref(null);
+const leaderboardClassName = ref('');
+const leaderboardLoading = ref(false);
 const challengeLeaderboards = reactive({
   english: { rows: [], totals: { topScore: 0, participants: 0 } },
   pinyin: { rows: [], totals: { topScore: 0, participants: 0 } }
 });
 const challengeLeaderboardLoading = ref(false);
+const challengeLeaderboardScope = ref('class');
+const challengeLeaderboardClassName = ref('');
 const learningSummary = ref(null);
 const learningDiagnostics = ref(null);
 const learningLoading = ref(false);
@@ -233,6 +243,7 @@ const englishCurrentCode = computed(() => {
 });
 // 倒计时阶段 startedAt 还在未来，用 startedAt 当前沿，剩余时间固定显示 60
 const challengeRemaining = computed(() => {
+  if (challengeExitRemaining.value !== null) return challengeExitRemaining.value;
   if (!challenge.value) return 60;
   const from = Math.max(now.value, challenge.value.startedAt);
   return Math.max(0, Math.min(60, Math.ceil((challenge.value.expiresAt - from) / 1000)));
@@ -405,14 +416,15 @@ function compareTrainingText(input, target) {
   const correct = entered.reduce((total, char, index) => total + (char === expected[index] ? 1 : 0), 0);
   return { correct, wrong: Math.max(0, entered.length - correct) };
 }
-function recordTrainingSession({ mode, lessonTitle, correctChars, wrongChars, startedAt, keyStats = Array.from(activeKeyStats.values()) }) {
-  if (!user.value || !startedAt || correctChars < 1) return;
+function recordTrainingSession({ mode, lessonTitle, correctChars, wrongChars, startedAt, targetText = '', typedText = '', keyStats = Array.from(activeKeyStats.values()) }) {
+  if (!user.value || !startedAt || (correctChars < 1 && wrongChars < 1)) return;
   const durationMs = Math.max(1000, Date.now() - startedAt);
   const key = `${mode}:${lessonTitle}:${startedAt}`;
   if (recordedTrainingRuns.has(key)) return;
   recordedTrainingRuns.add(key);
+  const sourceKey = `practice:${user.value.id}:${mode}:${lessonTitle}:${startedAt}`;
   requestJSON('/api/training-sessions', {
-    method: 'POST', body: JSON.stringify({ mode, lessonTitle, correctChars, wrongChars, durationMs, keyStats })
+    method: 'POST', body: JSON.stringify({ mode, lessonTitle, correctChars, wrongChars, durationMs, targetText, typedText, keyStats, sourceKey })
   }).then(() => loadLearningData()).catch(() => recordedTrainingRuns.delete(key));
 }
 async function loadPassage() { const res = await fetch('/api/passages?category=' + encodeURIComponent(category.value) + '&random=1'); const data = await res.json(); passage.value=data.passages?.[0] || null; typed.value=''; }
@@ -508,6 +520,7 @@ async function submitLogin() {
     setPage(returnAfterLogin.value || 'home');
     returnAfterLogin.value = null;
     loadLearningData();
+    if (page.value === 'challenge-home') { challengeLeaderboardScope.value = 'class'; loadChallengeLeaderboards('class'); }
   } catch (error) { authMessage.value = error.message; }
   finally { authBusy.value = false; }
 }
@@ -605,41 +618,98 @@ async function submitChallenge() {
     challengeResult.value = data;
     challenge.value = null;
     localStorage.removeItem(challengeStorageKey);
-    loadLeaderboard(activeChallengeMode.value);
+    loadLeaderboard(leaderboardScope.value, activeChallengeMode.value);
   } catch (error) {
     if (error.message.includes('尚未结束')) return;
     challengeResult.value = { error: error.message };
   } finally { challengeSubmitting.value = false; }
 }
-async function loadLeaderboard(mode = null) {
+async function loadLeaderboard(scope = leaderboardScope.value, mode = leaderboardMode.value) {
+  leaderboardLoading.value = true;
   try {
     const modeQuery = mode === 'english' || mode === 'pinyin' ? `&mode=${encodeURIComponent(mode)}` : '';
-    const data = await requestJSON('/api/leaderboard?period=all&limit=10' + modeQuery);
-    leaderboardRows.value = data.rows;
+    const limit = scope === 'all' ? 50 : 20;
+    const data = await requestJSON(`/api/leaderboard?period=all&limit=${limit}&scope=${encodeURIComponent(scope)}${modeQuery}`);
+    leaderboardScope.value = data.scope || scope;
+    leaderboardMode.value = data.mode || 'all';
+    leaderboardRows.value = data.rows || [];
     Object.assign(leaderboardTotals, data.totals);
+    leaderboardCurrentRank.value = data.currentRank ?? null;
+    leaderboardClassName.value = data.className || '';
   } catch {
     leaderboardRows.value = [];
-  }
+    leaderboardCurrentRank.value = null;
+  } finally { leaderboardLoading.value = false; }
 }
-async function loadChallengeLeaderboards() {
+async function loadChallengeLeaderboards(scope = challengeLeaderboardScope.value) {
   challengeLeaderboardLoading.value = true;
+  challengeLeaderboardScope.value = scope;
+  const limit = scope === 'all' ? 50 : 20;
   await Promise.all(Object.keys(challengeLeaderboards).map(async (mode) => {
     try {
-      const data = await requestJSON('/api/leaderboard?period=all&limit=10&mode=' + encodeURIComponent(mode));
+      const data = await requestJSON(`/api/leaderboard?period=all&limit=${limit}&scope=${encodeURIComponent(scope)}&mode=${encodeURIComponent(mode)}`);
       challengeLeaderboards[mode].rows = data.rows || [];
       Object.assign(challengeLeaderboards[mode].totals, data.totals || {});
+      challengeLeaderboardClassName.value = data.className || '';
     } catch {
       challengeLeaderboards[mode].rows = [];
     }
   }));
   challengeLeaderboardLoading.value = false;
 }
-async function openLeaderboard() { await loadLeaderboard(); leaderboardOpen.value = true; }
-function openChallengePage() { challengeResult.value = null; challengeMode.value = 'pinyin'; stopChallengeCountdown(); setPage('challenge-home'); loadChallengeLeaderboards(); }
+async function switchChallengeLeaderboardScope(scope) { await loadChallengeLeaderboards(scope); }
+async function openLeaderboard() { leaderboardScope.value = user.value ? 'class' : 'all'; leaderboardMode.value = 'all'; await loadLeaderboard(); leaderboardOpen.value = true; }
+async function switchLeaderboardScope(scope) { leaderboardScope.value = scope; await loadLeaderboard(scope, leaderboardMode.value); }
+async function switchLeaderboardMode(mode) { leaderboardMode.value = mode; await loadLeaderboard(leaderboardScope.value, mode); }
+function openChallengePage() { challengeResult.value = null; challengeMode.value = 'pinyin'; stopChallengeCountdown(); challengeLeaderboardScope.value = user.value ? 'class' : 'all'; setPage('challenge-home'); loadChallengeLeaderboards(challengeLeaderboardScope.value); }
+function requestChallengeExit() {
+  if (!challenge.value || challengeSubmitting.value) { openChallengePage(); return; }
+  const pauseAt = Date.now();
+  const activeFrom = Math.max(pauseAt, challenge.value.startedAt);
+  challengeExitRemaining.value = Math.max(0, Math.ceil((challenge.value.expiresAt - activeFrom) / 1000));
+  challengeExitStartedAt.value = pauseAt;
+  challenge.value = { ...challenge.value, paused: true };
+  challengeExitOpen.value = true;
+  challengeInputEl.value?.blur();
+}
+function cancelChallengeExit() {
+  const resumeAt = Date.now();
+  const pauseDuration = challengeExitStartedAt.value ? Math.max(0, resumeAt - challengeExitStartedAt.value) : 0;
+  if (challenge.value && pauseDuration) {
+    challenge.value = {
+      ...challenge.value,
+      startedAt: challenge.value.startedAt + pauseDuration,
+      expiresAt: challenge.value.expiresAt + pauseDuration,
+      paused: false
+    };
+  }
+  challengeExitOpen.value = false;
+  challengeExitRemaining.value = null;
+  challengeExitStartedAt.value = null;
+  now.value = resumeAt;
+  if (!challenge.value) return;
+  focusChallengeInput();
+}
+function confirmChallengeExit() {
+  challengeExitOpen.value = false;
+  challengeExitRemaining.value = null;
+  challengeExitStartedAt.value = null;
+  stopChallengeCountdown();
+  challenge.value = null;
+  challengeInput.value = '';
+  localStorage.removeItem(challengeStorageKey);
+  openChallengePage();
+}
 function focusChallengeInput() { nextTick(() => { positionChallengeCapture(); challengeInputEl.value?.focus(); }); }
 function challengeTypedLine(segment) { return challengeTypedCharacters.value.slice(segment.offset, segment.offset + segment.line.length); }
 function challengeCaretVisible(segment) { return challengeTypedCharacters.value.length >= segment.offset && challengeTypedCharacters.value.length <= segment.offset + segment.line.length; }
-function setPage(nextPage) { page.value = nextPage; window.location.hash = nextPage === 'home' ? '' : nextPage; }
+const feedbackFrom = ref('');
+function setPage(nextPage) {
+  // 从游戏里点「反馈」时记下来源，反馈页可以自动选好「哪个功能」。
+  if (nextPage === 'bug-feedback' && page.value !== 'bug-feedback') feedbackFrom.value = page.value;
+  page.value = nextPage;
+  window.location.hash = nextPage === 'home' ? '' : nextPage;
+}
 function goHome() { setPage('home'); passage.value=null; typed.value=''; practiceStartedAt.value=null; }
 function openGrowth() { if (!user.value) { openAccount(); return; } authOpen.value = false; if (!learningSummary.value) loadLearningData(); setPage('growth'); }
 function openDiagnostics() { if (!user.value) { openAccount(); return; } authOpen.value = false; if (!learningDiagnostics.value) loadLearningData(); setPage('diagnostics'); }
@@ -670,7 +740,7 @@ function handleDiagnosticInput(event) {
   }
   if (typedChars.length >= diagnosticTargetCharacters.value.length && !diagnosticDrill.completed) {
     diagnosticDrill.completed = true;
-    recordTrainingSession({ mode: 'beginner', lessonTitle: diagnosticDrill.title, correctChars: diagnosticCorrect.value, wrongChars: Math.max(0, typedChars.length - diagnosticCorrect.value), startedAt: diagnosticDrill.startedAt });
+    recordTrainingSession({ mode: 'beginner', lessonTitle: diagnosticDrill.title, correctChars: diagnosticCorrect.value, wrongChars: Math.max(0, typedChars.length - diagnosticCorrect.value), startedAt: diagnosticDrill.startedAt, targetText: diagnosticDrill.target, typedText: diagnosticInput.value });
   }
 }
 function goEnglishHome() { setPage('english-home'); resetEnglishLesson(); }
@@ -700,7 +770,7 @@ function focusPinyinInput() { nextTick(() => pinyinInputEl.value?.focus()); }
 function startPinyinPractice() { if (!practiceStartedAt.value) practiceStartedAt.value = Date.now(); nextTick(() => {
   if (pinyinInput.value.length >= pinyinTarget.value.length) {
     const result = compareTrainingText(pinyinInput.value, pinyinTarget.value);
-    recordTrainingSession({ mode: page.value, lessonTitle: pinyinLesson.value?.selector || pinyinLesson.value?.title || '拼音练习', correctChars: result.correct, wrongChars: result.wrong, startedAt: practiceStartedAt.value });
+    recordTrainingSession({ mode: page.value, lessonTitle: pinyinLesson.value?.selector || pinyinLesson.value?.title || '拼音练习', correctChars: result.correct, wrongChars: result.wrong, startedAt: practiceStartedAt.value, targetText: pinyinTarget.value, typedText: pinyinInput.value });
     schedulePracticeAdvance('pinyin');
   }
 }); }
@@ -751,7 +821,7 @@ function handleEnglishKey(event) {
       autoAdvanceEnglishBoundary();
       if (typed.value.length >= englishTarget.value.length) {
         const result = compareTrainingText(typed.value, englishTarget.value);
-        recordTrainingSession({ mode: page.value, lessonTitle: englishLesson.value?.selector || englishLesson.value?.title || '英文练习', correctChars: result.correct, wrongChars: result.wrong, startedAt: practiceStartedAt.value });
+        recordTrainingSession({ mode: page.value, lessonTitle: englishLesson.value?.selector || englishLesson.value?.title || '英文练习', correctChars: result.correct, wrongChars: result.wrong, startedAt: practiceStartedAt.value, targetText: englishTarget.value, typedText: typed.value });
         schedulePracticeAdvance('english');
       }
     }
@@ -789,9 +859,9 @@ onMounted(async () => {
   }
   if (savedPage === 'practice') loadPassage();
   if (pinyinCopy[savedPage]) resetPinyinLesson(savedPage, false);
-  if (savedPage === 'challenge-home') loadChallengeLeaderboards();
   await loadAuthConfig();
   await loadCurrentUser();
+  if (savedPage === 'challenge-home') { challengeLeaderboardScope.value = user.value ? 'class' : 'all'; loadChallengeLeaderboards(challengeLeaderboardScope.value); }
   await loadLearningData();
   restoreChallenge();
   loadLeaderboard();
@@ -799,25 +869,25 @@ onMounted(async () => {
   window.addEventListener('resize', repositionCaptureInputs);
   repositionCaptureInputs();
   timer=window.setInterval(() => {
-    now.value=Date.now();
-    if (challenge.value && !challengeSubmitting.value && now.value >= challenge.value.expiresAt) submitChallenge();
+    if (!challengeExitOpen.value) now.value=Date.now();
+    if (challenge.value && !challengeExitOpen.value && !challenge.value.paused && !challengeSubmitting.value && now.value >= challenge.value.expiresAt) submitChallenge();
   },250);
 });
 onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.clearInterval(timer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); stopChallengeCountdown(); });
 </script>
 <template>
-<BattleGame v-if="page === 'battle'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
-<BattleGame v-else-if="page === 'battle-competition'" :user="user" competition @back="setPage('competition-hub')" @leaderboard="openLeaderboard" @login="openCompetitionLogin('battle-competition')"/>
-<BossGame v-else-if="page === 'boss'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
-<ArenaGame v-else-if="page === 'race' || page === 'rhythm'" :key="page" :mode="page" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
-<ChaseGame v-else-if="page === 'chase'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
-<RunnerGame v-else-if="page === 'runner'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="setPage('games'); openAccount()"/>
-<BugFeedback v-else-if="page === 'bug-feedback'" :user="user" @back="setPage('games')" @login="setPage('games'); openAccount()"/>
-<CompetitionGame v-else-if="page === 'competition'" :user="user" @back="setPage('competition-hub')" @login="openCompetitionLogin('competition')"/>
-<CompetitionHub v-else-if="page === 'competition-hub'" :user="user" @back="goHome" @select="setPage" @login="openCompetitionLogin('competition-hub')"/>
+<BattleGame v-if="page === 'battle'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
+<BattleGame v-else-if="page === 'battle-competition'" :user="user" competition @back="setPage('competition-hub')" @leaderboard="openLeaderboard" @login="openAccount"/>
+<BossGame v-else-if="page === 'boss'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
+<ArenaGame v-else-if="page === 'race' || page === 'rhythm'" :key="page" :mode="page" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
+<ChaseGame v-else-if="page === 'chase'" :user="user" @back="setPage('games')" @login="openAccount"/>
+<RunnerGame v-else-if="page === 'runner'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
+<BugFeedback v-else-if="page === 'bug-feedback'" :user="user" :from="feedbackFrom" @back="setPage('games')" @login="openAccount"/>
+<CompetitionGame v-else-if="page === 'competition'" :user="user" @back="setPage('competition-hub')" @login="openAccount"/>
+<CompetitionHub v-else-if="page === 'competition-hub'" :user="user" @back="goHome" @select="setPage" @login="openAccount"/>
 <GameLobby v-else-if="page === 'games'" :user="user" @select="setPage" @back="goHome" @growth="openGrowth" @leaderboard="openLeaderboard" @account="openAccount" @bug-report="setPage('bug-feedback')"/>
 <div v-else class="app-shell" :class="{ 'is-home-page': page === 'home', 'is-reference-page': page === 'beginner' || page === 'growth' || page === 'diagnostics' || page === 'diagnostic-drill' || page.startsWith('challenge-') || page.startsWith('english-') || page.startsWith('pinyin-'), 'is-beginner-page': page === 'beginner', 'is-english-home': page === 'english-home', 'is-english-practice': page.startsWith('english-') && page !== 'english-home', 'is-pinyin-practice': page.startsWith('pinyin-') && page !== 'pinyin-home', 'is-pinyin-home': page === 'pinyin-home', 'is-challenge-running': page.startsWith('challenge-') && !!challenge }"><AppHeader variant="hero" title="字练场 2026" subtitle="中文与英文键盘训练" :icon="KeyboardIcon" decor clickable-brand :user="user" @brand="goHome" @account="openAccount" />
-  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card competition" @click="setPage('competition-hub')"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="setPage('games')"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button></div><p class="footnote">练习可直接开始；参加现场比赛请先登录，等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
+  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="setPage('games')"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button><button class="course-card competition" @click="setPage('competition-hub')"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button></div><p class="footnote">练习可直接开始；参加现场比赛请先登录，等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
 <section v-else-if="page === 'growth'" class="lesson-view learning-view">
   <div class="lesson-nav"><button @click="goHome"><ArrowLeft :size="14"/>返回</button><span>首页</span><b>›</b><strong>我的成长</strong></div>
   <section class="learning-hero"><div><p class="eyebrow">学生成长中心</p><h1>{{ user?.displayName || '同学' }}，继续保持输入节奏。</h1><p v-if="learningSummary?.hasData">当前阶段：{{ learningSummary.level.label }} · {{ learningSummary.level.next }}</p><p v-else>完成一次练习后，这里会开始记录你的成长轨迹。</p></div><div class="learning-level"><Flame :size="20"/><strong>{{ learningSummary?.stats?.streak || 0 }}</strong><span>连续练习天</span></div></section>
@@ -935,6 +1005,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
       </div>
     </div>
     <aside class="challenge-rankings" aria-label="挑战排行榜">
+      <div class="challenge-ranking-scope"><div><strong>挑战排行榜</strong><small>{{ challengeLeaderboardScope === 'class' ? (challengeLeaderboardClassName ? `我的班级 · ${challengeLeaderboardClassName}` : '我的班级 · 尚未分班') : '全部班级 · 全校总榜' }}</small></div><div role="tablist" aria-label="挑战排行榜范围"><button type="button" :class="{active:challengeLeaderboardScope==='class'}" :disabled="!user" @click="switchChallengeLeaderboardScope('class')">我的班级</button><button type="button" :class="{active:challengeLeaderboardScope==='all'}" @click="switchChallengeLeaderboardScope('all')">全校总榜</button></div></div>
       <section v-for="mode in ['english','pinyin']" :key="mode" class="challenge-ranking-card" :class="mode">
         <header><span class="ranking-icon">{{ mode === 'english' ? 'EN' : '中' }}</span><div><strong>{{ mode === 'english' ? '英文排行榜' : '中文排行榜' }}</strong><small>一分钟挑战 · 最佳成绩</small></div><span class="ranking-top-score">{{ challengeLeaderboards[mode].totals.topScore }}<small>字</small></span></header>
         <div v-if="challengeLeaderboardLoading" class="ranking-empty">正在加载排名…</div>
@@ -946,7 +1017,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 </section>
 
 <section v-else-if="page.startsWith('challenge-')" class="lesson-view challenge-view">
-  <div class="lesson-nav"><button @click="openChallengePage">返回</button><span>首页</span><b>›</b><span>挑战模式</span><b>›</b><strong>{{ activeChallengeLabel }}</strong></div>
+  <div class="lesson-nav"><button @click="requestChallengeExit">返回</button><span>首页</span><b>›</b><span>挑战模式</span><b>›</b><strong>{{ activeChallengeLabel }}</strong></div>
   <section v-if="!challenge && !challengeResult" class="challenge-intro">
     <div class="challenge-number">60</div><div><p class="eyebrow">{{ activeChallengeLabel }}</p><h2>一分钟完成一篇{{ activeChallengeMode === 'english' ? '英文' : '中文' }}文章。</h2><p>排行榜按正确字数排序，同分时正确率更高者在前。成绩只绑定当前学生账号。</p><button type="button" @click="startChallenge(activeChallengeMode)">{{ user ? (challengeSubmitting ? '准备中…' : '开始挑战') : '登录后开始' }}</button></div>
   </section>
@@ -972,6 +1043,30 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 
 <section v-else class="lesson-view"><div class="lesson-nav"><button @click="goHome">返回</button><span>首页</span><b>›</b><strong>{{ category }}</strong></div><section class="lesson-panel practice-panel"><div class="lesson-title"><div><p class="eyebrow">自由练习 · {{ category }}</p><h2>{{ passage?.title || '正在准备练习文章' }}</h2><p>在输入框中输入上方文字，系统会实时计算准确率。</p></div><select v-model="category" @change="loadPassage"><option>拼音打字</option><option>校园生活</option><option>成长励志</option></select></div><div class="practice-metrics"><span>正确 <b>{{ score.correct }}</b> 字</span><span>正确率 <b>{{ score.accuracy }}%</b></span><span>最后按键 <b>{{ lastCode }}</b></span></div><div class="text-sheet"><span v-for="(char,i) in targetChars" :key="i" :class="{correct:i<score.input.length&&score.input[i]===char,wrong:i<score.input.length&&score.input[i]!==char,current:i===score.input.length}">{{ char }}</span></div><textarea :value="typed" @input="updateInput" placeholder="在这里输入上方文字"></textarea><Keyboard :keyboard="keyboard" :key-class="keyClass" @virtual-key="handleKey"/></section></section>
 </main>
+<div v-if="challengeExitOpen" class="modal-backdrop" @mousedown.self="cancelChallengeExit">
+  <section class="challenge-exit-modal" role="dialog" aria-modal="true" aria-labelledby="challenge-exit-title">
+    <p class="eyebrow">正在进行挑战</p>
+    <h2 id="challenge-exit-title">确定要退出吗？</h2>
+    <p>退出后本次输入和成绩不会保存。选择“继续挑战”可以回到文章继续输入。</p>
+    <footer><button type="button" class="challenge-exit-cancel" @click="cancelChallengeExit">继续挑战</button><button type="button" class="challenge-exit-confirm" @click="confirmChallengeExit">确认退出</button></footer>
+  </section>
+</div>
+<div v-if="leaderboardOpen" class="modal-backdrop" @mousedown.self="leaderboardOpen=false">
+  <section class="leaderboard-modal" role="dialog" aria-modal="true" aria-label="学生排行榜">
+    <button class="modal-close" type="button" title="关闭" aria-label="关闭排行榜" @click="leaderboardOpen=false">×</button>
+    <header class="leaderboard-modal-head"><div><p class="eyebrow">学习榜单</p><h2>排行榜</h2><span>{{ leaderboardScope === 'class' ? (leaderboardClassName ? `我的班级 · ${leaderboardClassName}` : '我的班级 · 尚未分班') : '全部班级 · 全校总榜' }}</span></div><Trophy :size="30"/></header>
+    <div class="leaderboard-scope-tabs" role="tablist" aria-label="排行榜范围"><button type="button" :class="{active:leaderboardScope==='class'}" :disabled="!user" @click="switchLeaderboardScope('class')">我的班级榜</button><button type="button" :class="{active:leaderboardScope==='all'}" @click="switchLeaderboardScope('all')">全校总榜</button></div>
+    <div class="leaderboard-mode-tabs" role="tablist" aria-label="排行榜类型"><button type="button" :class="{active:leaderboardMode==='all'}" @click="switchLeaderboardMode('all')">综合榜</button><button type="button" :class="{active:leaderboardMode==='pinyin'}" @click="switchLeaderboardMode('pinyin')">中文挑战</button><button type="button" :class="{active:leaderboardMode==='english'}" @click="switchLeaderboardMode('english')">英文挑战</button></div>
+    <div class="leaderboard-summary"><span>最高成绩 <b>{{ leaderboardTotals.topScore }}</b><small>字</small></span><span>上榜人数 <b>{{ leaderboardTotals.participants }}</b><small>人</small></span><span>当前排名 <b>{{ leaderboardCurrentRank || '-' }}</b><small v-if="leaderboardCurrentRank">名</small></span></div>
+    <div v-if="leaderboardCurrentRank && leaderboardCurrentRank > 20" class="leaderboard-outside">当前第 {{ leaderboardCurrentRank }} 名，暂未进入前 20</div>
+    <div v-else-if="leaderboardScope === 'class' && !leaderboardClassName" class="leaderboard-outside">你还没有分班，暂时无法查看班级榜</div>
+    <div v-if="leaderboardLoading" class="leaderboard-empty">正在加载榜单…</div>
+    <ol v-else-if="leaderboardRows.length" class="leaderboard-list"><li v-for="row in leaderboardRows" :key="row.id" :class="{current:row.isCurrentUser}"><b>{{ row.rank }}</b><span>{{ row.nickname }}<small v-if="leaderboardScope==='all' && row.className" class="leaderboard-class">{{ row.className }}</small><em v-if="row.isCurrentUser">我</em></span><strong>{{ row.score }} 字</strong><small>{{ Math.round(row.accuracy) }}%</small></li></ol>
+    <p v-else class="leaderboard-empty">暂无成绩<br/><small>完成一次挑战后登上榜单</small></p>
+  </section>
+</div>
+<small class="copyright-mark" aria-label="版权 lulu">© lulu</small>
+</div>
 <div v-if="authOpen" class="modal-backdrop" @mousedown.self="authOpen=false">
   <section class="auth-modal" :class="{ 'profile-modal': authView === 'profile' && user }" role="dialog" aria-modal="true" :aria-label="authView === 'profile' ? '个人中心' : '学生账号'">
     <button class="modal-close" type="button" title="关闭" @click="authOpen=false">×</button>
@@ -1001,7 +1096,5 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
       <p class="auth-message" :class="{success:authMessage.includes('成功') || authMessage.includes('提交')}">{{ authMessage }}</p>
     </template>
   </section>
-</div>
-<div v-if="leaderboardOpen" class="modal-backdrop" @mousedown.self="leaderboardOpen=false"><section class="leaderboard-modal" role="dialog" aria-modal="true" aria-label="一分钟竞速排行榜"><button class="modal-close" type="button" title="关闭" @click="leaderboardOpen=false">×</button><Trophy :size="34"/><h2>一分钟竞速排行榜</h2><div class="leaderboard-summary"><span>最高字数 <b>{{ leaderboardTotals.topScore }}</b></span><span>参与人数 <b>{{ leaderboardTotals.participants }}</b></span></div><ol><li v-for="row in leaderboardRows" :key="row.id" :class="{current:row.isCurrentUser}"><b>{{ row.rank }}</b><span>{{ row.nickname }}</span><strong>{{ row.score }} 字</strong><small>{{ Math.round(row.accuracy) }}%</small></li></ol><p v-if="!leaderboardRows.length" class="leaderboard-empty">还没有人上榜，第一名等你来拿。</p></section></div>
 </div>
 </template>

@@ -27,6 +27,7 @@ function createDatabase(databasePath) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE COLLATE NOCASE,
       display_name TEXT NOT NULL,
+      student_id TEXT,
       avatar_data TEXT,
       password_hash TEXT NOT NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -100,6 +101,8 @@ function createDatabase(databasePath) {
       passage_id INTEGER,
       session_id TEXT UNIQUE,
       user_id INTEGER,
+      category_snapshot TEXT,
+      title_snapshot TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (passage_id) REFERENCES passages(id) ON DELETE SET NULL,
       FOREIGN KEY (session_id) REFERENCES challenge_sessions(id) ON DELETE SET NULL,
@@ -118,6 +121,7 @@ function createDatabase(databasePath) {
       duration_ms INTEGER NOT NULL DEFAULT 0,
       completed_at INTEGER NOT NULL,
       source_key TEXT,
+      is_finalized INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -195,6 +199,42 @@ function createDatabase(databasePath) {
       created_at INTEGER NOT NULL,
       last_login_at INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS ai_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      provider TEXT NOT NULL DEFAULT '阿里云百炼',
+      base_url TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      model TEXT NOT NULL DEFAULT 'qwen-flash',
+      role_prompt TEXT NOT NULL DEFAULT '你是一名真实的电商消费者，正在与客服沟通。请保持自然、具体、有情绪但不夸张，围绕订单、物流、退换货、售后和商品体验提出合理诉求。',
+      api_key_ciphertext TEXT NOT NULL DEFAULT '',
+      enabled INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS customer_service_sessions (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      scenario_json TEXT NOT NULL,
+      history_json TEXT NOT NULL DEFAULT '[]',
+      started_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      ended_at INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS customer_service_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL UNIQUE,
+      user_id INTEGER NOT NULL,
+      result_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES customer_service_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_customer_service_sessions_user ON customer_service_sessions(user_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_customer_service_results_user ON customer_service_results(user_id, created_at DESC);
   `);
 
   const challengeColumns = db.pragma('table_info(challenge_sessions)');
@@ -208,6 +248,15 @@ function createDatabase(databasePath) {
   if (!scoreColumns.some((column) => column.name === 'user_id')) {
     db.exec('ALTER TABLE scores ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
   }
+  if (!scoreColumns.some((column) => column.name === 'category_snapshot')) {
+    db.exec('ALTER TABLE scores ADD COLUMN category_snapshot TEXT');
+  }
+  if (!scoreColumns.some((column) => column.name === 'title_snapshot')) {
+    db.exec('ALTER TABLE scores ADD COLUMN title_snapshot TEXT');
+  }
+  db.exec(`UPDATE scores SET category_snapshot = (SELECT category FROM passages WHERE passages.id = scores.passage_id),
+    title_snapshot = (SELECT title FROM passages WHERE passages.id = scores.passage_id)
+    WHERE category_snapshot IS NULL OR title_snapshot IS NULL`);
   const assignmentColumns = db.pragma('table_info(assignments)');
   if (!assignmentColumns.some((column) => column.name === 'class_id')) {
     db.exec('ALTER TABLE assignments ADD COLUMN class_id INTEGER');
@@ -217,11 +266,25 @@ function createDatabase(databasePath) {
   if (!userColumns.some((column) => column.name === 'avatar_data')) {
     db.exec('ALTER TABLE users ADD COLUMN avatar_data TEXT');
   }
+  if (!userColumns.some((column) => column.name === 'student_id')) {
+    db.exec('ALTER TABLE users ADD COLUMN student_id TEXT');
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_student_id_unique ON users(lower(trim(student_id))) WHERE student_id IS NOT NULL AND trim(student_id) <> ''");
+  const aiColumns = db.pragma('table_info(ai_settings)');
+  if (!aiColumns.some((column) => column.name === 'role_prompt')) {
+    db.exec("ALTER TABLE ai_settings ADD COLUMN role_prompt TEXT NOT NULL DEFAULT '你是一名真实的电商消费者，正在与客服沟通。请保持自然、具体、有情绪但不夸张，围绕订单、物流、退换货、售后和商品体验提出合理诉求。'");
+  }
+  db.exec("UPDATE ai_settings SET role_prompt = '你是一名真实的电商消费者，正在与客服沟通。请保持自然、具体、有情绪但不夸张，围绕订单、物流、退换货、售后和商品体验提出合理诉求。' WHERE role_prompt IS NULL OR trim(role_prompt) = ''");
   const trainingColumns = db.pragma('table_info(training_sessions)');
   if (!trainingColumns.some((column) => column.name === 'source_key')) {
     db.exec('ALTER TABLE training_sessions ADD COLUMN source_key TEXT');
   }
+  if (!trainingColumns.some((column) => column.name === 'is_finalized')) {
+    db.exec('ALTER TABLE training_sessions ADD COLUMN is_finalized INTEGER NOT NULL DEFAULT 1');
+  }
+  db.exec("UPDATE training_sessions SET is_finalized = 0 WHERE lesson_title LIKE '%（进行中）' AND is_finalized = 1");
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_training_sessions_source ON training_sessions(source_key) WHERE source_key IS NOT NULL');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_training_sessions_finalized ON training_sessions(is_finalized, completed_at DESC)');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_session ON scores(session_id) WHERE session_id IS NOT NULL');
   db.exec('CREATE INDEX IF NOT EXISTS idx_scores_user_rank ON scores(user_id, score DESC, accuracy DESC, created_at ASC)');
   const duplicateNames = db.prepare(`

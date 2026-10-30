@@ -644,7 +644,7 @@ function toCsv(rows, usernames) {
   return `\uFEFF${lines.join('\r\n')}\r\n`;
 }
 
-function installCompetition(app, { db, requireUser, now }) {
+function installCompetition(app, { db, requireUser, requireAdmin, now }) {
   db.exec(`CREATE TABLE IF NOT EXISTS competition_results (
     id TEXT PRIMARY KEY,
     mode TEXT NOT NULL,
@@ -653,11 +653,11 @@ function installCompetition(app, { db, requireUser, now }) {
   )`);
 
   function record({ round, phase, player, stats, finalized, at, durationMs }) {
-    db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    db.prepare(`INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key, is_finalized)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO UPDATE SET
         correct_chars=excluded.correct_chars, wrong_chars=excluded.wrong_chars, accuracy=excluded.accuracy,
-        speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at`)
+        speed=excluded.speed, duration_ms=excluded.duration_ms, completed_at=excluded.completed_at, is_finalized=excluded.is_finalized`)
       .run(
         player.id,
         `competition-${player.team || 'personal'}`,
@@ -668,7 +668,7 @@ function installCompetition(app, { db, requireUser, now }) {
         Math.round((stats.correct / durationMs) * 60000),
         durationMs,
         at,
-        `competition:${round}:${player.seat}`
+        `competition:${round}:${player.seat}`, finalized ? 1 : 0
       );
   }
 
@@ -708,7 +708,12 @@ function installCompetition(app, { db, requireUser, now }) {
   app.get('/api/competition/:mode/board', route((request) => pick(request).boardState(12)));
 
   // 成绩导出：读数据库里最近一场已结算的比赛，服务重启也不会丢。
-  app.get('/api/competition/:mode/export.csv', requireUser, (request, response, next) => {
+  // 学生自己看成绩用它，教师后台和 AI 助手导出也用它 —— 后台没有学生会话，
+  // 所以这里学生优先、后台其次，两边都能拿到同一份文件。
+  const requireStudentOrAdmin = (request, response, next) => (
+    request.user ? next() : requireAdmin(request, response, next)
+  );
+  app.get('/api/competition/:mode/export.csv', requireStudentOrAdmin, (request, response, next) => {
     try {
       const mode = request.params.mode;
       if (!rooms[mode]) return response.status(404).json({ message: '比赛类型不正确' });

@@ -64,7 +64,7 @@ test('runs a persisted 1v1 event through the new API and hides other seat tokens
   assert.ok(finished.body.events.some((event) => event.action === 'round_settled'));
   const csv = await admin.get(`/api/competitions/${created.body.id}/export.csv`).expect(200);
   assert.match(csv.headers['content-type'], /text\/csv/);
-  assert.match(csv.text, /最终名次,姓名,参赛方/);
+  assert.match(csv.text, /最终名次,学生姓名,学号,班级,登录账号,参赛方/);
   assert.match(csv.text, /甲选手/);
   db.close();
 });

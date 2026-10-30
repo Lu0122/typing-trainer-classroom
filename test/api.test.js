@@ -547,8 +547,52 @@ test('filters scores by keyword, time range and passage category', async () => {
   assert.equal((await admin.get('/api/admin/scores?q=小明').expect(200)).body.total, 1);
   assert.equal((await admin.get('/api/admin/scores?range=7d').expect(200)).body.total, 1, '只留 7 天内的记录');
   assert.equal((await admin.get(`/api/admin/scores?category=${encodeURIComponent(passage.category)}`).expect(200)).body.total, 2);
+  const exported = await admin.get('/api/admin/scores/export?q=小明').expect(200);
+  assert.equal(exported.body.total, 1);
+  assert.equal(exported.body.rows[0].studentId, '');
+  assert.equal(exported.body.rows[0].className, '未分班');
   const categories = await admin.get('/api/admin/score-categories').expect(200);
   assert.ok(categories.body.categories.includes(passage.category));
+  context.db.close();
+});
+
+test('filters scores by class id and by unassigned students', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+
+  const insertUser = context.db.prepare("INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, 'x')");
+  const mingId = insertUser.run('u1', '小明').lastInsertRowid;
+  const hongId = insertUser.run('u2', '小红').lastInsertRowid;
+  const classId = context.db.prepare(`INSERT INTO classes (name, term, description, is_active, created_at, updated_at)
+    VALUES (?, ?, '', 1, 1000, 1000)`).run('一班', '2026秋').lastInsertRowid;
+  context.db.prepare('INSERT INTO class_members (class_id, user_id, joined_at, left_at) VALUES (?, ?, 1000, NULL)').run(classId, mingId);
+
+  const passage = context.db.prepare('SELECT id FROM passages WHERE is_active = 1 LIMIT 1').get();
+  const insertScore = context.db.prepare(`INSERT INTO scores (nickname, score, accuracy, wrong_chars, passage_id, created_at, user_id)
+    VALUES (?, ?, 95, 1, ?, ?, ?)`);
+  insertScore.run('小明', 60, passage.id, new Date().toISOString(), mingId);
+  insertScore.run('小红', 70, passage.id, new Date().toISOString(), hongId);
+  insertScore.run('访客', 80, passage.id, new Date().toISOString(), null);
+
+  const byClass = await admin.get(`/api/admin/scores?classId=${classId}`).expect(200);
+  assert.equal(byClass.body.total, 1, '只返回该班学生的成绩');
+  assert.equal(byClass.body.rows[0].nickname, '小明');
+  assert.equal(byClass.body.rows[0].className, '一班');
+
+  const unassigned = await admin.get('/api/admin/scores?classId=unassigned').expect(200);
+  assert.equal(unassigned.body.total, 1, '只返回未分班的已注册学生成绩，访客成绩不算未分班');
+  assert.equal(unassigned.body.rows[0].nickname, '小红');
+  assert.equal(unassigned.body.rows[0].className, '未分班');
+
+  assert.equal((await admin.get('/api/admin/scores?classId=abc').expect(200)).body.total, 3, '非法 classId 不追加筛选');
+
+  const exported = await admin.get(`/api/admin/scores/export?classId=${classId}`).expect(200);
+  assert.equal(exported.body.total, 1);
+  assert.equal(exported.body.rows.length, 1);
+  assert.equal(exported.body.rows[0].nickname, '小明');
+  assert.equal(exported.body.rows[0].className, '一班');
+  assert.ok(exported.body.rows.every((row) => row.className === '一班'));
   context.db.close();
 });
 
@@ -661,5 +705,76 @@ test('filters the progress list by class and echoes the chosen sort', async () =
   const sorted = await admin.get('/api/admin/progress/students?sort=sessions&order=asc').expect(200);
   assert.equal(sorted.body.sort, 'sessions');
   assert.equal(sorted.body.order, 'asc');
+  context.db.close();
+});
+
+test('exports weekly typing summaries for the selected class', async () => {
+  const context = setup();
+  const first = await registerStudent(context.app, 'weekly1', '周报甲');
+  const second = await registerStudent(context.app, 'weekly2', '周报乙');
+  const third = await registerStudent(context.app, 'weekly3', '周报丙');
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const classId = context.db.prepare(`INSERT INTO classes (name, term, description, is_active, created_at, updated_at)
+    VALUES ('周报班', '2026秋', '', 1, 1000, 1000)`).run().lastInsertRowid;
+  const firstId = context.db.prepare('SELECT id FROM users WHERE username = ?').get(first.username).id;
+  const secondId = context.db.prepare('SELECT id FROM users WHERE username = ?').get(second.username).id;
+  const thirdId = context.db.prepare('SELECT id FROM users WHERE username = ?').get(third.username).id;
+  const addMember = context.db.prepare('INSERT INTO class_members (class_id, user_id, joined_at, left_at) VALUES (?, ?, 1000, NULL)');
+  addMember.run(classId, firstId); addMember.run(classId, secondId); addMember.run(classId, thirdId);
+
+  await first.agent.post('/api/training-sessions').send({ mode: 'english-word', lessonTitle: '周报练习', correctChars: 20, wrongChars: 2, durationMs: 60_000 }).expect(201);
+  context.advance(2 * 24 * 60 * 60 * 1000);
+  await first.agent.post('/api/training-sessions').send({ mode: 'english-word', lessonTitle: '周报练习', correctChars: 40, wrongChars: 0, durationMs: 60_000 }).expect(201);
+  await second.agent.post('/api/training-sessions').send({ mode: 'beginner', lessonTitle: '周报入门', correctChars: 10, wrongChars: 1, durationMs: 60_000 }).expect(201);
+
+  await admin.get('/api/admin/progress/weekly').expect(400).expect((response) => assert.match(response.body.message, /选择一个班级/));
+  const weekly = await admin.get(`/api/admin/progress/weekly?classId=${classId}`).expect(200);
+  assert.equal(weekly.body.className, '周报班');
+  assert.equal(weekly.body.total, 3);
+  const firstSummary = weekly.body.rows.find((row) => row.displayName === '周报甲');
+  assert.equal(firstSummary.sessions, 2);
+  assert.equal(firstSummary.correctChars, 60);
+  assert.equal(firstSummary.wrongChars, 2);
+  assert.equal(firstSummary.averageSpeed, 30);
+  assert.equal(firstSummary.accuracy, 96.8);
+  const inactiveSummary = weekly.body.rows.find((row) => row.displayName === '周报丙');
+  assert.equal(inactiveSummary.sessions, 0);
+  assert.equal(inactiveSummary.durationHours, 0);
+  context.db.close();
+});
+
+test('学生反馈：只填一句话就能提交，其余字段留空也不报错', async () => {
+  const context = setup();
+  const { agent: student } = await registerStudent(context.app, '301', '反馈同学');
+
+  // 极简路径：学生只会写「在哪 + 看到什么」，不该被复现步骤/预期结果卡住。
+  const minimal = await student.post('/api/bug-reports').send({ title: '音游第三关音符突然不动了' }).expect(201);
+  assert.match(minimal.body.caseId, /^BUG-\d{5}$/u);
+
+  const mine = await student.get('/api/bug-reports/mine').expect(200);
+  assert.equal(mine.body.reports.length, 1);
+  assert.equal(mine.body.reports[0].title, '音游第三关音符突然不动了');
+  assert.equal(mine.body.reports[0].status, '待处理');
+  assert.equal(mine.body.reports[0].priority, 'P2', '没指定严重程度时用默认值');
+
+  // 标题是唯一必填项，空标题仍要拦住。
+  await student.post('/api/bug-reports').send({ title: '   ', steps: '打开了音游' }).expect(400);
+
+  // 标签映射：功能写进前置条件、问题类型写进实际结果、严重程度写进优先级。
+  await student.post('/api/bug-reports').send({
+    title: '排行榜不显示我的名字',
+    preconditions: '功能：排行榜 / 成绩',
+    actualResult: '问题类型：分数不对\n打完一局没上榜',
+    priority: 'P1'
+  }).expect(201);
+
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const rows = (await admin.get('/api/admin/bug-reports').expect(200)).body.rows;
+  const row = rows.find((item) => item.title === '排行榜不显示我的名字');
+  assert.equal(row.preconditions, '功能：排行榜 / 成绩');
+  assert.equal(row.priority, 'P1');
+  assert.match(row.actualResult, /问题类型：分数不对/u);
   context.db.close();
 });

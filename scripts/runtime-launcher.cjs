@@ -30,8 +30,9 @@ function health(port) {
 
 function openBrowser(port) {
   if (noBrowser) return;
-  execFile('cmd.exe', ['/d', '/s', '/c', `start "" "http://127.0.0.1:${port}/"`], { windowsHide: true }, error => {
-    if (error) console.log(`请手动打开 http://127.0.0.1:${port}/`);
+  // 老师开机第一件事是管后台，所以默认打开 /admin，不是学生首页。
+  execFile('cmd.exe', ['/d', '/s', '/c', `start "" "http://127.0.0.1:${port}/admin"`], { windowsHide: true }, error => {
+    if (error) console.log(`请手动打开 http://127.0.0.1:${port}/admin`);
   });
 }
 
@@ -66,7 +67,7 @@ async function main() {
     if (alive(previous.pid)) {
       const status = previous.port && await health(previous.port);
       if (status?.instance === previous.instance) {
-        console.log(`字练场已经在运行：http://127.0.0.1:${previous.port}/`);
+        console.log(`字练场已经在运行：http://127.0.0.1:${previous.port}/admin`);
         openBrowser(previous.port);
       } else console.log('这个运行包的服务正在启动或尚未退出，请查看原服务窗口。');
       return;
@@ -83,8 +84,12 @@ async function main() {
   fs.writeFileSync(lockPath, JSON.stringify(record));
   process.env.PORT = String(port);
   process.env.TYPING_RUNTIME_INSTANCE = instance;
-  console.log('字练场 · 免安装运行版');
-  console.log('请保持此窗口开启；停止服务可输入 q 回车，或按 Ctrl+C。');
+  console.log('================================================');
+  console.log('  字练场 · 免安装运行版');
+  console.log('  ⚠ 不要关闭这个黑色窗口');
+  console.log('     关掉窗口 = 服务停止，全班学生都会断线');
+  console.log('  需要停止时：输入 q 回车，或按 Ctrl+C');
+  console.log('================================================');
   require('./backend/server.js');
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', value => { if (value.trim().toLowerCase() === 'q') process.emit('SIGINT'); });
@@ -93,8 +98,9 @@ async function main() {
   async function ready() {
     const status = await health(port);
     if (status?.instance === instance) {
-      console.log(`READY http://127.0.0.1:${port}/`);
-      console.log(`管理后台：http://127.0.0.1:${port}/admin`);
+      console.log(noBrowser
+        ? `READY 服务已就绪：http://127.0.0.1:${port}/`
+        : `READY 服务已就绪，已在本机打开后台：http://127.0.0.1:${port}/admin`);
       openBrowser(port);
     } else if (Date.now() < deadline) setTimeout(ready, 200);
     else console.error('服务未就绪，请查看上面的错误或 data/runlogs/server-events.log。');

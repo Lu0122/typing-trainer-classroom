@@ -4,6 +4,29 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { createDatabase } = require('./database');
 const { createApp } = require('./app');
 
+// 挑出「发给学生」用的那个局域网地址。
+// 一台电脑常常同时挂着 WSL、Hyper-V、VMware、VPN 的虚拟网卡，全都打印出来老师分不清。
+// 先按网卡名排除虚拟网卡，再按网段排序（192.168 > 10 > 172.16-31 > 其它），
+// 最后把 .1 结尾的地址（虚拟网络的网关常用）往后排。
+const VIRTUAL_ADAPTER = /vethernet|vmware|virtualbox|hyper-v|wsl|docker|loopback|tap|tailscale|zerotier|vpn|teredo|isatap/i;
+function lanRank(address) {
+  let score = 30;
+  if (/^192\.168\./.test(address)) score = 0;
+  else if (/^10\./.test(address)) score = 10;
+  else if (/^172\.(?:1[6-9]|2\d|3[01])\./.test(address)) score = 20;
+  if (address.endsWith('.1')) score += 5;
+  return score;
+}
+function lanAddresses() {
+  return Object.entries(os.networkInterfaces())
+    .flatMap(([name, items]) => (items || [])
+      .filter((item) => item && item.family === 'IPv4' && !item.internal)
+      .map((item) => ({ name, address: item.address })))
+    .filter((item) => !VIRTUAL_ADAPTER.test(item.name))
+    .filter((item) => !/^198\.(?:18|19)\./.test(item.address) && !item.address.startsWith('169.254.'))
+    .sort((a, b) => lanRank(a.address) - lanRank(b.address));
+}
+
 const port = Number.parseInt(process.env.PORT, 10) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 const databasePath = path.resolve(process.env.DATABASE_PATH || path.join(__dirname, '..', 'data', 'typing.db'));
@@ -22,9 +45,21 @@ if (!process.env.ADMIN_PASSWORD) {
 
 const server = app.listen(port, host, () => {
   console.log(`项目目录：${path.join(__dirname, '..')}`);
-  console.log(`字练场已启动：http://localhost:${port}`);
-  const addresses = Object.values(os.networkInterfaces()).flat().filter((item) => item && item.family === 'IPv4' && !item.internal);
-  for (const item of addresses) console.log(`局域网访问：http://${item.address}:${port}`);
+  console.log(`本机后台：http://127.0.0.1:${port}/admin`);
+  // 老师只需要一条能发给学生的链接，所以这里挑一个最像「教室局域网」的地址：
+  // 先排除虚拟网卡（WSL / Hyper-V / VMware / VPN 等），再按网段排序。
+  const lan = lanAddresses();
+  if (lan.length) {
+    console.log('');
+    console.log('==== 发给学生的链接（把下面这一条发到班级群）====');
+    console.log(`  http://${lan[0].address}:${port}    [${lan[0].name}]`);
+    console.log('================================================');
+    if (lan.length > 1) {
+      console.log(`其它网卡（一般不用）：${lan.slice(1).map((item) => `http://${item.address}:${port} [${item.name}]`).join('  ')}`);
+    }
+  } else {
+    console.log('没有检测到可用的局域网地址：学生可能连不上，请确认这台电脑已连上教室网络。');
+  }
 });
 
 function shutdown() {

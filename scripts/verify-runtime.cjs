@@ -77,8 +77,19 @@ async function main() {
   const settings = require('dotenv').parse(fs.readFileSync(path.join(extracted, '.env')));
   const admin = await fetch(base + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: settings.ADMIN_PASSWORD || 'admin123' }) });
   assert.equal(admin.status, 200, '运行包沿用 .env 后台密码');
+  const adminCookie = admin.headers.get('set-cookie')?.split(';')[0] || '';
   const registration = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'runtime901', displayName: '运行包验收', password: 'Classroom123' }) });
-  assert.equal(registration.status, 201);
+  if (settings.STUDENT_REGISTRATION_ENABLED === 'true') {
+    assert.equal(registration.status, 201);
+  } else {
+    assert.equal(registration.status, 404, '关闭学生自助注册时应返回 404');
+    const imported = await fetch(base + '/api/admin/users/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: adminCookie },
+      body: JSON.stringify({ rows: [{ displayName: '运行包验收', studentId: '20999901' }] })
+    });
+    assert.equal(imported.status, 201, '关闭注册后应可由管理员导入学生');
+  }
   const duplicate = spawnSync(runtime, ['launcher.cjs', '--no-browser', '--port=0'], { cwd: extracted, env: cleanEnv, windowsHide: true, encoding: 'utf8', timeout: 10000 });
   assert.equal(duplicate.status, 0); assert.match(duplicate.stdout, /已经在运行/);
   assert.equal((await (await get(base, '/api/health')).json()).instance, status.instance);

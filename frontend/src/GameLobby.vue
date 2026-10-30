@@ -217,6 +217,7 @@ function trackGlow(event) {
               <strong>进入战场<ArrowRight :size="16"/></strong>
             </footer>
           </button>
+
         </div>
 
         <footer class="lobby-foot">

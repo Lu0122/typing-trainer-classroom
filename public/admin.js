@@ -1,4 +1,4 @@
-const adminState = { passages: [], users: [], progress: [], assignments: [], competitions: [], assignmentUsers: [], assignmentClasses: [], classes: [], unassignedStudents: [], page: 1, pages: 1, passagePage: 1, passagePages: 1, userPage: 1, userPages: 1, progressPage: 1, progressPages: 1, assignmentPage: 1, assignmentPages: 1, classPage: 1, classPages: 1, unassignedPage: 1, unassignedPages: 1, classMembersPage: 1, classMembersPages: 1, classMembersClassId: null, activeView: 'overview', admin: null };
+const adminState = { passages: [], users: [], progress: [], assignments: [], competitions: [], assignmentUsers: [], assignmentClasses: [], classes: [], unassignedStudents: [], page: 1, pages: 1, passagePage: 1, passagePages: 1, userPage: 1, userPages: 1, progressPage: 1, progressPages: 1, assignmentPage: 1, assignmentPages: 1, classPage: 1, classPages: 1, unassignedPage: 1, unassignedPages: 1, classMembersPage: 1, classMembersPages: 1, classMembersClassId: null, agentLogs: [], agentConversations: [], agentConversationId: null, activeView: 'overview', admin: null };
 
 const el = {
   loginView: document.querySelector('#login-view'), adminShell: document.querySelector('#admin-shell'),
@@ -6,29 +6,52 @@ const el = {
   togglePassword: document.querySelector('#toggle-password'), loginError: document.querySelector('#login-error'),
   logout: document.querySelector('#logout-button'), navItems: document.querySelectorAll('.admin-nav-item'),
   views: document.querySelectorAll('.admin-view'), currentDate: document.querySelector('#current-date'),
+  breadcrumbHome: document.querySelector('#breadcrumb-home'), breadcrumbCurrent: document.querySelector('#breadcrumb-current'),
   statAttempts: document.querySelector('#stat-attempts'), statParticipants: document.querySelector('#stat-participants'),
   statParticipantNote: document.querySelector('#stat-participant-note'), statAverage: document.querySelector('#stat-average'), statTop: document.querySelector('#stat-top'), statPassages: document.querySelector('#stat-passages'),
   overviewSpeedChart: document.querySelector('#overview-speed-chart'), overviewActivityChart: document.querySelector('#overview-activity-chart'), overviewModeChart: document.querySelector('#overview-mode-chart'),
-  passageSearch: document.querySelector('#passage-search'), passageCount: document.querySelector('#passage-count'),
+  passageSearch: document.querySelector('#passage-search'), passageCategoryFilter: document.querySelector('#passage-category-filter'), passageCount: document.querySelector('#passage-count'),
   passageTable: document.querySelector('#passage-table'), passageEmpty: document.querySelector('#passage-empty'), addPassage: document.querySelector('#add-passage'), passagePagination: document.querySelector('#passage-pagination'), passagePageLabel: document.querySelector('#passage-page-label'), passagePreviousPage: document.querySelector('#passage-previous-page'), passageNextPage: document.querySelector('#passage-next-page'),
   userSearch: document.querySelector('#user-search'), userClassFilter: document.querySelector('#user-class-filter'), userCount: document.querySelector('#user-count'), userTable: document.querySelector('#user-table'), userEmpty: document.querySelector('#user-empty'), refreshUsers: document.querySelector('#refresh-users'), userPagination: document.querySelector('#user-pagination'), userPageLabel: document.querySelector('#user-page-label'), userPreviousPage: document.querySelector('#user-previous-page'), userNextPage: document.querySelector('#user-next-page'),
   studentImportText: document.querySelector('#student-import-text'), studentImportSubmit: document.querySelector('#student-import-submit'), studentImportResult: document.querySelector('#student-import-result'),
-  progressSearch: document.querySelector('#progress-search'), progressCount: document.querySelector('#progress-count'), progressTable: document.querySelector('#progress-table'), progressEmpty: document.querySelector('#progress-empty'), refreshProgress: document.querySelector('#refresh-progress'), progressPagination: document.querySelector('#progress-pagination'), progressPageLabel: document.querySelector('#progress-page-label'), progressPreviousPage: document.querySelector('#progress-previous-page'), progressNextPage: document.querySelector('#progress-next-page'),
+  progressSearch: document.querySelector('#progress-search'), progressClassFilter: document.querySelector('#progress-class-filter'), progressCount: document.querySelector('#progress-count'), progressTable: document.querySelector('#progress-table'), progressEmpty: document.querySelector('#progress-empty'), exportProgressWeekly: document.querySelector('#export-progress-weekly'), refreshProgress: document.querySelector('#refresh-progress'), progressPagination: document.querySelector('#progress-pagination'), progressPageLabel: document.querySelector('#progress-page-label'), progressPreviousPage: document.querySelector('#progress-previous-page'), progressNextPage: document.querySelector('#progress-next-page'),
   progressMonitored: document.querySelector('#progress-monitored'), progressImproving: document.querySelector('#progress-improving'), progressSpeedChange: document.querySelector('#progress-speed-change'), progressWeekSessions: document.querySelector('#progress-week-sessions'),
   assignments: document.querySelector('#assignment-table'), assignmentCount: document.querySelector('#assignment-count'), assignmentEmpty: document.querySelector('#assignment-empty'), assignmentPagination: document.querySelector('#assignment-pagination'), assignmentPageLabel: document.querySelector('#assignment-page-label'), assignmentPreviousPage: document.querySelector('#assignment-previous-page'), assignmentNextPage: document.querySelector('#assignment-next-page'), refreshAssignments: document.querySelector('#refresh-assignments'), assignmentForm: document.querySelector('#assignment-form'), assignmentId: document.querySelector('#assignment-id-input'), assignmentTitle: document.querySelector('#assignment-title-input'), assignmentMode: document.querySelector('#assignment-mode-input'), assignmentLesson: document.querySelector('#assignment-lesson-input'), assignmentAudience: document.querySelector('#assignment-audience-input'), assignmentClassField: document.querySelector('#assignment-class-field'), assignmentClass: document.querySelector('#assignment-class-input'), assignmentStudentsField: document.querySelector('#assignment-students-field'), assignmentStudents: document.querySelector('#assignment-students-input'), assignmentAccuracy: document.querySelector('#assignment-accuracy-input'), assignmentSpeed: document.querySelector('#assignment-speed-input'), assignmentDue: document.querySelector('#assignment-due-input'), assignmentDescription: document.querySelector('#assignment-description-input'), assignmentSubmit: document.querySelector('#assignment-submit'),
   classes: document.querySelector('#class-table'), classCount: document.querySelector('#class-count'), classEmpty: document.querySelector('#class-empty'), classPagination: document.querySelector('#class-pagination'), classPageLabel: document.querySelector('#class-page-label'), classPreviousPage: document.querySelector('#class-previous-page'), classNextPage: document.querySelector('#class-next-page'), refreshClasses: document.querySelector('#refresh-classes'), classForm: document.querySelector('#class-form'), classId: document.querySelector('#class-id-input'), className: document.querySelector('#class-name-input'), classTerm: document.querySelector('#class-term-input'), classDescription: document.querySelector('#class-description-input'), classSubmit: document.querySelector('#class-submit'), classMembersTitle: document.querySelector('#class-members-title'), classMembersTable: document.querySelector('#class-members-table'), classMembersEmpty: document.querySelector('#class-members-empty'), classMembersPagination: document.querySelector('#class-members-pagination'), classMembersPageLabel: document.querySelector('#class-members-page-label'), classMembersPreviousPage: document.querySelector('#class-members-previous-page'), classMembersNextPage: document.querySelector('#class-members-next-page'), classOverviewContent: document.querySelector('#class-overview-content'), classMetricMembers: document.querySelector('#class-metric-members'), classMetricActive: document.querySelector('#class-metric-active'), classMetricSessions: document.querySelector('#class-metric-sessions'), classMetricMinutes: document.querySelector('#class-metric-minutes'), classMetricSpeed: document.querySelector('#class-metric-speed'), classMetricAccuracy: document.querySelector('#class-metric-accuracy'), classOverviewTasks: document.querySelector('#class-overview-tasks'), classOverviewTasksEmpty: document.querySelector('#class-overview-tasks-empty'), classOverviewRisks: document.querySelector('#class-overview-risks'), classOverviewRisksEmpty: document.querySelector('#class-overview-risks-empty'), classOverviewRanking: document.querySelector('#class-overview-ranking'), classOverviewRankingEmpty: document.querySelector('#class-overview-ranking-empty'), closeClassMembers: document.querySelector('#close-class-members'), unassignedTable: document.querySelector('#unassigned-table'), unassignedCount: document.querySelector('#unassigned-count'), unassignedEmpty: document.querySelector('#unassigned-empty'), unassignedPagination: document.querySelector('#unassigned-pagination'), unassignedPageLabel: document.querySelector('#unassigned-page-label'), unassignedPreviousPage: document.querySelector('#unassigned-previous-page'), unassignedNextPage: document.querySelector('#unassigned-next-page'),
   scoreTable: document.querySelector('#score-table'), scoreCount: document.querySelector('#score-count'), scoreEmpty: document.querySelector('#score-empty'),
-  scorePagination: document.querySelector('#score-pagination'), pageLabel: document.querySelector('#page-label'), previousPage: document.querySelector('#previous-page'), nextPage: document.querySelector('#next-page'), refreshScores: document.querySelector('#refresh-scores'),
+  scorePagination: document.querySelector('#score-pagination'), pageLabel: document.querySelector('#page-label'), previousPage: document.querySelector('#previous-page'), nextPage: document.querySelector('#next-page'), exportScores: document.querySelector('#export-scores'), refreshScores: document.querySelector('#refresh-scores'),
   competitionForm: document.querySelector('#competition-form'), competitionName: document.querySelector('#competition-name-input'), competitionMode: document.querySelector('#competition-mode-input'), competitionSchedule: document.querySelector('#competition-schedule-input'), competitionDuration: document.querySelector('#competition-duration-input'), competitionSeries: document.querySelector('#competition-series-input'), competitionSideA: document.querySelector('#competition-side-a-input'), competitionSideB: document.querySelector('#competition-side-b-input'), competitionSideNames: document.querySelector('#competition-side-names-input'), competitionTeamSize: document.querySelector('#competition-team-size-input'), competitionTeamFields: document.querySelectorAll('.competition-team-field'), competitionLeagueFields: document.querySelectorAll('.competition-league-field'), competitionTable: document.querySelector('#competition-table'), competitionCount: document.querySelector('#competition-count'), competitionEmpty: document.querySelector('#competition-empty'), refreshCompetitions: document.querySelector('#refresh-competitions'),
   battleCompetitionStatus: document.querySelector('#battle-competition-status'), battleCompetitionSummary: document.querySelector('#battle-competition-summary'), battleCompetitionRoster: document.querySelector('#battle-competition-roster'), battleCompetitionDuration: document.querySelector('#battle-competition-duration'), battleCompetitionPrepare: document.querySelector('#battle-competition-prepare'), battleCompetitionStart: document.querySelector('#battle-competition-start'),
   dialog: document.querySelector('#passage-dialog'), passageForm: document.querySelector('#passage-form'), dialogTitle: document.querySelector('#passage-dialog-title'),
-  passageId: document.querySelector('#passage-id'), passageTitle: document.querySelector('#passage-title-input'), passageCategory: document.querySelector('#passage-category-input'),
+  passageId: document.querySelector('#passage-id'), passageTitle: document.querySelector('#passage-title-input'), passageCategory: document.querySelector('#passage-category-input'), passageAiHint: document.querySelector('#passage-ai-hint'),
   passageContent: document.querySelector('#passage-content-input'), passageActive: document.querySelector('#passage-active-input'), contentCounter: document.querySelector('#content-counter'),
   closeDialog: document.querySelector('#close-passage-dialog'), cancelPassage: document.querySelector('#cancel-passage'),
   resetDialog: document.querySelector('#password-reset-dialog'), resetForm: document.querySelector('#password-reset-form'), resetUserId: document.querySelector('#reset-user-id'), resetUserName: document.querySelector('#reset-user-name'), resetPassword: document.querySelector('#reset-password-input'), resetPasswordConfirm: document.querySelector('#reset-password-confirm'), resetError: document.querySelector('#reset-password-error'), closeReset: document.querySelector('#close-password-reset'), cancelReset: document.querySelector('#cancel-password-reset'),
+  studentProfileDialog: document.querySelector('#student-profile-dialog'), studentProfileForm: document.querySelector('#student-profile-form'), studentProfileId: document.querySelector('#student-profile-id'), studentProfileName: document.querySelector('#student-profile-name'), studentProfileStudentId: document.querySelector('#student-profile-student-id'), studentProfileClass: document.querySelector('#student-profile-class'), studentProfileAvatar: document.querySelector('#student-profile-avatar'), studentProfileAvatarPreview: document.querySelector('#student-profile-avatar-preview'), studentProfileError: document.querySelector('#student-profile-error'), closeStudentProfile: document.querySelector('#close-student-profile'), cancelStudentProfile: document.querySelector('#cancel-student-profile'),
   progressDialog: document.querySelector('#progress-dialog'), closeProgressDialog: document.querySelector('#close-progress-dialog'), progressStudentName: document.querySelector('#progress-student-name'), progressDialogSummary: document.querySelector('#progress-dialog-summary'), progressChart: document.querySelector('#progress-chart'), progressModeList: document.querySelector('#progress-mode-list'), progressRecentList: document.querySelector('#progress-recent-list'),
-  mobileMenu: document.querySelector('#mobile-menu-button'), sidebar: document.querySelector('.admin-sidebar'), toast: document.querySelector('#admin-toast')
+  mobileMenu: document.querySelector('#mobile-menu-button'), navScrim: document.querySelector('#admin-nav-scrim'), sidebar: document.querySelector('.admin-sidebar'), toast: document.querySelector('#admin-toast')
 };
+
+el.aiSettingsForm = document.querySelector('#ai-settings-form');
+el.aiProvider = document.querySelector('#ai-provider-input');
+el.aiModel = document.querySelector('#ai-model-input');
+el.aiBaseUrl = document.querySelector('#ai-base-url-input');
+el.aiApiKey = document.querySelector('#ai-api-key-input');
+el.aiRolePrompt = document.querySelector('#ai-role-prompt-input');
+el.aiEnabled = document.querySelector('#ai-enabled-input');
+el.aiStatus = document.querySelector('#ai-settings-status');
+el.aiMessage = document.querySelector('#ai-settings-message');
+el.aiTest = document.querySelector('#ai-test-button');
+el.generatePassageAi = document.querySelector('#generate-passage-ai');
+el.agentForm = document.querySelector('#agent-form');
+el.agentInput = document.querySelector('#agent-input');
+el.agentMessages = document.querySelector('#agent-messages');
+el.agentStatus = document.querySelector('#agent-status');
+el.agentQuickPrompts = document.querySelectorAll('.agent-quick-prompt');
+el.agentConversationList = document.querySelector('#agent-conversation-list');
+el.agentConversationCount = document.querySelector('#agent-conversation-count');
+el.agentConversationEmpty = document.querySelector('#agent-conversation-empty');
+el.agentNewChat = document.querySelector('#agent-new-chat');
 
 el.adminAccountForm = document.querySelector('#admin-account-form');
 el.adminAccountOpen = document.querySelector('#admin-account-open');
@@ -90,6 +113,7 @@ el.competitionLanguageFilter = document.querySelector('#competition-language-fil
 el.scoreSearch = document.querySelector('#score-search');
 el.scoreRangeFilter = document.querySelector('#score-range-filter');
 el.scoreCategoryFilter = document.querySelector('#score-category-filter');
+el.scoreClassFilter = document.querySelector('#score-class-filter');
 
 el.studentImportOpen = document.querySelector('#student-import-open');
 el.studentImportDialog = document.querySelector('#student-import-dialog');
@@ -105,9 +129,18 @@ el.studentImportFile = document.querySelector('#student-import-file');
 el.studentImportDrop = document.querySelector('#student-import-drop');
 el.studentImportFileName = document.querySelector('#student-import-file-name');
 el.studentImportPreview = document.querySelector('#student-import-preview');
+el.studentImportPreviewEmpty = document.querySelector('#student-import-preview-empty');
 el.studentImportPasteSubmit = document.querySelector('#student-import-paste-submit');
 el.studentImportPasteResult = document.querySelector('#student-import-paste-result');
 el.studentImportClass = document.querySelector('#student-import-class');
+el.studentImportAddClass = document.querySelector('#student-import-add-class');
+el.studentImportStatusDialog = document.querySelector('#student-import-status-dialog');
+el.studentImportStatusIcon = document.querySelector('#student-import-status-icon');
+el.studentImportStatusTitle = document.querySelector('#student-import-status-title');
+el.studentImportStatusMessage = document.querySelector('#student-import-status-message');
+el.studentImportStatusProgress = document.querySelector('#student-import-status-progress');
+el.studentImportStatusDetail = document.querySelector('#student-import-status-detail');
+el.studentImportStatusClose = document.querySelector('#student-import-status-close');
 
 el.classCreateOpen = document.querySelector('#class-create-open');
 el.classDialog = document.querySelector('#class-dialog');
@@ -129,7 +162,6 @@ el.classAssignResult = document.querySelector('#class-assign-result');
 el.classAssignCount = document.querySelector('#class-assign-count');
 el.classMembersDialog = document.querySelector('#class-members-dialog');
 
-el.progressClassFilter = document.querySelector('#progress-class-filter');
 el.assignmentOpen = document.querySelector('#assignment-open');
 el.assignmentDialog = document.querySelector('#assignment-dialog');
 el.assignmentDialogTitle = document.querySelector('#assignment-dialog-title');
@@ -157,6 +189,16 @@ el.bugReportPageLabel = document.querySelector('#bug-report-page-label');
 el.bugReportPreviousPage = document.querySelector('#bug-report-previous-page');
 el.bugReportNextPage = document.querySelector('#bug-report-next-page');
 el.refreshBugReports = document.querySelector('#refresh-bug-reports');
+el.agentLogTable = document.querySelector('#agent-log-table');
+el.agentLogCount = document.querySelector('#agent-log-count');
+el.agentLogEmpty = document.querySelector('#agent-log-empty');
+el.agentLogPagination = document.querySelector('#agent-log-pagination');
+el.agentLogPageLabel = document.querySelector('#agent-log-page-label');
+el.agentLogPreviousPage = document.querySelector('#agent-log-previous-page');
+el.agentLogNextPage = document.querySelector('#agent-log-next-page');
+el.refreshAgentLogs = document.querySelector('#refresh-agent-logs');
+el.agentLogSearch = document.querySelector('#agent-log-search');
+el.agentLogRange = document.querySelector('#agent-log-range');
 el.bugReportDialog = document.querySelector('#bug-report-dialog');
 el.closeBugReport = document.querySelector('#close-bug-report');
 el.cancelBugReport = document.querySelector('#cancel-bug-report');
@@ -273,14 +315,41 @@ function setAuthenticated(authenticated) {
   if (!authenticated) setTimeout(() => el.password.focus(), 0);
 }
 
+// 移动端把列表折成卡片时，用每列的表头文字当字段名。
+// 表头只写一次，靠 MutationObserver 跟随重渲染，避免每个 render 函数各改一遍。
+function labelTableCells() {
+  document.querySelectorAll('#admin-shell .table-scroll table').forEach((table) => {
+    const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      [...tr.children].forEach((cell, index) => {
+        const label = heads[index] || '';
+        if (label && cell.dataset.label !== label) cell.dataset.label = label;
+      });
+    });
+  });
+}
+let labelQueued = false;
+function scheduleTableLabels() {
+  if (labelQueued) return;
+  labelQueued = true;
+  requestAnimationFrame(() => { labelQueued = false; labelTableCells(); });
+}
+new MutationObserver(scheduleTableLabels).observe(document.body, { childList: true, subtree: true });
+
+// 移动端导航抽屉：打开时补一层遮罩，点遮罩 / Esc / 切页都会收起。
+function setNavOpen(open) {
+  el.sidebar.classList.toggle('is-open', open);
+  if (el.navScrim) el.navScrim.hidden = !open;
+  el.mobileMenu?.setAttribute('aria-expanded', String(open));
+}
+
 function renderAdminAccounts(rows) {
   el.adminAccountCount.textContent = `共 ${adminState.adminAccountsTotal ?? rows.length} 个`;
   el.adminAccountEmpty.hidden = rows.length > 0;
   el.adminAccountTable.replaceChildren(...rows.map((item) => {
     const row = document.createElement('tr');
-    const name = document.createElement('td'); name.className = 'student-cell';
-    const strong = document.createElement('strong'); strong.textContent = item.displayName;
-    const small = document.createElement('span'); small.textContent = item.username; name.append(strong, small);
+    const name = document.createElement('td'); name.className = 'admin-account-cell';
+    name.textContent = item.username;
     const role = document.createElement('td'); role.textContent = item.role === 'superadmin' ? '超级管理员' : '普通管理员';
     const status = document.createElement('td'); const pill = document.createElement('span');
     pill.className = `status-pill ${item.isActive ? '' : 'is-inactive'}`; pill.textContent = item.isActive ? '启用中' : '已停用'; status.append(pill);
@@ -334,6 +403,243 @@ async function loadStats() {
   el.statPassages.textContent = `${stats.activePassages} 篇文章正在使用`;
 }
 
+async function loadAiSettings() {
+  const data = await api('/api/admin/ai-settings');
+  el.aiProvider.value = data.provider || '阿里云百炼';
+  el.aiModel.value = data.model || 'qwen-flash';
+  el.aiBaseUrl.value = data.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  el.aiApiKey.value = '';
+  el.aiRolePrompt.value = data.rolePrompt || '你是一名真实的电商消费者，正在与客服沟通。请保持自然、具体、有情绪但不夸张，围绕订单、物流、退换货、售后和商品体验提出合理诉求。';
+  el.aiEnabled.checked = Boolean(data.enabled);
+  el.aiStatus.textContent = data.apiKeyConfigured ? (data.enabled ? '已启用' : '已配置，未启用') : '未配置';
+  el.aiStatus.className = `status-badge ${data.apiKeyConfigured ? 'is-ready' : ''}`;
+}
+
+// 查询明细用表格展示（不是原始 JSON）：模型回答已经是自然语言，这里只给老师核对数字用的表。
+// 助手气泡：先建空壳，流式时往里逐字追加。
+function createAgentBubble(role) {
+  const message = document.createElement('div');
+  message.className = `agent-message agent-message-${role}`;
+  const title = document.createElement('strong');
+  title.textContent = role === 'user' ? '我' : '管理助手';
+  const body = document.createElement('p');
+  message.append(title, body);
+  if (el.agentMessages) {
+    el.agentMessages.append(message);
+    el.agentMessages.scrollTop = el.agentMessages.scrollHeight;
+  }
+  return { message, body };
+}
+
+// 等待期间的气泡占位：一句话 + 三个跳动的点，让老师知道「在跑」而不是「卡死了」。
+function setAgentPending(body, text) {
+  if (!body) return;
+  body.classList.add('is-pending');
+  body.replaceChildren(document.createTextNode(text));
+  const dots = document.createElement('span');
+  dots.className = 'agent-dots';
+  dots.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+  body.append(dots);
+}
+
+function clearAgentPending(body) {
+  if (body) body.classList.remove('is-pending');
+}
+
+function appendAgentDownloads(message, downloads) {
+  for (const item of downloads || []) {
+    const link = document.createElement('a');
+    link.className = 'primary-button agent-download-link';
+    link.href = item.url;
+    link.download = '';
+    link.textContent = `下载${String(item.label || '').replace(/^导出/u, '') || '数据'} CSV`;
+    message.append(link);
+  }
+}
+
+// 只放自然语言，不再往气泡里塞数据表 —— 老师要的是结论，不是字段。
+function appendAgentMessage(role, content, downloads = []) {
+  const { message, body } = createAgentBubble(role);
+  body.textContent = content;
+  if (role === 'assistant') appendAgentDownloads(message, downloads);
+  if (el.agentMessages) el.agentMessages.scrollTop = el.agentMessages.scrollHeight;
+  return message;
+}
+
+async function sendAgentMessage(message) {
+  const text = String(message || '').trim();
+  if (!text) return;
+  appendAgentMessage('user', text);
+  el.agentInput.value = '';
+  el.agentInput.disabled = true;
+  el.agentStatus.textContent = '思考中…';
+  const bubble = createAgentBubble('assistant');
+  setAgentPending(bubble.body, '正在理解你的问题');
+  let acc = '';
+  // 模型首字有时要等十几秒，久了把文案换成「还在处理」，避免看起来像卡死。
+  const slowTimer = setTimeout(() => {
+    if (!acc.trim()) setAgentPending(bubble.body, '还在处理，请稍等');
+  }, 20000);
+  try {
+    const response = await fetch('/api/admin/agent/chat?stream=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, conversationId: adminState.agentConversationId || undefined })
+    });
+    if (response.status === 401) { setAuthenticated(false); throw new Error('登录已过期'); }
+    if (!response.ok || !response.body) throw new Error(`服务返回 ${response.status}`);
+
+    // 逐块解析 SSE：event: xxx / data: {...}
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let done = null;
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      let index = buffer.indexOf('\n\n');
+      while (index >= 0) {
+        const raw = buffer.slice(0, index);
+        buffer = buffer.slice(index + 2);
+        index = buffer.indexOf('\n\n');
+        const event = (raw.match(/^event:\s*(.+)$/m) || [])[1] || 'message';
+        const dataLine = (raw.match(/^data:\s*(.+)$/m) || [])[1] || '';
+        let payload = {};
+        try { payload = JSON.parse(dataLine); } catch { /* 忽略空块 */ }
+        if (event === 'delta' && payload.text) {
+          if (!acc.trim()) clearAgentPending(bubble.body);
+          acc += payload.text;
+          bubble.body.textContent = acc;
+          el.agentMessages.scrollTop = el.agentMessages.scrollHeight;
+          el.agentStatus.textContent = '正在生成…';
+        } else if (event === 'progress') {
+          // 后端在「理解问题」「查完数据」两个节点各推一条，让等待过程有反馈。
+          el.agentStatus.textContent = payload.text || '处理中…';
+          if (!acc.trim()) setAgentPending(bubble.body, String(payload.text || '处理中').replace(/…$/u, ''));
+        } else if (event === 'done') {
+          done = payload;
+        } else if (event === 'error') {
+          throw new Error(payload.message || '生成失败');
+        }
+      }
+    }
+    clearAgentPending(bubble.body);
+    if (!acc.trim()) bubble.body.textContent = done?.reply || '这次没有查到数据。';
+    else bubble.body.textContent = done?.reply || acc;
+    appendAgentDownloads(bubble.message, done?.downloads);
+    el.agentStatus.textContent = done?.streamed ? '已由 AI 生成' : (done?.source === 'llm' ? '已由 AI 分析' : '已使用内置查询模式');
+    if (done?.conversationId) {
+      adminState.agentConversationId = done.conversationId;
+      try { localStorage.setItem(AGENT_CONVERSATION_KEY, String(done.conversationId)); } catch { /* 隐私模式 */ }
+    }
+    loadAgentConversations().catch(() => {});
+  } catch (error) {
+    clearAgentPending(bubble.body);
+    bubble.body.textContent = `查询失败：${error.message}`;
+    el.agentStatus.textContent = '';
+    if (error.status === 401) setAuthenticated(false);
+  } finally {
+    clearTimeout(slowTimer);
+    el.agentInput.disabled = false;
+    el.agentInput.focus();
+    el.agentMessages.scrollTop = el.agentMessages.scrollHeight;
+  }
+}
+
+
+async function loadAgentConversations() {
+  const data = await api('/api/admin/agent/conversations');
+  adminState.agentConversations = data.rows || [];
+  renderAgentConversations();
+  return adminState.agentConversations;
+}
+
+function renderAgentConversations() {
+  const rows = adminState.agentConversations || [];
+  if (el.agentConversationCount) el.agentConversationCount.textContent = `共 ${rows.length} 个`;
+  if (el.agentConversationEmpty) el.agentConversationEmpty.hidden = rows.length > 0;
+  if (!el.agentConversationList) return;
+  el.agentConversationList.replaceChildren(...rows.map((row) => {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `agent-conversation${row.id === adminState.agentConversationId ? ' is-active' : ''}`;
+    const title = document.createElement('strong');
+    title.textContent = row.title || '新对话';
+    const meta = document.createElement('span');
+    meta.textContent = `${row.messageCount} 条 · ${formatDate(row.updatedAt)}`;
+    button.append(title, meta);
+    button.addEventListener('click', () => openAgentConversation(row.id).catch((error) => toast(error.message, true)));
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'agent-conversation-delete';
+    remove.title = '删除这个对话';
+    remove.setAttribute('aria-label', `删除${row.title || '对话'}`);
+    remove.innerHTML = '<i data-lucide="trash-2"></i>';
+    remove.addEventListener('click', (event) => {
+      event.stopPropagation();
+      deleteAgentConversation(row.id).catch((error) => toast(error.message, true));
+    });
+
+    item.append(button, remove);
+    return item;
+  }));
+  window.lucide?.createIcons();
+}
+
+// 历史消息里存的是当时的结果视图（含 downloadUrl），这里还原成下载按钮。
+// 注意别再直接调用已删掉的 agentDownloads()，那会让整个会话页报 ReferenceError。
+function downloadsFromResults(results) {
+  return (Array.isArray(results) ? results : [])
+    .filter((item) => item && item.downloadUrl)
+    .map((item) => ({ url: item.downloadUrl, label: item.label || '' }));
+}
+
+async function openAgentConversation(id) {
+  adminState.agentConversationId = id;
+  try { localStorage.setItem(AGENT_CONVERSATION_KEY, String(id)); } catch { /* 隐私模式 */ }
+  el.agentMessages.replaceChildren();
+  const data = await api(`/api/admin/agent/conversations/${id}`);
+  for (const message of data.messages || []) {
+    if (message.role === 'user') appendAgentMessage('user', message.content);
+    else appendAgentMessage('assistant', message.content, downloadsFromResults(message.results));
+  }
+  renderAgentConversations();
+  el.agentMessages.scrollTop = el.agentMessages.scrollHeight;
+}
+
+async function deleteAgentConversation(id) {
+  await api(`/api/admin/agent/conversations/${id}`, { method: 'DELETE' });
+  if (adminState.agentConversationId === id) startNewAgentConversation();
+  await loadAgentConversations();
+}
+
+function startNewAgentConversation() {
+  adminState.agentConversationId = null;
+  try { localStorage.removeItem(AGENT_CONVERSATION_KEY); } catch { /* 隐私模式 */ }
+  if (!el.agentMessages) return;
+  el.agentMessages.replaceChildren();
+  appendAgentMessage('assistant', '你好，我是管理助手。可以问：本周比上周怎么样、谁最近没练习、哪些键最容易打错、导出竞速成绩。');
+  el.agentStatus.textContent = '';
+  el.agentInput.value = '';
+  el.agentInput.focus();
+  renderAgentConversations();
+}
+
+// 进页面时恢复上次看的对话，没有就开一个新的。
+async function ensureAgentReady() {
+  // 每次进页面都拉一次列表：adminState 里初始值是 []，用真值判断会永远跳过加载。
+  await loadAgentConversations();
+  let saved = null;
+  try { saved = Number(localStorage.getItem(AGENT_CONVERSATION_KEY)) || null; } catch { /* 隐私模式 */ }
+  const exists = saved && (adminState.agentConversations || []).some((row) => row.id === saved);
+  if (exists) await openAgentConversation(saved);
+  else if ((adminState.agentConversations || []).length) await openAgentConversation(adminState.agentConversations[0].id);
+  else startNewAgentConversation();
+}
+
 const modeNames = { beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', runner: '遗迹逃亡', challenge: '一分钟挑战' };
 function renderOverviewCharts(overview) {
   if (!window.echarts || !el.overviewSpeedChart) return;
@@ -370,6 +676,66 @@ function actionButton(icon, label, className, handler) {
   return button;
 }
 
+const PASSAGE_CATEGORY_ORDER = ['校园生活', '成长励志', '生活随笔', '科技阅读', '一分钟挑战', '英文挑战', '拼音挑战', '英文打字', '拼音打字'];
+const MODE_ONLY_CATEGORIES = new Set(['一分钟挑战', '英文挑战', '拼音挑战']);
+// 前台没有任何可达路径会用到这两个分类的文章：拼音课程走前端内置题库（pinyinCopy），
+// 比赛候选池又过滤掉 language==='pinyin'。所以新增文章时不再提供，只留库里已有的旧文章能回显。
+const HIDDEN_PASSAGE_CATEGORIES = new Set(['英文打字', '拼音打字']);
+// 与后端 backend/article-prompt.js 的 LANGUAGE_BY_CATEGORY 保持一致：分类决定 AI 生成什么语言。
+const ARTICLE_LANGUAGE_BY_CATEGORY = { 英文打字: 'en', 英文挑战: 'en', 拼音打字: 'pinyin' };
+
+function sortPassageCategories(categories) {
+  const rank = (name) => { const index = PASSAGE_CATEGORY_ORDER.indexOf(name); return index === -1 ? PASSAGE_CATEGORY_ORDER.length : index; };
+  return [...categories].sort((a, b) => rank(a) - rank(b) || String(a).localeCompare(String(b), 'zh-Hans-CN'));
+}
+
+// 弹窗和列表页筛选共用一套分组，避免两处对不上。
+// includeHidden：筛选要能查到历史文章，所以把「前台未使用」的分类也列出来；
+// 新增/编辑弹窗不列，否则老师又会选到没人用的分类。
+function groupPassageCategories(categories, { includeHidden = false } = {}) {
+  const list = sortPassageCategories(categories);
+  const groups = [
+    { label: '练习文章', items: list.filter((category) => !MODE_ONLY_CATEGORIES.has(category) && !HIDDEN_PASSAGE_CATEGORIES.has(category)) },
+    { label: '模式专用（挑战 / 竞速）', items: list.filter((category) => MODE_ONLY_CATEGORIES.has(category)) }
+  ];
+  if (includeHidden) groups.push({ label: '前台未使用（历史文章）', items: list.filter((category) => HIDDEN_PASSAGE_CATEGORIES.has(category)) });
+  return groups.filter((group) => group.items.length);
+}
+
+function appendCategoryGroups(select, groups) {
+  for (const group of groups) {
+    const node = document.createElement('optgroup');
+    node.label = group.label;
+    node.append(...group.items.map((name) => new Option(name, name)));
+    select.append(node);
+  }
+}
+
+function fillPassageCategoryOptions(current = '') {
+  const select = el.passageCategory;
+  if (!select) return;
+  const all = adminState.passageCategories || [];
+  const groups = groupPassageCategories(all, { includeHidden: false });
+  // 编辑旧文章时把它的分类补回来（可能是已隐藏的分类），否则会静默变成空值。
+  if (current && !groups.some((group) => group.items.includes(current))) {
+    const practice = groups.find((group) => group.label === '练习文章');
+    if (practice) practice.items.unshift(current);
+    else groups.unshift({ label: '练习文章', items: [current] });
+  }
+  select.replaceChildren(new Option(all.length ? '请选择分类' : '暂无可选分类', ''));
+  appendCategoryGroups(select, groups);
+  select.value = current || '';
+  if (select.value !== (current || '')) select.value = '';
+}
+
+function fillPassageCategoryFilter(categories, current = '') {
+  const select = el.passageCategoryFilter;
+  if (!select) return;
+  select.replaceChildren(new Option('全部分类', ''));
+  appendCategoryGroups(select, groupPassageCategories(categories, { includeHidden: true }));
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+}
+
 function renderPassages() {
   const rows = adminState.passages;
   el.passageCount.textContent = `共 ${adminState.passageTotal || 0} 篇`;
@@ -395,8 +761,11 @@ function renderPassages() {
 }
 
 async function loadPassages(page = pagers.passages?.page || 1) {
-  const query = filterQuery({ page, q: el.passageSearch.value.trim() });
+  const query = filterQuery({ page, q: el.passageSearch.value.trim(), category: el.passageCategoryFilter.value });
   const data = await api(`/api/admin/passages?${query}`);
+  const currentCategory = el.passageCategoryFilter.value;
+  fillPassageCategoryFilter(data.categories || [], currentCategory);
+  adminState.passageCategories = data.categories || [];
   adminState.passages = data.rows;
   adminState.passagePage = data.page; adminState.passagePages = data.pages; adminState.passageTotal = data.total;
   pagers.passages?.render(data);
@@ -407,13 +776,35 @@ function openPassageDialog(item = null) {
   el.passageForm.reset();
   el.passageId.value = item?.id || '';
   el.passageTitle.value = item?.title || '';
-  el.passageCategory.value = item?.category || '';
+  fillPassageCategoryOptions(item?.category || '');
   el.passageContent.value = item?.content || '';
   el.passageActive.checked = item ? Boolean(item.isActive) : true;
   el.dialogTitle.textContent = item ? '编辑文章' : '新增文章';
   el.contentCounter.textContent = `${Array.from(el.passageContent.value).length} / 2000`;
+  syncPassageAiButton();
   el.dialog.showModal();
   setTimeout(() => el.passageTitle.focus(), 0);
+}
+
+function syncPassageAiButton() {
+  if (!el.generatePassageAi) return;
+  // 下拉里选不到的分类（英文打字 / 拼音打字）也不让生成，保持「能看到 = 能生成」。
+  const supported = !HIDDEN_PASSAGE_CATEGORIES.has(el.passageCategory.value);
+  el.generatePassageAi.disabled = !el.passageTitle.value.trim() || !el.passageCategory.value.trim() || !supported;
+  syncPassageAiHint();
+}
+
+// 让老师在点之前就知道会拿到什么语言：分类决定生成语言，不是模型自由发挥。
+function syncPassageAiHint() {
+  if (!el.passageAiHint) return;
+  const category = el.passageCategory.value;
+  if (HIDDEN_PASSAGE_CATEGORIES.has(category)) {
+    el.passageAiHint.textContent = `「${category}」分类前台暂未使用，请改用其它分类或手工录入正文。`;
+    return;
+  }
+  el.passageAiHint.textContent = ARTICLE_LANGUAGE_BY_CATEGORY[category] === 'en'
+    ? '先填写标题和分类，AI 将按英文文章生成（词间带空格，不出现汉字）。'
+    : '先填写标题和分类，再根据这两个信息生成正文。';
 }
 
 async function deletePassage(item) {
@@ -437,6 +828,24 @@ async function savePassage(event) {
   } catch (error) { toast(error.message, true); }
 }
 
+async function generatePassageWithAi() {
+  if (el.passageContent.value.trim() && !confirm('当前正文已有内容，AI 生成会覆盖它，继续吗？')) return;
+  const button = el.generatePassageAi;
+  button.disabled = true;
+  button.querySelector('span').textContent = 'AI 生成中…';
+  try {
+    const data = await api('/api/admin/passages/generate', {
+      method: 'POST',
+      body: JSON.stringify({ title: el.passageTitle.value.trim(), category: el.passageCategory.value.trim(), length: 400 })
+    });
+    el.passageTitle.value = data.title || el.passageTitle.value;
+    el.passageContent.value = data.content || '';
+    el.contentCounter.textContent = `${Array.from(el.passageContent.value).length} / 2000`;
+    toast('AI 文章已生成，请检查后保存');
+  } catch (error) { toast(error.message || 'AI 文章生成失败', true); }
+  finally { button.disabled = false; button.querySelector('span').textContent = 'AI 生成文章'; }
+}
+
 function renderUsers() {
   const rows = adminState.users;
   el.userCount.textContent = `共 ${adminState.userTotal || 0} 个账号`;
@@ -447,6 +856,9 @@ function renderUsers() {
     const name = document.createElement('strong'); name.textContent = item.displayName;
     const username = document.createElement('span'); username.textContent = `@${item.username}`;
     student.append(name, username);
+    const studentId = document.createElement('td'); studentId.className = 'student-id-cell'; studentId.textContent = item.studentId || '—';
+    const className = document.createElement('td'); className.className = 'class-name-cell';
+    const classLabel = document.createElement('span'); classLabel.className = item.className === '未分班' ? 'is-unassigned' : ''; classLabel.textContent = item.className || '未分班'; className.append(classLabel);
     const attempts = document.createElement('td'); attempts.textContent = item.attempts;
     const best = document.createElement('td'); best.className = 'score-number'; best.textContent = item.personalBest;
     const status = document.createElement('td');
@@ -455,13 +867,52 @@ function renderUsers() {
     const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
     const actions = document.createElement('td'); actions.className = 'table-actions';
     actions.append(
+      actionButton('pencil', '编辑账号资料', '', () => openStudentProfile(item)),
       actionButton('key-round', '重置密码', '', () => openPasswordReset(item)),
       actionButton(item.isActive ? 'user-x' : 'user-check', item.isActive ? '停用账号' : '启用账号', item.isActive ? 'is-danger' : '', () => toggleUserStatus(item))
     );
-    row.append(student, attempts, best, status, lastLogin, created, actions);
+    row.append(student, studentId, className, attempts, best, status, lastLogin, created, actions);
     return row;
   }));
   window.lucide?.createIcons();
+}
+
+async function loadStudentProfileClasses(selected = '') {
+  const data = await api('/api/admin/classes?all=true');
+  el.studentProfileClass.replaceChildren(new Option('暂不分班', ''), ...(data.rows || []).filter((item) => item.isActive).map((item) => new Option(item.term ? `${item.name} · ${item.term}` : item.name, String(item.id))));
+  el.studentProfileClass.value = selected || '';
+}
+
+function openStudentProfile(item) {
+  el.studentProfileForm.reset();
+  el.studentProfileError.textContent = '';
+  el.studentProfileId.value = item.id;
+  el.studentProfileName.value = item.displayName || '';
+  el.studentProfileStudentId.value = item.studentId || '';
+  el.studentProfileAvatar.value = '';
+  el.studentProfileAvatarPreview.textContent = (item.displayName || '字').slice(0, 1);
+  el.studentProfileAvatarPreview.style.backgroundImage = item.avatarUrl ? `url(${item.avatarUrl})` : '';
+  el.studentProfileAvatarPreview.classList.toggle('has-image', Boolean(item.avatarUrl));
+  const currentClass = item.className && item.className !== '未分班' ? [...document.querySelectorAll('#user-class-filter option')].find((option) => option.textContent.includes(item.className))?.value : '';
+  loadStudentProfileClasses(currentClass).catch((error) => { el.studentProfileError.textContent = error.message; });
+  el.studentProfileDialog.showModal();
+  window.lucide?.createIcons();
+}
+
+function readStudentProfileAvatar() {
+  const file = el.studentProfileAvatar.files?.[0];
+  if (!file) return Promise.resolve('');
+  return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('头像读取失败')); reader.readAsDataURL(file); });
+}
+
+async function saveStudentProfile(event) {
+  event.preventDefault();
+  el.studentProfileError.textContent = '';
+  try {
+    const avatarData = await readStudentProfileAvatar();
+    await api(`/api/admin/users/${el.studentProfileId.value}/profile`, { method: 'PATCH', body: JSON.stringify({ displayName: el.studentProfileName.value.trim(), studentId: el.studentProfileStudentId.value.trim(), classId: el.studentProfileClass.value || null, avatarData }) });
+    el.studentProfileDialog.close(); toast('学生资料已更新'); await loadUsers();
+  } catch (error) { el.studentProfileError.textContent = error.message; }
 }
 
 async function loadUsers(page = pagers.users?.page || 1) {
@@ -481,7 +932,7 @@ async function loadUserClassFilter() {
 }
 
 function modeLabel(mode) {
-  return ({ beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', runner: '遗迹逃亡', challenge: '一分钟挑战' })[mode] || mode;
+  return ({ beginner: '新手入门', 'english-word': '英文单词', 'english-phrase': '英文语句', 'english-article': '英文文章', 'pinyin-syllable': '拼音音节', 'pinyin-word': '拼音词组', 'pinyin-article': '拼音文章', battle: '占领战', boss: '全班打 Boss', race: '打字赛车', rhythm: '节奏连击', runner: '遗迹逃亡', challenge: '一分钟挑战', 'competition-personal': '竞速比赛', 'competition-team': '团队比赛' })[mode] || mode;
 }
 
 function changeText(value, suffix = '') {
@@ -559,6 +1010,57 @@ async function loadProgressClassFilter() {
     if ([...el.progressClassFilter.options].some((option) => option.value === current)) el.progressClassFilter.value = current;
   } catch {
     el.progressClassFilter.replaceChildren(new Option('全部班级', ''), new Option('待分班', 'unassigned'));
+  }
+}
+
+async function exportWeeklyProgress() {
+  if (!window.XLSX) { toast('表格组件未加载，请刷新页面重试', true); return; }
+  if (!el.progressClassFilter.value) {
+    toast('请先选择具体班级，再导出周报', true);
+    el.progressClassFilter.focus();
+    return;
+  }
+  const button = el.exportProgressWeekly;
+  if (button) button.disabled = true;
+  try {
+    const query = filterQuery({ q: el.progressSearch.value.trim(), classId: el.progressClassFilter.value });
+    const data = await api(`/api/admin/progress/weekly?${query}`);
+    if (!data.rows?.length) { toast('当前筛选没有可导出的训练记录', true); return; }
+    const rows = data.rows.map((item) => ({
+      周开始: item.weekStart,
+      周结束: item.weekEnd,
+      班级: item.className,
+      学生姓名: item.displayName,
+      登录账号: item.username,
+      学号: item.studentId,
+      训练次数: item.sessions,
+      活跃天数: item.activeDays,
+      练习时长小时: item.durationHours,
+      正确字数: item.correctChars,
+      错误字数: item.wrongChars,
+      总字数: item.totalChars,
+      平均速度字每分: item.averageSpeed,
+      最高速度字每分: item.bestSpeed,
+      准确率百分比: item.accuracy,
+      训练模式: item.modes.split('、').filter(Boolean).map(modeLabel).join('、'),
+      最近训练: formatDate(item.latestAt)
+    }));
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    sheet['!cols'] = [
+      { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 22 }, { wch: 16 },
+      { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+      { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 24 }, { wch: 20 }
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, '每周打字情况');
+    const classLabel = data.className || el.progressClassFilter.selectedOptions?.[0]?.textContent || '全部班级';
+    const safeLabel = classLabel.replace(/[\\/:*?"<>|]/g, '_').trim() || '全部班级';
+    XLSX.writeFile(workbook, `学生每周打字情况-${safeLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast(`已导出 ${rows.length} 条学生周记录`);
+  } catch (error) {
+    toast(error.message || '导出失败，请稍后重试', true);
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
@@ -716,9 +1218,10 @@ function renderUnassignedStudents() {
     const name = document.createElement('strong'); name.textContent = item.displayName;
     const username = document.createElement('span'); username.textContent = `@${item.username}`;
     student.append(name, username);
+    const studentId = document.createElement('td'); studentId.className = 'student-id-cell'; studentId.textContent = item.studentId || '';
     const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
     const lastLogin = document.createElement('td'); lastLogin.textContent = formatDate(item.lastLoginAt);
-    row.append(student, created, lastLogin);
+    row.append(student, studentId, created, lastLogin);
     return row;
   }));
 }
@@ -835,7 +1338,10 @@ function resetClassForm() {
   window.lucide?.createIcons();
 }
 
-function openClassCreate() {
+let studentImportPendingClass = false;
+
+function openClassCreate(fromStudentImport = false) {
+  studentImportPendingClass = fromStudentImport;
   resetClassForm();
   el.classDialog.showModal();
   el.className.focus();
@@ -854,11 +1360,17 @@ async function saveClass(event) {
   event.preventDefault();
   const id = el.classId.value;
   try {
-    await api(id ? `/api/admin/classes/${id}` : '/api/admin/classes', { method: id ? 'PUT' : 'POST', body: JSON.stringify({ name: el.className.value, term: el.classTerm.value, description: el.classDescription.value }) });
+    const saved = await api(id ? `/api/admin/classes/${id}` : '/api/admin/classes', { method: id ? 'PUT' : 'POST', body: JSON.stringify({ name: el.className.value, term: el.classTerm.value, description: el.classDescription.value }) });
     resetClassForm();
     el.classDialog.close();
     toast(id ? '班级已更新' : '班级已创建');
     await Promise.all([loadClasses(), loadClassTermOptions()]);
+    if (!id && studentImportPendingClass) {
+      await loadStudentImportClasses();
+      el.studentImportClass.value = String(saved.id || '');
+      studentImportPendingClass = false;
+      toast('班级已创建，已选中该班级');
+    }
   } catch (error) { toast(error.message, true); }
 }
 
@@ -1039,7 +1551,8 @@ async function loadScores(page = pagers.scores?.page || 1) {
     page,
     q: el.scoreSearch.value.trim(),
     range: el.scoreRangeFilter.value,
-    category: el.scoreCategoryFilter.value
+    category: el.scoreCategoryFilter.value,
+    classId: el.scoreClassFilter.value
   });
   const data = await api(`/api/admin/scores?${query}`);
   adminState.page = data.page;
@@ -1058,11 +1571,41 @@ async function loadScores(page = pagers.scores?.page || 1) {
     const wrong = document.createElement('td'); wrong.textContent = item.wrongChars;
     const passage = document.createElement('td'); passage.textContent = item.passageTitle || '文章已删除';
     const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
+    const className = document.createElement('td'); className.textContent = item.className || '未分班';
     const actions = document.createElement('td'); actions.className = 'table-actions'; actions.append(actionButton('trash-2', '删除成绩', 'is-danger', () => deleteScore(item)));
-    row.append(nickname, score, accuracy, wrong, passage, created, actions);
+    row.append(nickname, className, score, accuracy, wrong, passage, created, actions);
     return row;
   }));
   window.lucide?.createIcons();
+}
+
+async function exportScores() {
+  if (!window.XLSX) { toast('表格组件未加载，请刷新页面重试', true); return; }
+  const button = el.exportScores;
+  button.disabled = true;
+  try {
+    const query = filterQuery({ q: el.scoreSearch.value.trim(), range: el.scoreRangeFilter.value, category: el.scoreCategoryFilter.value, classId: el.scoreClassFilter.value });
+    const data = await api(`/api/admin/scores/export?${query}`);
+    if (!data.rows?.length) { toast('当前筛选没有可导出的竞速成绩', true); return; }
+    const rows = data.rows.map((item) => ({
+      学生姓名: item.nickname,
+      学号: item.studentId || '',
+      班级: item.className || '未分班',
+      登录账号: item.username || '',
+      正确字数: item.score,
+      正确率百分比: item.accuracy,
+      错字数: item.wrongChars,
+      挑战文章: item.passageTitle || '文章已删除',
+      提交时间: formatDate(item.createdAt)
+    }));
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    sheet['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 28 }, { wch: 20 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, '竞速成绩');
+    XLSX.writeFile(workbook, `竞速成绩-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast(`已导出 ${rows.length} 条竞速成绩`);
+  } catch (error) { toast(error.message || '导出失败，请稍后重试', true); }
+  finally { button.disabled = false; }
 }
 
 const competitionStatusNames = { draft: '草稿', registration: '检录中', running: '比赛中', paused: '已暂停', finished: '已结束' };
@@ -1110,10 +1653,22 @@ async function loadScoreCategories() {
   try {
     const data = await api('/api/admin/score-categories');
     const current = el.scoreCategoryFilter.value;
-    const categories = data.categories || [];
-    el.scoreCategoryFilter.replaceChildren(new Option('全部分类', ''), ...categories.map((category) => new Option(category, category)));
+    const categories = sortPassageCategories(data.categories || []);
+    el.scoreCategoryFilter.replaceChildren(new Option('全部分类', ''));
+    // 与「练习文章」页共用同一套分组顺序：模式专用单独一组，其余算练习文章。
+    appendCategoryGroups(el.scoreCategoryFilter, [
+      { label: '练习文章', items: categories.filter((category) => !MODE_ONLY_CATEGORIES.has(category)) },
+      { label: '模式专用（挑战 / 竞速）', items: categories.filter((category) => MODE_ONLY_CATEGORIES.has(category)) }
+    ].filter((group) => group.items.length));
     if (categories.includes(current)) el.scoreCategoryFilter.value = current;
   } catch { /* 分类读取失败不影响列表 */ }
+}
+
+async function loadScoreClasses() {
+  const current = el.scoreClassFilter.value;
+  const data = await api('/api/admin/classes?all=true');
+  el.scoreClassFilter.replaceChildren(new Option('全部班级', ''), new Option('待分班', 'unassigned'), ...(data.rows || []).map((item) => new Option(item.term ? `${item.name} · ${item.term}` : item.name, item.id)));
+  if ([...el.scoreClassFilter.options].some((option) => option.value === current)) el.scoreClassFilter.value = current;
 }
 
 async function loadCompetitions(page = pagers.competitions?.page || 1) {
@@ -1420,6 +1975,58 @@ async function decideCompetitionResult(item) {
 
 const BUG_STATUS_CLASS = { 待处理: 'is-pending', 处理中: 'is-running', 已处理: 'is-done' };
 
+// ------------------------------------------------------------ 助手审计
+// 管理助手每次提问都会写进 agent_audit_logs，这里只读展示摘要（工具名 + 回复前 300 字）。
+async function loadAgentLogs(page = pagers.agentLogs?.page || 1) {
+  const data = await api(`/api/admin/agent/logs?${filterQuery({ page, q: el.agentLogSearch.value.trim(), range: el.agentLogRange.value })}`);
+  adminState.agentLogs = data.rows || [];
+  el.agentLogCount.textContent = `共 ${data.total} 条`;
+  el.agentLogEmpty.hidden = adminState.agentLogs.length > 0;
+  pagers.agentLogs?.render(data);
+  renderAgentLogs();
+}
+
+function renderAgentLogs() {
+  el.agentLogTable.replaceChildren(...(adminState.agentLogs || []).map((item) => {
+    const row = document.createElement('tr');
+    const message = document.createElement('td'); message.className = 'article-cell agent-log-message';
+    const strong = document.createElement('strong'); strong.textContent = item.message;
+    const code = document.createElement('span'); code.textContent = `#${item.id}`;
+    message.append(strong, code);
+
+    const admin = document.createElement('td'); admin.textContent = item.adminUsername || '—';
+
+    const tools = document.createElement('td'); tools.className = 'agent-tool-cell';
+    // 注意：td 本身不能改成 display:flex，否则会脱离表格布局、下边框错位。
+    // 需要横向排列的是里面的这个 div。
+    const toolList = document.createElement('div'); toolList.className = 'agent-tool-list';
+    if (item.tools?.length) {
+      for (const name of item.tools) {
+        const pill = document.createElement('span'); pill.className = 'status-badge'; pill.textContent = name;
+        toolList.append(pill);
+      }
+    } else {
+      toolList.textContent = '未调用';
+    }
+    tools.append(toolList);
+
+    const source = document.createElement('td');
+    const sourcePill = document.createElement('span');
+    sourcePill.className = `status-pill ${item.source === 'llm' ? '' : 'is-inactive'}`;
+    sourcePill.textContent = item.source === 'llm' ? 'AI 分析' : '内置规则';
+    source.append(sourcePill);
+
+    const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
+    const reply = document.createElement('td'); reply.className = 'agent-reply-cell';
+    const replyText = document.createElement('div'); replyText.className = 'agent-reply-text';
+    replyText.textContent = item.reply || '—';
+    reply.append(replyText);
+    row.append(message, admin, tools, source, created, reply);
+    return row;
+  }));
+  window.lucide?.createIcons();
+}
+
 async function loadBugReports(page = pagers.bugReports?.page || 1) {
   const query = filterQuery({
     page,
@@ -1500,14 +2107,17 @@ function openBugReport(item) {
 }
 
 async function switchView(view) {
-  const allowedViews = ['overview', 'admins', 'passages', 'users', 'classes', 'progress', 'assignments', 'competitions', 'scores', 'bug-reports'];
+  const allowedViews = ['overview', 'admins', 'passages', 'users', 'classes', 'progress', 'assignments', 'competitions', 'scores', 'ai-settings', 'bug-reports', 'agent-logs', 'agent'];
+  const viewLabels = { overview: '概览', admins: '后台账号', passages: '练习文章', users: '学生账号', classes: '班级分组', progress: '学习进步', assignments: '教学任务', competitions: '比赛赛事', scores: '竞速成绩', 'ai-settings': 'AI服务设置', 'bug-reports': '意见反馈', 'agent-logs': '助手审计', agent: '管理助手' };
   if (!allowedViews.includes(view)) view = 'overview';
   adminState.activeView = view;
   try { localStorage.setItem('typing-admin-view', view); } catch { /* private mode */ }
   if (location.hash !== `#${view}`) history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
   el.navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
+  el.breadcrumbCurrent.textContent = viewLabels[view];
+  el.breadcrumbHome.disabled = view === 'overview';
   el.views.forEach((section) => { section.hidden = section.id !== `view-${view}`; });
-  el.sidebar.classList.remove('is-open');
+  setNavOpen(false);
   try {
     if (view === 'overview') await Promise.all([loadStats(), loadProgressOverview()]);
     if (view === 'admins') await loadAdminAccounts();
@@ -1517,8 +2127,11 @@ async function switchView(view) {
     if (view === 'progress') await Promise.all([loadProgress(), loadProgressClassFilter()]);
     if (view === 'assignments') await Promise.all([loadAssignments(), loadAssignmentUsers(), loadAssignmentClasses()]);
     if (view === 'competitions') await Promise.all([loadCompetitions(), loadBattleCompetition(), loadTextCatalog()]);
-    if (view === 'scores') await Promise.all([loadScores(), loadScoreCategories()]);
+    if (view === 'scores') await Promise.all([loadScores(), loadScoreCategories(), loadScoreClasses()]);
+    if (view === 'ai-settings') await loadAiSettings();
     if (view === 'bug-reports') await loadBugReports();
+    if (view === 'agent-logs') await loadAgentLogs();
+    if (view === 'agent') await ensureAgentReady();
   } catch (error) {
     if (error.status === 401) setAuthenticated(false);
     else toast(error.message, true);
@@ -1565,13 +2178,27 @@ el.adminAccountOpen?.addEventListener('click', () => {
 el.closeAdminAccount?.addEventListener('click', () => el.adminAccountDialog.close());
 el.cancelAdminAccount?.addEventListener('click', () => el.adminAccountDialog.close());
 el.navItems.forEach((item) => item.addEventListener('click', () => switchView(item.dataset.view)));
+el.breadcrumbHome.addEventListener('click', () => switchView('overview'));
 document.querySelectorAll('.jump-button').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.jump)));
+el.agentNewChat?.addEventListener('click', startNewAgentConversation);
+el.agentForm?.addEventListener('submit', (event) => { event.preventDefault(); sendAgentMessage(el.agentInput.value); });
+// 输入框里回车是换行，Ctrl（或 ⌘）+ 回车 才发送，避免写长问题时被误发。
+el.agentInput?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  sendAgentMessage(el.agentInput.value);
+});
+el.agentQuickPrompts?.forEach((button) => button.addEventListener('click', () => sendAgentMessage(button.dataset.prompt)));
 el.passageSearch.addEventListener('input', debounce(() => loadPassages(1)));
+el.passageCategoryFilter.addEventListener('change', () => loadPassages(1));
 el.addPassage.addEventListener('click', () => openPassageDialog());
 el.closeDialog.addEventListener('click', () => el.dialog.close());
 el.cancelPassage.addEventListener('click', () => el.dialog.close());
 el.passageContent.addEventListener('input', () => { el.contentCounter.textContent = `${Array.from(el.passageContent.value).length} / 2000`; });
 el.passageForm.addEventListener('submit', savePassage);
+el.generatePassageAi.addEventListener('click', generatePassageWithAi);
+el.passageTitle.addEventListener('input', syncPassageAiButton);
+el.passageCategory.addEventListener('change', syncPassageAiButton);
 el.userSearch.addEventListener('input', debounce(() => loadUsers(1)));
 el.userClassFilter.addEventListener('change', () => loadUsers(1));
 el.refreshUsers.addEventListener('click', () => loadUsers(1));
@@ -1581,6 +2208,13 @@ el.refreshUsers.addEventListener('click', () => loadUsers(1));
 // 和粘贴文本（直接交给后端的 text 分支，分隔符由后端兼容）。
 
 let studentImportRows = [];
+let studentImportEditingRow = null;
+
+function syncStudentImportActions() {
+  const canImport = studentImportRows.length > 0 && studentImportEditingRow === null;
+  el.studentImportSubmit.disabled = !canImport;
+  el.studentImportPasteSubmit.disabled = !canImport;
+}
 
 function switchImportTab(tab) {
   const excel = tab !== 'paste';
@@ -1594,13 +2228,15 @@ function switchImportTab(tab) {
 
 function openStudentImportDialog() {
   studentImportRows = [];
+  studentImportEditingRow = null;
   el.studentImportFile.value = '';
   el.studentImportFileName.textContent = '点击选择 Excel，或把文件拖到这里';
   el.studentImportPreview.replaceChildren();
   el.studentImportPreview.hidden = true;
+  el.studentImportPreviewEmpty.hidden = false;
   el.studentImportResult.textContent = '还没有选择文件。';
   el.studentImportResult.classList.remove('is-error');
-  el.studentImportSubmit.disabled = true;
+  syncStudentImportActions();
   el.studentImportText.value = '';
   el.studentImportPasteResult.textContent = '';
   el.studentImportPasteResult.classList.remove('is-error');
@@ -1617,16 +2253,17 @@ async function loadStudentImportClasses() {
     const data = await api('/api/admin/classes?all=true');
     const options = (data.rows || []).filter((item) => item.isActive);
     el.studentImportClass.replaceChildren(
-      new Option('暂不分班', ''),
+      new Option('请选择班级（推荐）', ''),
+      new Option('暂不分班（稍后处理）', 'later'),
       ...options.map((item) => new Option(item.term ? `${item.name} · ${item.term}` : item.name, String(item.id)))
     );
     if ([...el.studentImportClass.options].some((option) => option.value === current)) el.studentImportClass.value = current;
   } catch {
-    el.studentImportClass.replaceChildren(new Option('暂不分班', ''));
+    el.studentImportClass.replaceChildren(new Option('请选择班级（推荐）', ''), new Option('暂不分班（稍后处理）', 'later'));
   }
 }
 
-// 表头按关键字认（姓名/名字、学号/账号/用户名）；认不出就按「第一列姓名、第二列学号」读。
+// 表头按关键字认（姓名/名字、学号/账号/用户名）；认不出就按「第一列学号、第二列姓名」读。
 function parseStudentSheet(buffer) {
   if (!window.XLSX) throw new Error('表格组件未加载，请刷新页面重试');
   const workbook = XLSX.read(buffer, { type: 'array' });
@@ -1639,42 +2276,168 @@ function parseStudentSheet(buffer) {
   const idIndex = header.findIndex((cell) => /学号|账号|用户名|登录名/.test(cell));
   const hasHeader = nameIndex >= 0 && idIndex >= 0;
   const body = hasHeader ? matrix.slice(1) : matrix;
-  const rows = body.map((line) => ({
-    displayName: String(line[hasHeader ? nameIndex : 0] ?? '').trim(),
-    studentId: String(line[hasHeader ? idIndex : 1] ?? '').trim()
-  })).filter((row) => row.displayName || row.studentId);
-  if (!rows.length) throw new Error(hasHeader ? '表格里没有数据行' : '没读到数据，请下载模板后按「姓名」「学号」两列填写');
+  const rows = body.map((line) => {
+    if (hasHeader) return {
+      displayName: String(line[nameIndex] ?? '').trim(),
+      studentId: String(line[idIndex] ?? '').trim()
+    };
+    const first = String(line[0] ?? '').trim();
+    const second = String(line[1] ?? '').trim();
+    const newOrder = /^[A-Za-z0-9_-]{4,32}$/.test(first) && !/^[A-Za-z0-9_-]{4,32}$/.test(second);
+    return newOrder ? { displayName: second, studentId: first } : { displayName: first, studentId: second };
+  }).filter((row) => row.displayName || row.studentId);
+  if (!rows.length) throw new Error(hasHeader ? '表格里没有数据行' : '没读到数据，请下载模板后按「学号」「姓名」两列填写');
   if (!hasHeader && rows.some((row) => !row.displayName || !row.studentId)) {
-    throw new Error('表格需要「姓名」「学号」两列，请下载模板后填写');
+    throw new Error('表格需要「学号」「姓名」两列，请下载模板后填写');
   }
   return rows;
 }
 
-function renderStudentImportPreview() {
+function renderStudentImportPreview(rows = studentImportRows) {
   el.studentImportPreview.replaceChildren();
-  if (!studentImportRows.length) { el.studentImportPreview.hidden = true; return; }
+  if (!rows.length) { el.studentImportPreview.hidden = true; el.studentImportPreviewEmpty.hidden = false; syncStudentImportActions(); return; }
+  el.studentImportPreviewEmpty.hidden = true;
   const head = document.createElement('p');
-  head.textContent = `共读到 ${studentImportRows.length} 行，下面是前 5 行：`;
+  const failedCount = rows.filter((row) => row.importStatus === 'error').length;
+  head.textContent = failedCount
+    ? `还剩 ${rows.length} 行待处理，其中 ${failedCount} 行上次导入失败；请修改或删除后重试。`
+    : `共 ${rows.length} 行待导入，提交前可编辑或删除。`;
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  for (const label of ['姓名', '学号']) {
+  for (const label of ['序号', '学号', '姓名', '状态', '操作']) {
     const th = document.createElement('th');
     th.textContent = label;
     headRow.append(th);
   }
   thead.append(headRow);
   const tbody = document.createElement('tbody');
-  for (const row of studentImportRows.slice(0, 5)) {
+  rows.forEach((row, index) => {
     const tr = document.createElement('tr');
-    const name = document.createElement('td'); name.textContent = row.displayName || '（空）';
-    const id = document.createElement('td'); id.textContent = row.studentId || '（空）';
-    tr.append(name, id);
+    if (row.importStatus === 'error') tr.classList.add('import-row-is-error');
+    if (row.importStatus === 'success') tr.classList.add('import-row-is-success');
+    const number = document.createElement('td'); number.textContent = String(index + 1);
+    const id = document.createElement('td');
+    const name = document.createElement('td');
+    const status = document.createElement('td');
+    const actions = document.createElement('td');
+    const actionWrap = document.createElement('span'); actionWrap.className = 'import-row-actions';
+    if (studentImportEditingRow === index) {
+      const idInput = document.createElement('input'); idInput.value = row.studentId || ''; idInput.maxLength = 32; idInput.setAttribute('aria-label', `第${index + 1}行学号`);
+      const nameInput = document.createElement('input'); nameInput.value = row.displayName || ''; nameInput.maxLength = 12; nameInput.setAttribute('aria-label', `第${index + 1}行姓名`);
+      id.append(idInput); name.append(nameInput);
+      const save = document.createElement('button'); save.type = 'button'; save.className = 'import-row-action'; save.textContent = '保存';
+      save.addEventListener('click', () => {
+        const studentId = idInput.value.trim();
+        const displayName = nameInput.value.trim();
+        if (!studentId || !displayName) { toast('学号和姓名不能为空', true); return; }
+        studentImportRows[index] = { studentId, displayName, importStatus: null, importError: '' };
+        studentImportEditingRow = null;
+        renderStudentImportPreview();
+      });
+      const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'import-row-action'; cancel.textContent = '取消';
+      cancel.addEventListener('click', () => { studentImportEditingRow = null; renderStudentImportPreview(); });
+      actionWrap.append(save, cancel);
+      requestAnimationFrame(() => idInput.focus());
+    } else {
+      id.textContent = row.studentId || '（空）';
+      name.textContent = row.displayName || '（空）';
+      const statusPill = document.createElement('span');
+      statusPill.className = `import-row-status${row.importStatus === 'error' ? ' is-error' : row.importStatus === 'success' ? ' is-success' : ''}`;
+      statusPill.textContent = row.importStatus === 'error' ? `失败：${row.importError || '请检查这一行'}` : row.importStatus === 'success' ? '已导入' : '待导入';
+      status.append(statusPill);
+      const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'import-row-action'; edit.textContent = '编辑';
+      edit.addEventListener('click', () => { studentImportEditingRow = index; renderStudentImportPreview(); });
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'import-row-action is-danger'; remove.textContent = '删除';
+      remove.addEventListener('click', () => {
+        studentImportRows.splice(index, 1);
+        studentImportEditingRow = null;
+        renderStudentImportPreview();
+        const inlineResult = el.importPanelPaste.hidden ? el.studentImportResult : el.studentImportPasteResult;
+        inlineResult.textContent = studentImportRows.length ? `已保留 ${studentImportRows.length} 行，确认无误后点「导入学生」。` : '名单已清空，请重新上传或粘贴。';
+        syncStudentImportActions();
+      });
+      actionWrap.append(edit, remove);
+    }
+    actions.append(actionWrap);
+    tr.append(number, id, name, status, actions);
     tbody.append(tr);
-  }
+  });
   table.append(thead, tbody);
   el.studentImportPreview.append(head, table);
   el.studentImportPreview.hidden = false;
+  syncStudentImportActions();
+}
+
+function keepFailedStudentImportRows(result) {
+  const errorsByLine = new Map((result.errors || []).map((item) => [Number(item.line), item]));
+  studentImportRows = studentImportRows
+    .map((row, index) => ({ ...row, importStatus: errorsByLine.has(index + 1) ? 'error' : 'success', importError: errorsByLine.get(index + 1)?.message || '' }))
+    .filter((row) => row.importStatus === 'error');
+  studentImportEditingRow = null;
+  renderStudentImportPreview();
+  syncStudentImportActions();
+}
+
+function parseStudentTextPreview(text) {
+  return String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const parts = line.split(/[\t,，;；]|\s+/).map((item) => item.trim());
+    const newOrder = /^[A-Za-z0-9_-]{4,32}$/.test(parts[0] || '') && !/^[A-Za-z0-9_-]{4,32}$/.test(parts[1] || '');
+    return newOrder ? { displayName: parts[1], studentId: parts[0] } : { displayName: parts[0], studentId: parts[1] };
+  }).filter((row) => !['姓名', '姓名/姓名'].includes(String(row.displayName).replace(/\s/g, '')));
+}
+
+function setStudentImportStatus({ state = 'loading', title, message, result = null, closeLabel = '知道了' }) {
+  if (!el.studentImportStatusDialog.open) el.studentImportStatusDialog.showModal();
+  el.studentImportStatusIcon.className = `student-import-status-icon ${state === 'loading' ? 'is-loading' : state === 'error' ? 'is-error' : ''}`;
+  el.studentImportStatusTitle.textContent = title;
+  el.studentImportStatusMessage.textContent = message;
+  el.studentImportStatusProgress.hidden = state !== 'loading';
+  el.studentImportStatusDetail.replaceChildren();
+  el.studentImportStatusDetail.className = `student-import-status-detail${result?.errors?.length ? ' is-error' : ''}`;
+  el.studentImportStatusClose.hidden = state === 'loading';
+  el.studentImportStatusClose.textContent = closeLabel;
+  if (result) {
+    const summary = document.createElement('p');
+    summary.textContent = result.summary;
+    el.studentImportStatusDetail.append(summary);
+    if (result.errors?.length) {
+      const list = document.createElement('ul');
+      result.errors.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = `第 ${item.line} 行：${item.message}`;
+        list.append(li);
+      });
+      el.studentImportStatusDetail.append(list);
+    }
+  }
+}
+
+function importResultSummary(result) {
+  const errors = result.errors || [];
+  const duplicateNames = errors.filter((item) => item.kind === 'duplicate-name').length;
+  const duplicateStudentIds = errors.filter((item) => item.kind === 'duplicate-student-id').length;
+  const otherFailures = errors.length - duplicateNames - duplicateStudentIds;
+  const details = [];
+  if (duplicateNames) details.push(`重复姓名 ${duplicateNames} 行`);
+  if (duplicateStudentIds) details.push(`重复学号 ${duplicateStudentIds} 行`);
+  if (otherFailures) details.push(`其他失败 ${otherFailures} 行`);
+  const summary = `成功导入 ${result.imported} 人${result.className ? `，已加入「${result.className}」` : ''}${result.failed ? `；失败 ${result.failed} 行${details.length ? `（${details.join('，')}）` : ''}` : '。没有失败或重复数据。'}`;
+  return { summary, errors };
+}
+
+function showStudentImportResult(result) {
+  const detail = importResultSummary(result);
+  setStudentImportStatus({
+    state: result.failed ? 'error' : 'success',
+    title: result.failed ? '导入完成，部分失败' : '导入成功',
+    message: result.failed ? '部分名单未能导入，请查看下面的失败行。' : '名单已处理完成。',
+    result: detail
+  });
+}
+
+function showStudentImportError(error) {
+  setStudentImportStatus({ state: 'error', title: '导入失败', message: error.message || '操作失败，请稍后重试。' });
 }
 
 async function handleStudentImportFile(file) {
@@ -1684,54 +2447,49 @@ async function handleStudentImportFile(file) {
   el.studentImportResult.textContent = '正在读取…';
   studentImportRows = [];
   el.studentImportSubmit.disabled = true;
+  setStudentImportStatus({ state: 'loading', title: '正在读取文件', message: `正在解析「${file.name}」，请稍候…` });
   try {
     studentImportRows = parseStudentSheet(await file.arrayBuffer());
     renderStudentImportPreview();
     el.studentImportResult.textContent = `已读取 ${studentImportRows.length} 行，确认无误后点「导入学生」。`;
-    el.studentImportSubmit.disabled = false;
+    syncStudentImportActions();
+    setStudentImportStatus({ state: 'success', title: '文件读取完成', message: `已读取 ${studentImportRows.length} 行，请关闭提示后核对名单。`, closeLabel: '返回导入' });
   } catch (error) {
     renderStudentImportPreview();
     el.studentImportResult.textContent = error.message;
     el.studentImportResult.classList.add('is-error');
+    showStudentImportError(error);
   }
 }
 
 function showImportResult(resultEl, result) {
   resultEl.replaceChildren();
+  const detail = importResultSummary(result);
   const summary = document.createElement('p');
-  summary.textContent = `已导入 ${result.imported} 人${result.className ? `，已加入「${result.className}」` : ''}${result.failed ? `，${result.failed} 行失败` : ''}`;
+  summary.textContent = '导入处理完成，详细结果已在弹框中显示。';
   resultEl.append(summary);
   resultEl.classList.toggle('is-error', result.failed > 0);
-  if (result.errors?.length) {
-    const list = document.createElement('ul');
-    list.className = 'import-error-list';
-    for (const item of result.errors.slice(0, 8)) {
-      const li = document.createElement('li');
-      li.textContent = `第 ${item.line} 行：${item.message}`;
-      list.append(li);
-    }
-    resultEl.append(list);
-  }
+  showStudentImportResult({ ...result, summary: detail.summary });
 }
 
 function downloadStudentImportTemplate() {
   if (!window.XLSX) { toast('表格组件未加载，请刷新页面重试', true); return; }
   const workbook = XLSX.utils.book_new();
-  const list = XLSX.utils.aoa_to_sheet([['姓名', '学号']]);
-  list['!cols'] = [{ wch: 16 }, { wch: 22 }];
+  const list = XLSX.utils.aoa_to_sheet([['学号', '姓名']]);
+  list['!cols'] = [{ wch: 22 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(workbook, list, '学生名单');
   const guide = XLSX.utils.aoa_to_sheet([
     ['填写说明'],
     ['1. 在「学生名单」工作表里，从第 2 行开始填写，每行一个学生。'],
-    ['2. A 列填姓名（2-12 个字），B 列填学号（4-32 位字母、数字、下划线或短横线）。'],
+    ['2. A 列填学号（4-32 位字母、数字、下划线或短横线），B 列填姓名（2-12 个字）。'],
     ['3. 导入后学生用姓名登录，初始密码就是学号。'],
     ['4. 姓名不能重复；已存在的姓名会被跳过，并在导入结果里提示行号。'],
     ['5. 单次最多导入 2000 人。'],
     [],
     ['示例（只作参照，不要填进「学生名单」）'],
-    ['姓名', '学号'],
-    ['张三', '20250101'],
-    ['李四', '20250102']
+    ['学号', '姓名'],
+    ['20250101', '张三'],
+    ['20250102', '李四']
   ]);
   guide['!cols'] = [{ wch: 72 }];
   XLSX.utils.book_append_sheet(workbook, guide, '填写说明');
@@ -1739,11 +2497,19 @@ function downloadStudentImportTemplate() {
 }
 
 el.studentImportOpen.addEventListener('click', openStudentImportDialog);
+el.studentImportStatusClose.addEventListener('click', () => el.studentImportStatusDialog.close());
+el.studentImportAddClass.addEventListener('click', () => openClassCreate(true));
 el.closeStudentImport.addEventListener('click', () => el.studentImportDialog.close());
 el.cancelStudentImport.addEventListener('click', () => el.studentImportDialog.close());
 el.cancelStudentImportPaste.addEventListener('click', () => el.studentImportDialog.close());
 el.importTabExcel.addEventListener('click', () => switchImportTab('excel'));
 el.importTabPaste.addEventListener('click', () => switchImportTab('paste'));
+el.studentImportText.addEventListener('input', () => {
+  studentImportRows = parseStudentTextPreview(el.studentImportText.value);
+  studentImportEditingRow = null;
+  renderStudentImportPreview();
+  syncStudentImportActions();
+});
 el.studentImportTemplate.addEventListener('click', downloadStudentImportTemplate);
 el.studentImportFile.addEventListener('change', () => handleStudentImportFile(el.studentImportFile.files?.[0]));
 ['dragenter', 'dragover'].forEach((type) => el.studentImportDrop.addEventListener(type, (event) => {
@@ -1760,47 +2526,51 @@ el.studentImportDrop.addEventListener('drop', (event) => {
 el.studentImportSubmit.addEventListener('click', async () => {
   if (!studentImportRows.length) return;
   el.studentImportSubmit.disabled = true;
+  setStudentImportStatus({ state: 'loading', title: '正在导入学生', message: `正在处理 ${studentImportRows.length} 行名单，请稍候…` });
   try {
     const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ rows: studentImportRows, classId: el.studentImportClass.value || undefined }) });
     showImportResult(el.studentImportResult, result);
+    keepFailedStudentImportRows(result);
     toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
     await loadUsers();
-    if (!result.failed) el.studentImportDialog.close();
   } catch (error) {
     el.studentImportResult.textContent = error.message;
     el.studentImportResult.classList.add('is-error');
+    showStudentImportError(error);
     toast(error.message, true);
   } finally {
-    el.studentImportSubmit.disabled = false;
+    syncStudentImportActions();
   }
 });
 
 el.studentImportPasteSubmit.addEventListener('click', async () => {
   const text = el.studentImportText.value.trim();
-  if (!text) {
-    el.studentImportPasteResult.textContent = '请先粘贴姓名和学号';
+  if (!text || !studentImportRows.length) {
+    el.studentImportPasteResult.textContent = '请先粘贴学号和姓名';
     el.studentImportPasteResult.classList.add('is-error');
     return;
   }
   el.studentImportPasteSubmit.disabled = true;
+  setStudentImportStatus({ state: 'loading', title: '正在导入学生', message: '正在校验并写入粘贴名单，请稍候…' });
   try {
-    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ text, classId: el.studentImportClass.value || undefined }) });
+    const result = await api('/api/admin/users/import', { method: 'POST', body: JSON.stringify({ rows: studentImportRows, classId: el.studentImportClass.value || undefined }) });
     showImportResult(el.studentImportPasteResult, result);
     toast(result.failed ? '导入完成，请检查失败行' : '学生导入成功', result.failed > 0);
     el.studentImportText.value = '';
+    keepFailedStudentImportRows(result);
     await loadUsers();
-    if (!result.failed) el.studentImportDialog.close();
   } catch (error) {
     el.studentImportPasteResult.textContent = error.message;
     el.studentImportPasteResult.classList.add('is-error');
+    showStudentImportError(error);
     toast(error.message, true);
   } finally {
-    el.studentImportPasteSubmit.disabled = false;
+    syncStudentImportActions();
   }
 });
 el.refreshClasses.addEventListener('click', () => loadClasses(1, 1));
 el.classForm.addEventListener('submit', saveClass);
-el.classCreateOpen.addEventListener('click', openClassCreate);
+el.classCreateOpen.addEventListener('click', () => openClassCreate(false));
 el.closeClassDialog.addEventListener('click', () => { resetClassForm(); el.classDialog.close(); });
 el.cancelClassDialog.addEventListener('click', () => { resetClassForm(); el.classDialog.close(); });
 el.closeClassAssign.addEventListener('click', () => el.classAssignDialog.close());
@@ -1829,11 +2599,37 @@ document.querySelectorAll('#view-progress .sort-button').forEach((button) => {
   });
 });
 el.refreshProgress.addEventListener('click', () => loadProgress(1));
+el.exportProgressWeekly.addEventListener('click', exportWeeklyProgress);
 el.closeProgressDialog.addEventListener('click', () => el.progressDialog.close());
 el.resetForm.addEventListener('submit', submitPasswordReset);
 el.closeReset.addEventListener('click', () => el.resetDialog.close());
 el.cancelReset.addEventListener('click', () => el.resetDialog.close());
 el.refreshScores.addEventListener('click', () => loadScores(1));
+el.exportScores.addEventListener('click', exportScores);
+el.studentProfileForm.addEventListener('submit', saveStudentProfile);
+el.closeStudentProfile.addEventListener('click', () => el.studentProfileDialog.close());
+el.cancelStudentProfile.addEventListener('click', () => el.studentProfileDialog.close());
+el.studentProfileAvatar.addEventListener('change', () => { const file = el.studentProfileAvatar.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { el.studentProfileAvatarPreview.style.backgroundImage = `url(${reader.result})`; el.studentProfileAvatarPreview.classList.add('has-image'); }; reader.readAsDataURL(file); });
+el.aiSettingsForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  el.aiMessage.textContent = '';
+  try {
+    const data = await api('/api/admin/ai-settings', { method: 'PATCH', body: JSON.stringify({ provider: el.aiProvider.value.trim(), model: el.aiModel.value.trim(), baseUrl: el.aiBaseUrl.value.trim(), apiKey: el.aiApiKey.value, rolePrompt: el.aiRolePrompt.value.trim(), enabled: el.aiEnabled.checked }) });
+    el.aiApiKey.value = '';
+    el.aiStatus.textContent = data.apiKeyConfigured ? (data.enabled ? '已启用' : '已配置，未启用') : '未配置';
+    el.aiStatus.className = `status-badge ${data.apiKeyConfigured ? 'is-ready' : ''}`;
+    el.aiMessage.textContent = 'AI 服务设置已保存。';
+    toast('AI 服务设置已保存');
+  } catch (error) { el.aiMessage.textContent = error.message; el.aiMessage.classList.add('is-error'); }
+});
+el.aiTest?.addEventListener('click', async () => {
+  el.aiTest.disabled = true; el.aiMessage.textContent = '正在测试连接…'; el.aiMessage.classList.remove('is-error');
+  try {
+    const data = await api('/api/admin/ai-settings/test', { method: 'POST', body: JSON.stringify({ provider: el.aiProvider.value.trim(), model: el.aiModel.value.trim(), baseUrl: el.aiBaseUrl.value.trim(), apiKey: el.aiApiKey.value }) });
+    el.aiMessage.textContent = `连接成功：${data.message || '模型已响应'}`;
+  } catch (error) { el.aiMessage.textContent = error.message; el.aiMessage.classList.add('is-error'); }
+  finally { el.aiTest.disabled = false; }
+});
 el.competitionForm.addEventListener('submit', saveCompetition);
 el.battleCompetitionPrepare.addEventListener('click', prepareBattleCompetition);
 el.battleCompetitionStart.addEventListener('click', startBattleCompetition);
@@ -1903,7 +2699,12 @@ el.competitionLanguageFilter.addEventListener('change', () => loadCompetitions(1
 el.scoreSearch.addEventListener('input', debounce(() => loadScores(1)));
 el.scoreRangeFilter.addEventListener('change', () => loadScores(1));
 el.scoreCategoryFilter.addEventListener('change', () => loadScores(1));
+el.scoreClassFilter.addEventListener('change', () => loadScores(1));
 pagers.bugReports = createPager({ pagination: el.bugReportPagination, label: el.bugReportPageLabel, previous: el.bugReportPreviousPage, next: el.bugReportNextPage, load: (page) => loadBugReports(page) });
+pagers.agentLogs = createPager({ pagination: el.agentLogPagination, label: el.agentLogPageLabel, previous: el.agentLogPreviousPage, next: el.agentLogNextPage, load: (page) => loadAgentLogs(page) });
+el.refreshAgentLogs?.addEventListener('click', () => loadAgentLogs(1));
+el.agentLogSearch?.addEventListener('input', debounce(() => loadAgentLogs(1)));
+el.agentLogRange?.addEventListener('change', () => loadAgentLogs(1));
 el.bugReportSearch.addEventListener('input', debounce(() => loadBugReports(1)));
 el.bugReportStatusFilter.addEventListener('change', () => loadBugReports(1));
 el.bugReportPriorityFilter.addEventListener('change', () => loadBugReports(1));
@@ -1922,7 +2723,11 @@ el.saveBugReportStatus.addEventListener('click', async () => {
   } catch (error) { toast(error.message, true); }
   finally { el.saveBugReportStatus.disabled = false; }
 });
-el.mobileMenu.addEventListener('click', () => el.sidebar.classList.toggle('is-open'));
+el.mobileMenu.addEventListener('click', () => setNavOpen(!el.sidebar.classList.contains('is-open')));
+el.navScrim?.addEventListener('click', () => setNavOpen(false));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && el.sidebar.classList.contains('is-open')) setNavOpen(false);
+});
 
 window.addEventListener('DOMContentLoaded', async () => {
   window.lucide?.createIcons();
@@ -1945,3 +2750,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 setInterval(() => {
   if (adminState.activeView === 'competitions' && !el.adminShell.hidden) loadBattleCompetition().catch(() => {});
 }, 2000);
+
+
+
+
+

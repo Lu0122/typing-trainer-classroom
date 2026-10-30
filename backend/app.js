@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const express = require('express');
 const { scoreTyping, visibleCharacters } = require('./scoring');
+const { countScoreRows, selectScoreRows, scoreRowsToCsv } = require('./score-filters');
 const { listPage } = require('./pagination');
 const {
   FAKE_PASSWORD_RECORD,
@@ -19,7 +20,8 @@ const {
 
 const CHALLENGE_DURATION_MS = 60_000;
 const SUBMIT_GRACE_MS = 2_000;
-const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+// 后台用于教师的日常管理，保留 30 天登录状态；主动退出或账号停用仍会立即失效。
+const ADMIN_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const STUDENT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CHALLENGE_CATEGORIES = { english: '英文挑战', pinyin: '拼音挑战', legacy: '一分钟挑战' };
 
@@ -249,7 +251,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   }
 
   function trainingRowsForUsers(userIds = null) {
-    const filters = userIds?.length ? `WHERE user_id IN (${userIds.map(() => '?').join(',')})` : '';
+    const filters = userIds?.length ? `WHERE is_finalized = 1 AND user_id IN (${userIds.map(() => '?').join(',')})` : 'WHERE is_finalized = 1';
     const practice = db.prepare(`
       SELECT user_id AS userId, mode, lesson_title AS lessonTitle, correct_chars AS correctChars,
              wrong_chars AS wrongChars, accuracy, speed, duration_ms AS durationMs,
@@ -258,7 +260,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     `).all(...(userIds || []));
     const scoreFilters = userIds?.length ? `WHERE scores.user_id IN (${userIds.map(() => '?').join(',')})` : 'WHERE scores.user_id IS NOT NULL';
     const challenges = db.prepare(`
-      SELECT scores.user_id AS userId, 'challenge' AS mode, COALESCE(passages.title, '一分钟挑战') AS lessonTitle,
+      SELECT scores.user_id AS userId, 'challenge' AS mode, COALESCE(scores.title_snapshot, passages.title, '一分钟挑战') AS lessonTitle,
              scores.score AS correctChars, scores.wrong_chars AS wrongChars, scores.accuracy,
              scores.score AS speed, 60000 AS durationMs,
              CAST(strftime('%s', scores.created_at) AS INTEGER) * 1000 AS completedAt
@@ -305,7 +307,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   }
 
   function getUserBest(userId, category = null) {
-    const categoryFilter = category ? ' AND passages.category = ?' : '';
+    const categoryFilter = category ? ' AND COALESCE(scores.category_snapshot, passages.category) = ?' : '';
     const params = category ? [userId, category] : [userId];
     return db.prepare(`
       SELECT scores.id, scores.score, scores.accuracy, scores.created_at AS createdAt
@@ -318,7 +320,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   function getUserRank(userId, category = null) {
     const best = getUserBest(userId, category);
     if (!best) return { best: null, rank: null };
-    const categoryFilter = category ? ' AND passages.category = ?' : '';
+    const categoryFilter = category ? ' AND COALESCE(scores.category_snapshot, passages.category) = ?' : '';
     const categoryParams = category ? [category] : [];
     const rank = db.prepare(`
       WITH ordered AS (
@@ -473,8 +475,10 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const frequency = ['每次', '经常', '偶尔', '仅一次'].includes(body.frequency) ? body.frequency : '每次';
     const environment = cleanText(body.environment, 500);
     const attachmentData = typeof body.attachmentData === 'string' ? body.attachmentData : '';
-    if (!title || !steps || !expectedResult || !actualResult) {
-      return response.status(400).json({ message: '请填写缺陷标题、复现步骤、预期结果和实际结果' });
+    // 学生端只强制「说清发生了什么」。复现步骤、预期结果这些是测试工程师的语言，
+    // 大一学生在机房填不出来，强制必填只会逼他们乱填。其余字段允许留空。
+    if (!title) {
+      return response.status(400).json({ message: '请用一句话说清遇到的问题' });
     }
     if (attachmentData && !/^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/i.test(attachmentData)) {
       return response.status(400).json({ message: '附件仅支持 PNG、JPG 或 WebP 图片' });
@@ -701,19 +705,32 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const allowedModes = new Set(['beginner', 'english-word', 'english-phrase', 'english-article', 'pinyin-syllable', 'pinyin-word', 'pinyin-article']);
     const mode = cleanText(request.body?.mode, 30);
     const lessonTitle = cleanText(request.body?.lessonTitle, 80);
-    const correctChars = Math.min(10000, Math.max(0, Number.parseInt(request.body?.correctChars, 10) || 0));
-    const wrongChars = Math.min(10000, Math.max(0, Number.parseInt(request.body?.wrongChars, 10) || 0));
+    const sourceKey = cleanText(request.body?.sourceKey, 180) || null;
+    let correctChars = Math.min(10000, Math.max(0, Number.parseInt(request.body?.correctChars, 10) || 0));
+    let wrongChars = Math.min(10000, Math.max(0, Number.parseInt(request.body?.wrongChars, 10) || 0));
+    const targetText = String(request.body?.targetText ?? '').slice(0, 4000);
+    const typedText = String(request.body?.typedText ?? '').slice(0, 4000);
+    if (targetText) {
+      const calculated = scoreTyping(targetText, typedText);
+      correctChars = calculated.score;
+      wrongChars = calculated.wrong;
+    }
     const durationMs = Math.min(2 * 60 * 60 * 1000, Math.max(1000, Number.parseInt(request.body?.durationMs, 10) || 0));
-    if (!allowedModes.has(mode) || !lessonTitle || correctChars < 1) return response.status(400).json({ message: '练习数据不完整，未计入进步记录' });
+    if (!allowedModes.has(mode) || !lessonTitle || (correctChars < 1 && wrongChars < 1)) return response.status(400).json({ message: '练习数据不完整，未计入进步记录' });
     const accuracy = Math.round(correctChars / Math.max(1, correctChars + wrongChars) * 1000) / 10;
     const speed = Math.round(correctChars / durationMs * 60_000 * 10) / 10;
     const keyStats = normalizeKeyStats(request.body?.keyStats);
     const completedAt = now();
     const saveTraining = db.transaction(() => {
       const result = db.prepare(`
-        INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(request.user.id, mode, lessonTitle, correctChars, wrongChars, accuracy, speed, durationMs, completedAt);
+        INSERT INTO training_sessions (user_id, mode, lesson_title, correct_chars, wrong_chars, accuracy, speed, duration_ms, completed_at, source_key, is_finalized)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO NOTHING
+      `).run(request.user.id, mode, lessonTitle, correctChars, wrongChars, accuracy, speed, durationMs, completedAt, sourceKey);
+      if (result.changes === 0 && sourceKey) {
+        const existing = db.prepare('SELECT id FROM training_sessions WHERE source_key = ?').get(sourceKey);
+        return { id: existing.id, duplicate: true };
+      }
       const sessionId = Number(result.lastInsertRowid);
       const insertKeyStats = db.prepare(`
         INSERT INTO typing_key_stats (training_session_id, user_id, mode, key_code, expected_count, correct_count, wrong_count, actual_errors_json, created_at)
@@ -745,10 +762,10 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
         const status = meetsAccuracy && meetsSpeed ? 'completed' : 'in_progress';
         updateProgress.run(assignment.id, request.user.id, status, sessionId, accuracy, speed, status === 'completed' ? completedAt : null, completedAt);
       }
-      return sessionId;
+      return { id: sessionId, duplicate: false };
     });
-    const sessionId = saveTraining();
-    response.status(201).json({ id: sessionId, accuracy, speed, keyStats: keyStats.length });
+    const saved = saveTraining();
+    response.status(saved.duplicate ? 200 : 201).json({ id: saved.id, duplicate: saved.duplicate, accuracy, speed, keyStats: keyStats.length });
   });
 
   app.get('/api/passages', (request, response) => {
@@ -807,8 +824,8 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const saveScore = db.transaction(() => {
       const updated = db.prepare('UPDATE challenge_sessions SET submitted_at = ? WHERE id = ? AND submitted_at IS NULL').run(now(), session.id);
       if (updated.changes !== 1) return null;
-      return db.prepare('INSERT INTO scores (nickname, score, accuracy, wrong_chars, passage_id, session_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(request.user.displayName, result.score, result.accuracy, result.wrong, session.passage_id, session.id, request.user.id);
+      return db.prepare('INSERT INTO scores (nickname, score, accuracy, wrong_chars, passage_id, session_id, user_id, category_snapshot, title_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(request.user.displayName, result.score, result.accuracy, result.wrong, session.passage_id, session.id, request.user.id, session.category, session.title);
     });
     const insert = saveScore();
     if (!insert) {
@@ -828,16 +845,38 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.get('/api/leaderboard', (request, response) => {
-    const limit = Math.min(Math.max(Number.parseInt(request.query.limit, 10) || 10, 1), 50);
+    const scope = request.query.scope === 'class' ? 'class' : 'all';
+    const limit = Math.min(Math.max(Number.parseInt(request.query.limit, 10) || (scope === 'all' ? 50 : 20), 1), scope === 'all' ? 50 : 20);
     const period = request.query.period === 'today' ? 'today' : 'all';
     const periodFilter = period === 'today' ? `AND date(scores.created_at, 'localtime') = date('now', 'localtime')` : '';
     const mode = request.query.mode === 'english' || request.query.mode === 'pinyin' ? request.query.mode : null;
     const challengeCategory = mode ? CHALLENGE_CATEGORIES[mode] : null;
-    const modeFilter = challengeCategory ? 'AND passages.category = ?' : '';
-    const rowParams = challengeCategory ? [challengeCategory, limit] : [limit];
+    // 未传 scope 的旧调用保持全局榜兼容；前台排行榜入口会显式传 class/all。
+    const filters = ['scores.user_id IS NOT NULL', 'users.is_active = 1'];
+    const params = [];
+    if (period === 'today') filters.push("date(scores.created_at, 'localtime') = date('now', 'localtime')");
+    if (challengeCategory) { filters.push('COALESCE(scores.category_snapshot, passages.category) = ?'); params.push(challengeCategory); }
+    let classId = null;
+    let className = null;
+    if (scope === 'class') {
+      const membership = request.user?.id ? db.prepare(`
+        SELECT classes.id AS classId, classes.name AS className
+        FROM class_members JOIN classes ON classes.id = class_members.class_id
+        WHERE class_members.user_id = ? AND class_members.left_at IS NULL AND classes.is_active = 1
+        ORDER BY class_members.joined_at DESC LIMIT 1
+      `).get(request.user.id) : null;
+      classId = membership?.classId || null;
+      className = membership?.className || null;
+      if (classId) { filters.push('EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = scores.user_id AND cm.class_id = ? AND cm.left_at IS NULL)'); params.push(classId); }
+      else filters.push('1 = 0');
+    }
+    const where = `WHERE ${filters.join(' AND ')}`;
     const rows = db.prepare(`
       WITH attempts AS (
         SELECT scores.id, scores.user_id AS userId, users.display_name AS nickname,
+               (SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
+                WHERE cm.user_id = scores.user_id AND cm.left_at IS NULL
+                ORDER BY cm.joined_at DESC LIMIT 1) AS className,
                scores.score, scores.accuracy, scores.created_at AS createdAt,
                ROW_NUMBER() OVER (
                  PARTITION BY scores.user_id
@@ -845,23 +884,33 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
                ) AS attemptOrder
         FROM scores JOIN users ON users.id = scores.user_id
           LEFT JOIN passages ON passages.id = scores.passage_id
-        WHERE scores.user_id IS NOT NULL AND users.is_active = 1 ${periodFilter} ${modeFilter}
+        ${where}
       ), best AS (
-        SELECT id, userId, nickname, score, accuracy, createdAt FROM attempts WHERE attemptOrder = 1
+        SELECT id, userId, nickname, className, score, accuracy, createdAt FROM attempts WHERE attemptOrder = 1
       ), ranked AS (
         SELECT *, RANK() OVER (ORDER BY score DESC, accuracy DESC) AS rank FROM best
       )
-      SELECT id, userId, nickname, score, accuracy, createdAt, rank
+      SELECT id, userId, nickname, className, score, accuracy, createdAt, rank
       FROM ranked ORDER BY score DESC, accuracy DESC, createdAt ASC LIMIT ?
-    `).all(...rowParams).map((row) => ({ ...row, isCurrentUser: request.user?.id === row.userId }));
-    const totalParams = challengeCategory ? [challengeCategory] : [];
+    `).all(...params, limit).map((row) => ({ ...row, isCurrentUser: request.user?.id === row.userId }));
+    const currentRank = request.user?.id ? db.prepare(`
+      WITH attempts AS (
+        SELECT scores.user_id AS userId, scores.score, scores.accuracy, scores.created_at AS createdAt,
+               ROW_NUMBER() OVER (PARTITION BY scores.user_id ORDER BY scores.score DESC, scores.accuracy DESC, scores.created_at ASC) AS attemptOrder
+        FROM scores JOIN users ON users.id = scores.user_id
+          LEFT JOIN passages ON passages.id = scores.passage_id
+        ${where}
+      ), best AS (SELECT userId, score, accuracy, createdAt FROM attempts WHERE attemptOrder = 1), ranked AS (
+        SELECT userId, RANK() OVER (ORDER BY score DESC, accuracy DESC) AS rank FROM best
+      ) SELECT rank FROM ranked WHERE userId = ?
+    `).get(...params, request.user.id)?.rank ?? null : null;
     const totals = db.prepare(`
       SELECT COUNT(*) AS attempts, COUNT(DISTINCT scores.user_id) AS participants, COALESCE(MAX(scores.score), 0) AS topScore
       FROM scores JOIN users ON users.id = scores.user_id
         LEFT JOIN passages ON passages.id = scores.passage_id
-      WHERE scores.user_id IS NOT NULL AND users.is_active = 1 ${periodFilter} ${modeFilter}
-    `).get(...totalParams);
-    response.json({ period, mode, rows, totals });
+      ${where}
+    `).get(...params);
+    response.json({ period, mode, scope, classId, className, currentRank, rows, totals });
   });
 
   app.post('/api/admin/login', async (request, response, next) => {
@@ -1163,6 +1212,102 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     response.json({ rows: allRows.slice(pagination.offset, pagination.offset + pagination.pageSize), total, sort: sortKey, order: descending ? 'desc' : 'asc', ...pagination });
   });
 
+  // 学习进步周报：按学生和周一汇总全部训练记录，供后台导出 Excel。
+  app.get('/api/admin/progress/weekly', requireAdmin, (request, response) => {
+    const keyword = cleanText(request.query.q, 80);
+    const classId = String(request.query.classId || '');
+    if (!classId) return response.status(400).json({ message: '导出周报前请先选择一个班级' });
+    const filters = [];
+    const params = [];
+    if (keyword) {
+      filters.push('(users.display_name LIKE ? OR users.username LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    if (classId === 'unassigned') {
+      filters.push('NOT EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = users.id AND cm.left_at IS NULL)');
+    } else if (/^\d+$/.test(classId)) {
+      filters.push('EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = users.id AND cm.class_id = ? AND cm.left_at IS NULL)');
+      params.push(Number(classId));
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const users = db.prepare(`
+      SELECT users.id, users.username, users.student_id AS studentId, users.display_name AS displayName,
+             COALESCE((SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
+               WHERE cm.user_id = users.id AND cm.left_at IS NULL AND classes.is_active = 1
+               ORDER BY cm.joined_at DESC LIMIT 1), '未分班') AS className
+      FROM users ${where} ORDER BY users.display_name COLLATE NOCASE, users.id
+    `).all(...params);
+    if (!users.length) return response.json({ rows: [], total: 0, classId: classId || null, className: classId === 'unassigned' ? '待分班' : null });
+
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const weekStart = (completedAt) => {
+      const date = new Date(Number(completedAt));
+      date.setUTCHours(0, 0, 0, 0);
+      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+      return date.toISOString().slice(0, 10);
+    };
+    const groups = new Map();
+    const weeks = new Set();
+    for (const training of trainingRowsForUsers(users.map((user) => user.id))) {
+      const user = usersById.get(training.userId);
+      if (!user) continue;
+      const start = weekStart(training.completedAt);
+      weeks.add(start);
+      const key = `${user.id}:${start}`;
+      if (!groups.has(key)) groups.set(key, {
+        user, weekStart: start, sessions: 0, correctChars: 0, wrongChars: 0,
+        durationMs: 0, bestSpeed: 0, latestAt: 0, activeDays: new Set(), modes: new Set()
+      });
+      const group = groups.get(key);
+      const completedAt = Number(training.completedAt);
+      group.sessions += 1;
+      group.correctChars += Number(training.correctChars || 0);
+      group.wrongChars += Number(training.wrongChars || 0);
+      group.durationMs += Number(training.durationMs || 0);
+      group.bestSpeed = Math.max(group.bestSpeed, Number(training.speed || 0));
+      group.latestAt = Math.max(group.latestAt, completedAt);
+      group.activeDays.add(new Date(completedAt).toISOString().slice(0, 10));
+      if (training.mode) group.modes.add(training.mode);
+    }
+    // 只在已有训练记录的周补齐班级内零训练学生，便于教师识别未练习学生。
+    for (const start of weeks) {
+      for (const user of users) {
+        const key = `${user.id}:${start}`;
+        if (!groups.has(key)) groups.set(key, {
+          user, weekStart: start, sessions: 0, correctChars: 0, wrongChars: 0,
+          durationMs: 0, bestSpeed: 0, latestAt: 0, activeDays: new Set(), modes: new Set()
+        });
+      }
+    }
+    const rows = [...groups.values()].map((group) => {
+      const totalChars = group.correctChars + group.wrongChars;
+      const weekEnd = new Date(`${group.weekStart}T00:00:00.000Z`);
+      weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+      return {
+        weekStart: group.weekStart,
+        weekEnd: weekEnd.toISOString().slice(0, 10),
+        className: group.user.className,
+        displayName: group.user.displayName,
+        username: group.user.username,
+        studentId: group.user.studentId || '',
+        sessions: group.sessions,
+        activeDays: group.activeDays.size,
+        durationHours: Math.round(group.durationMs / 3_600_000 * 100) / 100,
+        correctChars: group.correctChars,
+        wrongChars: group.wrongChars,
+        totalChars,
+        averageSpeed: group.durationMs ? Math.round(group.correctChars / group.durationMs * 60_000 * 10) / 10 : 0,
+        bestSpeed: Math.round(group.bestSpeed * 10) / 10,
+        accuracy: totalChars ? Math.round(group.correctChars / totalChars * 1000) / 10 : 0,
+        modes: [...group.modes].join('、'),
+        latestAt: group.latestAt
+      };
+    }).sort((a, b) => b.weekStart.localeCompare(a.weekStart) || a.displayName.localeCompare(b.displayName, 'zh-CN'));
+    if (rows.length > 2000) return response.status(413).json({ message: `当前筛选将导出 ${rows.length} 条周记录，单次最多导出 2000 条，请先搜索学生缩小范围` });
+    const selectedClass = classId === 'unassigned' ? '待分班' : classId ? users[0]?.className || null : null;
+    response.json({ rows, total: rows.length, classId: classId || null, className: selectedClass });
+  });
+
   app.get('/api/admin/progress/students/:id', requireAdmin, (request, response) => {
     const id = Number.parseInt(request.params.id, 10);
     const user = db.prepare(`SELECT id, username, display_name AS displayName, is_active AS isActive, created_at AS createdAt, last_login_at AS lastLoginAt FROM users WHERE id = ?`).get(id);
@@ -1183,12 +1328,17 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
 
   app.get('/api/admin/passages', requireAdmin, (request, response) => {
     const keyword = cleanText(request.query.q, 80);
-    const filter = keyword ? 'WHERE title LIKE ? OR category LIKE ?' : '';
-    const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : [];
+    const category = cleanText(request.query.category, 30);
+    const filters = [];
+    const params = [];
+    if (keyword) { filters.push('(title LIKE ? OR category LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`); }
+    if (category) { filters.push('category = ?'); params.push(category); }
+    const filter = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const total = db.prepare(`SELECT COUNT(*) AS count FROM passages ${filter}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`SELECT id, title, category, content, is_active AS isActive, created_at AS createdAt, updated_at AS updatedAt FROM passages ${filter} ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`).all(...params, pagination.pageSize, pagination.offset);
-    response.json({ rows, total, ...pagination });
+    const categories = db.prepare('SELECT DISTINCT category FROM passages ORDER BY category').all().map((row) => row.category);
+    response.json({ rows, total, categories, ...pagination });
   });
 
   app.post('/api/admin/passages', requireAdmin, (request, response) => {
@@ -1226,6 +1376,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const range = String(request.query.range || '');
     const keyword = cleanText(request.query.q, 80);
     const category = cleanText(request.query.category, 40);
+    const classId = cleanText(request.query.classId, 40);
     const filters = [];
     const params = [];
     // created_at 有 ISO 和 "YYYY-MM-DD HH:MM:SS" 两种写法，用 julianday 才能都解析。
@@ -1236,7 +1387,14 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
       filters.push('(COALESCE(users.display_name, scores.nickname) LIKE ? OR users.username LIKE ?)');
       params.push(`%${keyword}%`, `%${keyword}%`);
     }
-    if (category) { filters.push('passages.category = ?'); params.push(category); }
+    if (category) { filters.push('COALESCE(scores.category_snapshot, passages.category) = ?'); params.push(category); }
+    // 按班级筛选：纯数字按班级成员，unassigned 指当前没有任何有效班级的已注册用户（访客成绩不算未分班）。
+    if (/^\d+$/.test(classId)) {
+      filters.push('EXISTS (SELECT 1 FROM class_members cm WHERE cm.user_id = scores.user_id AND cm.class_id = ? AND cm.left_at IS NULL)');
+      params.push(Number(classId));
+    } else if (classId === 'unassigned') {
+      filters.push('(users.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM class_members cm JOIN classes ON classes.id = cm.class_id WHERE cm.user_id = scores.user_id AND cm.left_at IS NULL AND classes.is_active = 1))');
+    }
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const total = db.prepare(`
       SELECT COUNT(*) AS count FROM scores
@@ -1247,14 +1405,33 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
       SELECT scores.id, COALESCE(users.display_name, scores.nickname) AS nickname, users.username,
+             COALESCE(users.student_id, '') AS studentId,
+             CASE WHEN users.id IS NULL THEN '' ELSE COALESCE((SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
+               WHERE cm.user_id = users.id AND cm.left_at IS NULL AND classes.is_active = 1 ORDER BY cm.joined_at DESC LIMIT 1), '未分班') END AS className,
              scores.score, scores.accuracy, scores.wrong_chars AS wrongChars,
-             scores.created_at AS createdAt, passages.title AS passageTitle
+             scores.created_at AS createdAt, COALESCE(scores.title_snapshot, passages.title) AS passageTitle
       FROM scores LEFT JOIN passages ON passages.id = scores.passage_id
       LEFT JOIN users ON users.id = scores.user_id
       ${where}
       ORDER BY scores.created_at DESC LIMIT ? OFFSET ?
     `).all(...params, pagination.pageSize, pagination.offset);
     response.json({ rows, total, ...pagination });
+  });
+
+  app.get('/api/admin/scores/export', requireAdmin, (request, response) => {
+    // 筛选条件与 AI 助手共用一份（backend/score-filters.js），避免两边数字对不上。
+    const query = { range: request.query.range, q: request.query.q, category: request.query.category, classId: request.query.classId };
+    const total = countScoreRows(db, query);
+    if (total > 5000) return response.status(413).json({ message: `当前筛选有 ${total} 条成绩，单次最多导出 5000 条，请先缩小筛选范围` });
+    const rows = selectScoreRows(db, query);
+    // format=csv 给 AI 助手和直接下载用；默认仍返回 JSON，后台页面用它自己生成 xlsx。
+    if (String(request.query.format || '') === 'csv') {
+      const stamp = new Date(now()).toISOString().slice(0, 10);
+      response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      response.setHeader('Content-Disposition', `attachment; filename="typing-scores-${stamp}.csv"`);
+      return response.send(scoreRowsToCsv(rows));
+    }
+    response.json({ rows, total });
   });
 
   app.delete('/api/admin/scores/:id', requireAdmin, (request, response) => {
@@ -1267,10 +1444,13 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     try {
       const rawRows = Array.isArray(request.body?.rows) ? request.body.rows : String(request.body?.text || '')
         .split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-          const parts = line.split(/[\t,，;；]/).map((item) => item.trim());
-          return { displayName: parts[0], studentId: parts[1] };
+          // 粘贴名单兼容逗号、分号、制表符和空格，和后台弹窗提示保持一致。
+          const parts = line.split(/[\t,，;；]|\s+/).map((item) => item.trim());
+          const looksLikeStudentId = (value) => /^[A-Za-z0-9_-]{4,32}$/.test(value || '');
+          const newOrder = looksLikeStudentId(parts[0]) && !looksLikeStudentId(parts[1]);
+          return newOrder ? { displayName: parts[1], studentId: parts[0] } : { displayName: parts[0], studentId: parts[1] }
         }).filter((row) => !['姓名', '姓名/姓名'].includes(String(row.displayName).replace(/\s/g, '')));
-      if (!rawRows.length) return response.status(400).json({ message: '请粘贴“姓名,学号”数据后再导入' });
+      if (!rawRows.length) return response.status(400).json({ message: '请粘贴“学号,姓名”数据后再导入' });
       if (rawRows.length > 2000) return response.status(400).json({ message: '单次最多导入 2000 名学生' });
       // 可选：导入后直接分到某个班级。班级必须存在且启用。
       const classId = Number.parseInt(request.body?.classId, 10);
@@ -1280,29 +1460,35 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
         if (!targetClass) return response.status(400).json({ message: '所选班级不存在' });
         if (!targetClass.isActive) return response.status(400).json({ message: '所选班级已停用，请先启用再导入' });
       }
-      const errors = [], prepared = [], seen = new Set();
+      const errors = [], prepared = [], seenNames = new Map(), seenStudentIds = new Map();
       for (let index = 0; index < rawRows.length; index += 1) {
         const displayName = normalizeDisplayName(rawRows[index]?.displayName);
         const studentId = String(rawRows[index]?.studentId || '').trim();
         const line = index + 1;
         const nameError = validateDisplayName(displayName);
         if (nameError || !/^[A-Za-z0-9_-]{4,32}$/.test(studentId)) {
-          errors.push({ line, message: nameError || '学号需为 4-32 位字母、数字、下划线或短横线' }); continue;
+          errors.push({ line, kind: 'invalid', message: nameError || '学号需为 4-32 位字母、数字、下划线或短横线' }); continue;
         }
         const key = displayName.toLowerCase();
-        if (seen.has(key)) { errors.push({ line, message: '本次数据中姓名重复' }); continue; }
-        seen.add(key);
-        if (db.prepare('SELECT 1 FROM users WHERE lower(display_name) = lower(?) OR lower(username) = lower(?)').get(displayName, displayName)) {
-          errors.push({ line, message: '姓名已存在，请先处理已有账号' }); continue;
+        if (seenNames.has(key)) { errors.push({ line, kind: 'duplicate-name', message: `本次数据中姓名重复（与第${seenNames.get(key)}行相同）` }); continue; }
+        seenNames.set(key, line);
+        const studentIdKey = studentId.toLowerCase();
+        if (seenStudentIds.has(studentIdKey)) { errors.push({ line, kind: 'duplicate-student-id', message: `本次数据中学号重复（与第${seenStudentIds.get(studentIdKey)}行相同）` }); continue; }
+        seenStudentIds.set(studentIdKey, line);
+        const existing = db.prepare('SELECT display_name AS displayName, student_id AS studentId FROM users WHERE lower(display_name) = lower(?) OR lower(username) = lower(?) OR lower(student_id) = lower(?)').get(displayName, displayName, studentId);
+        if (existing) {
+          const kind = existing.studentId && existing.studentId.toLowerCase() === studentId.toLowerCase() ? 'duplicate-student-id' : 'duplicate-name';
+          const message = kind === 'duplicate-student-id' ? '学号已存在，请先处理已有账号' : '姓名已存在，请先处理已有账号';
+          errors.push({ line, kind, message }); continue;
         }
         prepared.push({ displayName, studentId, passwordHash: await hashPassword(studentId) });
       }
       const insert = db.prepare(`INSERT INTO users
-        (username, display_name, password_hash, is_active, last_login_at)
-        VALUES (?, ?, ?, 1, NULL)`);
+        (username, display_name, student_id, password_hash, is_active, last_login_at)
+        VALUES (?, ?, ?, ?, 1, NULL)`);
       // 建账号和分班放同一个事务：不会出现「账号建好了但没进班」的半成品。
       const add = db.transaction(() => {
-        const ids = prepared.map((item) => insert.run(item.displayName, item.displayName, item.passwordHash).lastInsertRowid);
+        const ids = prepared.map((item) => insert.run(item.displayName, item.displayName, item.studentId, item.passwordHash).lastInsertRowid);
         if (targetClass && ids.length) {
           const saveMember = db.prepare(`INSERT INTO class_members (class_id, user_id, joined_at, left_at)
             VALUES (?, ?, ?, NULL)
@@ -1325,20 +1511,58 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     const classFilter = cleanText(request.query.classId, 30);
     const filters = [];
     const params = [];
-    if (keyword) { filters.push('(users.display_name LIKE ? OR users.username LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`); }
+    if (keyword) { filters.push('(users.display_name LIKE ? OR users.username LIKE ? OR users.student_id LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`); }
     if (classFilter === 'unassigned') filters.push('NOT EXISTS (SELECT 1 FROM class_members WHERE class_members.user_id = users.id AND class_members.left_at IS NULL)');
     else if (/^\d+$/.test(classFilter)) { filters.push('EXISTS (SELECT 1 FROM class_members WHERE class_members.user_id = users.id AND class_members.class_id = ? AND class_members.left_at IS NULL)'); params.push(Number(classFilter)); }
     const filter = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const total = db.prepare(`SELECT COUNT(*) AS count FROM users ${filter}`).get(...params).count;
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
-      SELECT users.id, users.username, users.display_name AS displayName, users.is_active AS isActive,
+      SELECT users.id, users.username, users.student_id AS studentId, users.display_name AS displayName, users.avatar_data AS avatarData, users.is_active AS isActive,
              users.created_at AS createdAt, users.last_login_at AS lastLoginAt,
+             COALESCE((SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
+               WHERE cm.user_id = users.id AND cm.left_at IS NULL AND classes.is_active = 1
+               ORDER BY cm.joined_at DESC LIMIT 1), '未分班') AS className,
              COUNT(scores.id) AS attempts, COALESCE(MAX(scores.score), 0) AS personalBest
       FROM users LEFT JOIN scores ON scores.user_id = users.id ${filter}
       GROUP BY users.id ORDER BY users.created_at DESC, users.id DESC LIMIT ? OFFSET ?
     `).all(...params, pagination.pageSize, pagination.offset);
-    response.json({ rows, total, ...pagination });
+    response.json({ rows: rows.map((row) => ({ ...row, avatarUrl: avatarUrlForUser(row), avatarData: undefined })), total, ...pagination });
+  });
+
+  app.patch('/api/admin/users/:id/profile', requireAdmin, (request, response) => {
+    const userId = Number.parseInt(request.params.id, 10);
+    if (!Number.isInteger(userId) || userId <= 0) return response.status(400).json({ message: '学生账号参数不正确' });
+    const displayName = normalizeDisplayName(request.body?.displayName);
+    const nameError = validateDisplayName(displayName);
+    if (nameError) return response.status(400).json({ message: nameError });
+    const studentId = String(request.body?.studentId || '').trim();
+    if (studentId && !/^[A-Za-z0-9_-]{4,32}$/.test(studentId)) return response.status(400).json({ message: '学号需为 4-32 位字母、数字、下划线或短横线' });
+    const classIdValue = request.body?.classId;
+    const classId = classIdValue === '' || classIdValue === null || classIdValue === undefined ? null : Number.parseInt(classIdValue, 10);
+    if (classId !== null && (!Number.isInteger(classId) || classId <= 0 || !db.prepare('SELECT 1 FROM classes WHERE id = ? AND is_active = 1').get(classId))) return response.status(400).json({ message: '请选择有效的启用班级' });
+    const avatarData = String(request.body?.avatarData || '').trim();
+    if (avatarData && (!/^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/i.test(avatarData) || avatarData.length > 220_000)) return response.status(413).json({ message: '头像格式不支持或文件过大，请选择较小的 PNG/JPG/WEBP 图片' });
+    try {
+      const save = db.transaction(() => {
+        const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+        if (!existing) return { error: '学生账号不存在' };
+        const duplicateName = db.prepare('SELECT id FROM users WHERE lower(display_name) = lower(?) AND id <> ?').get(displayName, userId);
+        if (duplicateName) return { error: '姓名已被其他学生使用' };
+        if (studentId) {
+          const duplicateStudentId = db.prepare('SELECT id FROM users WHERE lower(student_id) = lower(?) AND id <> ?').get(studentId, userId);
+          if (duplicateStudentId) return { error: '学号已被其他学生使用' };
+        }
+        const fields = avatarData ? 'display_name = ?, student_id = ?, avatar_data = ?' : 'display_name = ?, student_id = ?';
+        const values = avatarData ? [displayName, studentId || null, avatarData, userId] : [displayName, studentId || null, userId];
+        db.prepare(`UPDATE users SET ${fields} WHERE id = ?`).run(...values);
+        db.prepare('UPDATE class_members SET left_at = ? WHERE user_id = ? AND left_at IS NULL').run(now(), userId);
+        if (classId !== null) db.prepare('INSERT INTO class_members (class_id, user_id, joined_at, left_at) VALUES (?, ?, ?, NULL) ON CONFLICT(class_id, user_id) DO UPDATE SET left_at = NULL').run(classId, userId, now());
+        return { ok: true };
+      })();
+      if (save.error) return response.status(save.error === '学生账号不存在' ? 404 : 409).json({ message: save.error });
+      response.json({ ok: true });
+    } catch (error) { response.status(String(error.code || '').includes('SQLITE_CONSTRAINT') ? 409 : 500).json({ message: '保存学生资料失败' }); }
   });
 
   app.patch('/api/admin/users/:id/status', requireAdmin, (request, response) => {
@@ -1420,8 +1644,8 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
 
   app.get('/api/admin/classes/unassigned/students', requireAdmin, (request, response) => {
     const keyword = cleanText(request.query.q, 80);
-    const where = keyword ? 'AND (users.display_name LIKE ? OR users.username LIKE ?)' : '';
-    const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : [];
+    const where = keyword ? 'AND (users.display_name LIKE ? OR users.username LIKE ? OR users.student_id LIKE ?)' : '';
+    const params = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`] : [];
     const total = db.prepare(`
       SELECT COUNT(*) AS count FROM users
       WHERE users.is_active = 1
@@ -1430,7 +1654,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     `).get(...params).count;
     if (request.query.all === 'true') {
       const rows = db.prepare(`
-        SELECT users.id, users.username, users.display_name AS displayName,
+        SELECT users.id, users.username, users.student_id AS studentId, users.display_name AS displayName,
                users.created_at AS createdAt, users.last_login_at AS lastLoginAt
         FROM users
         WHERE users.is_active = 1
@@ -1442,7 +1666,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     }
     const pagination = listPage(request.query, total);
     const rows = db.prepare(`
-      SELECT users.id, users.username, users.display_name AS displayName,
+      SELECT users.id, users.username, users.student_id AS studentId, users.display_name AS displayName,
              users.created_at AS createdAt, users.last_login_at AS lastLoginAt
       FROM users
       WHERE users.is_active = 1
@@ -1629,9 +1853,11 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   const publicPath = path.join(__dirname, '..', 'public');
   require('./battle').installBattle(app, { db, requireUser, requireAdmin, now });
   require('./boss').installBoss(app, { db, requireUser, now });
-  require('./competition').installCompetition(app, { db, requireUser, now });
+  require('./competition').installCompetition(app, { db, requireUser, requireAdmin, now });
   require('./competition-event').installCompetitionEvent(app, { db, requireUser, requireAdmin, now });
   require('./arena').installArena(app, { db, requireUser, now });
+  require('./customer-service').installCustomerService(app, { db, requireUser, requireAdmin, now });
+  require('./agent').installAgent(app, { db, requireAdmin, now });
   require('./chase').installChase(app, { db, requireUser, now });
   require('./runner').installRunner(app, { db, requireUser, now });
   app.use('/vendor/lucide', express.static(path.join(__dirname, '..', 'node_modules', 'lucide', 'dist', 'umd')));
@@ -1650,3 +1876,6 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
 }
 
 module.exports = { createApp, CHALLENGE_DURATION_MS };
+
+
+
