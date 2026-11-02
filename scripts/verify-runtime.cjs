@@ -24,7 +24,9 @@ function start(port = 0) {
     const timeout = setTimeout(() => reject(new Error(`启动超时。${errors}\n${output}`)), 20000);
     child.stdout.on('data', chunk => {
       output += chunk.toString();
-      const match = output.match(/READY (http:\/\/127\.0\.0\.1:\d+)\//);
+      // 启动器的就绪行是「READY 服务已就绪：http://…」或「READY 服务已就绪，已在本机打开后台：http://…/admin」，
+      // 不能要求 READY 后面紧跟 URL，否则永远匹配不上、每次都在 20 秒后超时。
+      const match = output.match(/READY[^\n]*?(http:\/\/127\.0\.0\.1:\d+)/);
       if (match) { clearTimeout(timeout); resolve(match[1]); }
     });
     child.stderr.on('data', chunk => { errors += chunk.toString(); });
@@ -35,12 +37,20 @@ function start(port = 0) {
 }
 async function stop(child) {
   if (child.exitCode !== null) return;
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { child.kill(); reject(new Error('服务未能正常停止')); }, 10000);
-    child.once('exit', code => { clearTimeout(timeout); code === 0 ? resolve() : reject(new Error(`退出状态 ${code}`)); });
-    child.stdin.write('q\n');
-  });
+  const exited = new Promise((resolve) => child.once('exit', (code) => resolve(code)));
+  try { child.stdin.write('q\n'); } catch { /* 进程已经退出，管道断了 */ }
+  let code = await Promise.race([exited, new Promise((resolve) => setTimeout(() => resolve('timeout'), 10000))]);
+  if (code === 'timeout') {
+    // 只 kill cmd.exe 不够：真正的 node 服务是它的子进程，Windows 上不会跟着退出，
+    // 残留进程会一直占着端口和 runtime/node.exe，下一次验收就撞 EADDRINUSE / EPERM。
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+    // 必须等进程真的退出，否则紧接着删临时目录会因文件句柄未释放而 EPERM。
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))]);
+    if (active === child) active = null;
+    throw new Error('服务未能正常停止');
+  }
   if (active === child) active = null;
+  if (code !== 0) throw new Error(`退出状态 ${code}`);
 }
 async function get(base, url) {
   const response = await fetch(base + url, { signal: AbortSignal.timeout(10000) });
@@ -117,5 +127,13 @@ async function main() {
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   if (active) await stop(active).catch(() => {});
   const resolved = path.resolve(temporary);
-  if (path.dirname(resolved) === path.resolve(os.tmpdir()) && path.basename(resolved).startsWith('typing-runtime-check-')) fs.rmSync(resolved, { recursive: true, force: true });
+  if (path.dirname(resolved) === path.resolve(os.tmpdir()) && path.basename(resolved).startsWith('typing-runtime-check-')) {
+    // Windows 上 node.exe 刚退出时句柄可能还没释放，删不掉就重试几次；清不掉临时目录不该让验收判失败。
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try { fs.rmSync(resolved, { recursive: true, force: true }); break; } catch (error) {
+        if (attempt === 5) { console.warn(`临时目录清理失败（不影响验收结论）：${error.message}`); break; }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    }
+  }
 });
