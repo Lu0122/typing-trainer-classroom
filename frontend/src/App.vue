@@ -27,6 +27,17 @@ const authOpen = ref(false);
 const returnAfterLogin = ref(null);
 const authView = ref('login');
 const studentRegistrationEnabled = ref(false);
+// 老师开启检录后，所有已登录学生都必须进入比赛页，直到本场结束。
+const activeCompetition = ref(null);
+const competitionPageLocked = computed(() => ['registration', 'running', 'paused'].includes(activeCompetition.value?.status));
+let competitionPollTimer;
+let competitionPollRequest = null;
+function enforceCompetitionHash() {
+  if (competitionPageLocked.value && window.location.hash.slice(1) !== 'competition') {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#competition`);
+    page.value = 'competition';
+  }
+}
 const authBusy = ref(false);
 const authMessage = ref('');
 const avatarFileEl = ref(null);
@@ -445,6 +456,30 @@ async function loadCurrentUser() {
     user.value = null;
   }
 }
+async function refreshActiveCompetition() {
+  if (!user.value) {
+    activeCompetition.value = null;
+    return;
+  }
+  if (competitionPollRequest) return competitionPollRequest;
+  competitionPollRequest = (async () => {
+    try {
+      const rows = await requestJSON('/api/competitions/available');
+      const activeRows = (Array.isArray(rows) ? rows : []).filter((item) => ['registration', 'running', 'paused'].includes(item.status));
+      // 检录优先于已经开赛的赛事；同一状态取最近创建的一场。
+      activeCompetition.value = activeRows.find((item) => item.status === 'registration') || activeRows[0] || null;
+      if (competitionPageLocked.value && page.value !== 'competition') {
+        page.value = 'competition';
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#competition`);
+      }
+    } catch {
+      // 网络短暂异常时保留现有锁定状态，避免学生被错误放回其他页面。
+    } finally {
+      competitionPollRequest = null;
+    }
+  })();
+  return competitionPollRequest;
+}
 async function loadAuthConfig() {
   try { studentRegistrationEnabled.value = (await requestJSON('/api/auth/config')).studentRegistrationEnabled === true; } catch { studentRegistrationEnabled.value = false; }
 }
@@ -476,6 +511,20 @@ function openCompetitionLogin(targetPage) {
   returnAfterLogin.value = targetPage;
   setPage('home');
   openAccount();
+}
+// 首页卡片一律要求登录：未登录先弹登录框，登录成功后自动执行原本要做的动作。
+// returnAfterLogin 既可以是页面名（字符串），也可以是一个动作函数——后者能带上
+// 「新手入门要生成序列」「挑战页要重置状态」这些副作用，光记页面名会丢。
+function requireLogin(action) {
+  if (user.value) return action();
+  returnAfterLogin.value = action;
+  openAccount();
+}
+function runAfterLogin() {
+  const destination = returnAfterLogin.value;
+  returnAfterLogin.value = null;
+  if (typeof destination === 'function') destination();
+  else setPage(destination || 'home');
 }
 function optimizeAvatar(file) {
   return new Promise((resolve, reject) => {
@@ -520,8 +569,8 @@ async function submitLogin() {
     loginForm.password = '';
     authMessage.value = '';
     authOpen.value = false;
-    setPage(returnAfterLogin.value || 'home');
-    returnAfterLogin.value = null;
+    runAfterLogin();
+    refreshActiveCompetition();
     loadLearningData();
     if (page.value === 'challenge-home') { challengeLeaderboardScope.value = 'class'; loadChallengeLeaderboards('class'); }
   } catch (error) { authMessage.value = error.message; }
@@ -537,8 +586,8 @@ async function submitRegister() {
       authView.value = 'login';
       loginForm.username = registerForm.displayName;
     } else {
-      user.value = data.user; authView.value = 'profile'; authMessage.value = '账号创建成功。'; loadLearningData();
-      if (returnAfterLogin.value) { const destination = returnAfterLogin.value; returnAfterLogin.value = null; authOpen.value = false; setPage(destination); }
+      user.value = data.user; authView.value = 'profile'; authMessage.value = '账号创建成功。'; refreshActiveCompetition(); loadLearningData();
+      if (returnAfterLogin.value) { authOpen.value = false; runAfterLogin(); }
     }
     registerForm.displayName = ''; registerForm.password = '';
   } catch (error) { authMessage.value = error.message; }
@@ -546,7 +595,7 @@ async function submitRegister() {
 }
 async function logout() {
   authBusy.value = true;
-  try { await requestJSON('/api/auth/logout', { method: 'POST' }); user.value = null; learningSummary.value = null; learningDiagnostics.value = null; assignments.value = []; authView.value = 'login'; authOpen.value = false; }
+  try { await requestJSON('/api/auth/logout', { method: 'POST' }); user.value = null; activeCompetition.value = null; learningSummary.value = null; learningDiagnostics.value = null; assignments.value = []; authView.value = 'login'; authOpen.value = false; }
   finally { authBusy.value = false; }
 }
 function persistChallenge() {
@@ -664,7 +713,7 @@ async function switchChallengeLeaderboardScope(scope) { await loadChallengeLeade
 async function openLeaderboard() { leaderboardScope.value = user.value ? 'class' : 'all'; leaderboardMode.value = 'all'; await loadLeaderboard(); leaderboardOpen.value = true; }
 async function switchLeaderboardScope(scope) { leaderboardScope.value = scope; await loadLeaderboard(scope, leaderboardMode.value); }
 async function switchLeaderboardMode(mode) { leaderboardMode.value = mode; await loadLeaderboard(leaderboardScope.value, mode); }
-function openChallengePage() { challengeResult.value = null; challengeMode.value = 'pinyin'; stopChallengeCountdown(); challengeLeaderboardScope.value = user.value ? 'class' : 'all'; setPage('challenge-home'); loadChallengeLeaderboards(challengeLeaderboardScope.value); }
+function openChallengePage() { requireLogin(() => { challengeResult.value = null; challengeMode.value = 'pinyin'; stopChallengeCountdown(); challengeLeaderboardScope.value = user.value ? 'class' : 'all'; setPage('challenge-home'); loadChallengeLeaderboards(challengeLeaderboardScope.value); }); }
 function requestChallengeExit() {
   if (!challenge.value || challengeSubmitting.value) { openChallengePage(); return; }
   const pauseAt = Date.now();
@@ -708,6 +757,7 @@ function challengeTypedLine(segment) { return challengeTypedCharacters.value.sli
 function challengeCaretVisible(segment) { return challengeTypedCharacters.value.length >= segment.offset && challengeTypedCharacters.value.length <= segment.offset + segment.line.length; }
 const feedbackFrom = ref('');
 function setPage(nextPage) {
+  if (competitionPageLocked.value && nextPage !== 'competition') return;
   // 从游戏里点「反馈」时记下来源，反馈页可以自动选好「哪个功能」。
   if (nextPage === 'bug-feedback' && page.value !== 'bug-feedback') feedbackFrom.value = page.value;
   page.value = nextPage;
@@ -747,8 +797,11 @@ function handleDiagnosticInput(event) {
   }
 }
 function goEnglishHome() { setPage('english-home'); resetEnglishLesson(); }
-function openPractice(next) { category.value=next; if (next === '英文打字') { setPage('english-home'); } else if (next === '拼音打字') { setPage('pinyin-home'); } else { setPage('practice'); loadPassage(); } }
-function openBeginner() { setPage('beginner'); makeBeginnerSequence(false); }
+function openPractice(next) { requireLogin(() => { category.value=next; if (next === '英文打字') { setPage('english-home'); } else if (next === '拼音打字') { setPage('pinyin-home'); } else { setPage('practice'); loadPassage(); } }); }
+function openBeginner() { requireLogin(() => { setPage('beginner'); makeBeginnerSequence(false); }); }
+// 趣味游戏 / 打字比赛两个卡片也要先登录，避免未登录学生在游戏大厅或赛事页空转。
+function openGames() { requireLogin(() => setPage('games')); }
+function openCompetitionHub() { requireLogin(() => setPage('competition-hub')); }
 function advanceLesson(indexes, catalog, lessonPage) { const lessons = catalog[lessonPage] || []; if (lessons.length > 1) { indexes[lessonPage] = (indexes[lessonPage] + 1) % lessons.length; savePracticeIndex(lessonPage, indexes[lessonPage]); } }
 function openEnglishLesson(nextPage) { setPage(nextPage); resetEnglishLesson(nextPage, false); }
 function resetEnglishLesson(nextPage = page.value, advance = true) { clearPracticeAdvance(); if (advance) advanceLesson(englishLessonIndex, englishCopy, nextPage); typed.value=''; practiceStartedAt.value=null; now.value=Date.now(); resetKeyStats(); }
@@ -864,6 +917,7 @@ onMounted(async () => {
   if (pinyinCopy[savedPage]) resetPinyinLesson(savedPage, false);
   await loadAuthConfig();
   await loadCurrentUser();
+  await refreshActiveCompetition();
   if (savedPage === 'challenge-home') { challengeLeaderboardScope.value = user.value ? 'class' : 'all'; loadChallengeLeaderboards(challengeLeaderboardScope.value); }
   await loadLearningData();
   restoreChallenge();
@@ -875,8 +929,10 @@ onMounted(async () => {
     if (!challengeExitOpen.value) now.value=Date.now();
     if (challenge.value && !challengeExitOpen.value && !challenge.value.paused && !challengeSubmitting.value && now.value >= challenge.value.expiresAt) submitChallenge();
   },250);
+  competitionPollTimer = window.setInterval(refreshActiveCompetition, 1500);
+  window.addEventListener('hashchange', enforceCompetitionHash);
 });
-onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.clearInterval(timer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); stopChallengeCountdown(); });
+onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.removeEventListener('hashchange', enforceCompetitionHash); window.clearInterval(timer); window.clearInterval(competitionPollTimer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); stopChallengeCountdown(); });
 </script>
 <template>
 <BattleGame v-if="page === 'battle'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
@@ -886,11 +942,11 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 <ChaseGame v-else-if="page === 'chase'" :user="user" @back="setPage('games')" @login="openAccount"/>
 <RunnerGame v-else-if="page === 'runner'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
 <BugFeedback v-else-if="page === 'bug-feedback'" :user="user" :from="feedbackFrom" @back="setPage('games')" @login="openAccount"/>
-<CompetitionGame v-else-if="page === 'competition'" :user="user" @back="setPage('competition-hub')" @login="openAccount"/>
+<CompetitionGame v-else-if="page === 'competition'" :user="user" :locked="competitionPageLocked" @back="setPage('competition-hub')" @login="openAccount"/>
 <CompetitionHub v-else-if="page === 'competition-hub'" :user="user" @back="goHome" @select="setPage" @login="openAccount"/>
 <GameLobby v-else-if="page === 'games'" :user="user" @select="setPage" @back="goHome" @growth="openGrowth" @leaderboard="openLeaderboard" @account="openAccount" @bug-report="setPage('bug-feedback')"/>
 <div v-else class="app-shell" :class="{ 'is-home-page': page === 'home', 'is-reference-page': page === 'beginner' || page === 'growth' || page === 'diagnostics' || page === 'diagnostic-drill' || page.startsWith('challenge-') || page.startsWith('english-') || page.startsWith('pinyin-'), 'is-beginner-page': page === 'beginner', 'is-english-home': page === 'english-home', 'is-english-practice': page.startsWith('english-') && page !== 'english-home', 'is-pinyin-practice': page.startsWith('pinyin-') && page !== 'pinyin-home', 'is-pinyin-home': page === 'pinyin-home', 'is-challenge-running': page.startsWith('challenge-') && !!challenge }"><AppHeader variant="hero" title="字练场 2026" subtitle="中文与英文键盘训练" :icon="KeyboardIcon" decor clickable-brand :user="user" @brand="goHome" @account="openAccount" />
-  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="setPage('games')"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button><button class="course-card competition" @click="setPage('competition-hub')"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button></div><p class="footnote">练习可直接开始；参加现场比赛请先登录，等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
+  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="openGames"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button><button class="course-card competition" @click="openCompetitionHub"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button></div><p class="footnote">练习可直接开始；参加现场比赛请先登录，等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
 <section v-else-if="page === 'growth'" class="lesson-view learning-view">
   <div class="lesson-nav"><button @click="goHome"><ArrowLeft :size="14"/>返回</button><span>首页</span><b>›</b><strong>我的成长</strong></div>
   <section class="learning-hero"><div><p class="eyebrow">学生成长中心</p><h1>{{ user?.displayName || '同学' }}，继续保持输入节奏。</h1><p v-if="learningSummary?.hasData">当前阶段：{{ learningSummary.level.label }} · {{ learningSummary.level.next }}</p><p v-else>完成一次练习后，这里会开始记录你的成长轨迹。</p></div><div class="learning-level"><Flame :size="20"/><strong>{{ learningSummary?.stats?.streak || 0 }}</strong><span>连续练习天</span></div></section>
@@ -1091,7 +1147,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
       </div>
     </template>
     <template v-else>
-      <h2>学生账号</h2><p class="auth-intro">使用姓名和密码登录，登录后保存竞速成绩并进入班级排行榜。</p>
+      <h2>学生账号</h2><p class="auth-intro">使用姓名和密码登录；登录后才能进入练习和比赛，成绩会保存到你的账号。</p>
       <div class="auth-tabs"><button type="button" :class="{active:authView==='login'}" @click="authView='login';authMessage=''">登录</button><button v-if="studentRegistrationEnabled" type="button" :class="{active:authView==='register'}" @click="authView='register';authMessage=''">注册</button></div>
       <form v-if="authView === 'login'" @submit.prevent="submitLogin"><label>姓名或用户名<input v-model.trim="loginForm.username" autocomplete="username" required maxlength="32"/></label><label>密码<input v-model="loginForm.password" type="password" autocomplete="current-password" required/></label><button class="auth-primary" :disabled="authBusy">{{ authBusy ? '登录中…' : '登录' }}</button></form>
       <form v-else @submit.prevent="submitRegister"><label>姓名<input v-model.trim="registerForm.displayName" autocomplete="name" required maxlength="12"/></label><label>密码<input v-model="registerForm.password" type="password" minlength="6" maxlength="12" pattern="(?:[0-9]{6,12}|(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,12})" autocomplete="new-password" required placeholder="6-12 位纯数字，或字母数字组合"/></label><button class="auth-primary" :disabled="authBusy">{{ authBusy ? '提交中…' : '提交注册申请' }}</button></form>

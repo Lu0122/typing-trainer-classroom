@@ -1,10 +1,10 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Trophy } from 'lucide-vue-next';
 import AppHeader from './AppHeader.vue';
 import PinyinLineInput from './PinyinLineInput.vue';
 
-const props = defineProps({ user: { type: Object, default: null } });
+const props = defineProps({ user: { type: Object, default: null }, locked: { type: Boolean, default: false } });
 const emit = defineEmits(['back', 'login']);
 
 const mode = ref('personal');
@@ -16,7 +16,7 @@ const connected = ref(true);
 const clock = ref(Date.now());
 const editor = ref(null);
 
-// 新赛事引擎：有老师创建的 1v1 赛事时，学生端优先显示新赛事入口。
+// 新赛事引擎：有老师创建的赛事时，学生端优先显示新赛事入口。
 const eventList = ref([]);
 const eventId = ref(null);
 const eventState = ref(null);
@@ -115,6 +115,8 @@ const eventRunning = computed(() => eventState.value?.status === 'running' && ev
 const eventPlayerFinished = computed(() => Boolean(eventState.value?.me?.finished));
 const eventCanType = computed(() => eventRunning.value && !eventPlayerFinished.value);
 const eventFinished = computed(() => eventState.value?.status === 'finished');
+// 老师终止赛事：学生被放回其他页面，这里只负责给出明确提示，不再上报成绩。
+const eventTerminated = computed(() => eventState.value?.status === 'terminated');
 const eventText = computed(() => eventState.value?.round?.text || '');
 const eventCommitted = computed(() => eventState.value?.me?.typed || '');
 const eventLockedPrefix = computed(() => eventSubmittedPrefix.value.length > eventCommitted.value.length ? eventSubmittedPrefix.value : eventCommitted.value);
@@ -202,6 +204,7 @@ const eventProgress = computed(() => {
 const eventPhaseLabel = computed(() => {
   if (!props.user) return '登录后查看赛事';
   if (!eventState.value) return '等待老师开赛';
+  if (eventTerminated.value) return '比赛已终止';
   if (eventFinished.value) return '比赛结束';
   if (eventState.value?.status === 'paused') return eventState.value?.round?.status === 'scheduled' ? '等待计划时间' : '比赛已暂停';
   if (eventState.value?.round?.status === 'countdown') return '即将开赛';
@@ -211,7 +214,32 @@ const eventPhaseLabel = computed(() => {
   return '等待老师开赛';
 });
 
+// Chrome 在 Windows 上默认用覆盖式滚动条，静止时完全看不见，
+// 全班四五十人时学生根本看不出「本场结果 / 选手排名」还能往下翻。
+// 所以自绘一个常驻滑块：只有内容真的溢出才出现，滚动 / 尺寸变化 / 行数变化时重算。
+const resultScrollEl = ref(null);
+const rankScrollEl = ref(null);
+const resultThumb = reactive({ visible: false, height: 0, top: 0 });
+const rankThumb = reactive({ visible: false, height: 0, top: 0 });
+
+function updateScrollThumb(el, thumb) {
+  if (!el) { thumb.visible = false; return; }
+  const { scrollHeight, clientHeight, scrollTop } = el;
+  if (scrollHeight <= clientHeight + 2) { thumb.visible = false; return; }
+  const height = Math.max(26, Math.round((clientHeight / scrollHeight) * clientHeight));
+  const maxTop = Math.max(0, clientHeight - height);
+  const ratio = scrollTop / Math.max(1, scrollHeight - clientHeight);
+  thumb.visible = true;
+  thumb.height = height;
+  thumb.top = Math.round(Math.min(maxTop, Math.max(0, ratio * maxTop)));
+}
+const updateResultThumb = () => updateScrollThumb(resultScrollEl.value, resultThumb);
+const updateRankThumb = () => updateScrollThumb(rankScrollEl.value, rankThumb);
+function updateListThumbs() { updateResultThumb(); updateRankThumb(); }
+
 function updateViewportWidth() {
+  // 放在提前 return 之前：作答中也要保持滑块位置正确。
+  updateListThumbs();
   // Keep line boundaries and page position stable once the contestant is typing.
   if (eventDraft.value.length) return;
   viewportWidth.value = window.innerWidth;
@@ -251,6 +279,8 @@ function applyEvent(data) {
   const oldRound = eventState.value?.round?.id;
   const oldRoundStatus = eventState.value?.round?.status;
   eventState.value = data;
+  // 名次变化会改变列表高度，滑块要跟着重算。
+  nextTick(updateListThumbs);
   clearTimeout(eventBoundaryTimer);
   if (data.round?.status === 'countdown') eventBoundaryTimer = setTimeout(refreshEventState, Math.max(0, data.round.startsAt - data.serverNow + 80));
   if (data.mode === 'team' && !(data.sides || []).some((side) => side.id === eventSideId.value)) eventSideId.value = data.sides?.[0]?.id || null;
@@ -285,7 +315,7 @@ async function refreshEventState() {
 async function refreshEvents() {
   if (stopped || !props.user || eventReading) return;
   try {
-    const response = await fetch('/api/competitions/available?mode=speed', { signal: AbortSignal.timeout(7000) });
+    const response = await fetch('/api/competitions/available', { signal: AbortSignal.timeout(7000) });
     if (!response.ok) throw Object.assign(new Error('赛事列表暂时不可用'), { status: response.status });
     const rows = await response.json();
     eventList.value = Array.isArray(rows) ? rows : [];
@@ -296,14 +326,13 @@ async function refreshEvents() {
       await refreshEventState();
       return;
     }
-    if (eventState.value?.status !== 'finished') {
-      eventMode.value = true;
-      eventId.value = null;
-      eventState.value = null;
-    } else {
-      eventMode.value = true;
-      await refreshEventState();
-    }
+    eventMode.value = true;
+    // 列表空了：先按 eventId 拉一次真实状态。不能拿本地 status 判断——
+    // 老师刚终止时本地还停在 registration，会把「已终止」的提示和返回按钮一起清掉。
+    if (eventId.value) await refreshEventState();
+    if (['finished', 'terminated'].includes(eventState.value?.status)) return;
+    eventId.value = null;
+    eventState.value = null;
   } catch (error) {
     if (!eventState.value) eventMessage.value = error.message;
   }
@@ -326,10 +355,6 @@ async function eventAction(path = '', body) {
   } finally {
     eventBusy.value = false;
   }
-}
-
-function eventJoin() {
-  eventAction('/join', eventIsTeam.value ? { sideId: eventSideId.value } : {});
 }
 
 function queueEventFlush() {
@@ -573,7 +598,7 @@ onBeforeUnmount(() => {
       title="打字比赛"
       :subtitle="eventIsSpeed ? `个人赛 · ${eventLanguage}` : eventIsTeam ? '同题团队赛' : '个人赛'"
       :icon="Trophy"
-      back-label="返回比赛项目"
+      :back-label="props.locked ? '' : '返回比赛项目'"
       :user="props.user"
       @back="emit('back')"
       @account="emit('login')"
@@ -609,14 +634,17 @@ onBeforeUnmount(() => {
           </header>
           <div class="competition-event-progress"><i :style="{ width: `${eventProgress}%` }"></i></div>
 
-          <div v-if="eventFinished" class="competition-event-result">
-            <b>本场结果</b>
-            <ol>
-              <li v-for="row in eventRanking" :key="row.userId">
-                <span>{{ row.rank }}</span><strong>{{ row.name }}</strong>
-                <em>{{ eventIsSpeed ? `${row.correct} 字 · ${row.speed || 0} 字/分 · ${((row.timeMs ?? 0) / 1000).toFixed(1)} 秒` : row.finished ? `${(row.elapsedMs / 1000).toFixed(1)} 秒` : `${row.correct} 字` }}</em>
-              </li>
-            </ol>
+          <div v-if="eventFinished" class="competition-event-result-frame">
+            <div ref="resultScrollEl" class="competition-event-result" @scroll="updateResultThumb">
+              <b>本场结果</b>
+              <ol>
+                <li v-for="row in eventRanking" :key="row.userId">
+                  <span>{{ row.rank }}</span><strong>{{ row.name }}</strong>
+                  <em>{{ eventIsSpeed ? `${row.correct} 字 · ${row.speed || 0} 字/分 · ${((row.timeMs ?? 0) / 1000).toFixed(1)} 秒` : row.finished ? `${(row.elapsedMs / 1000).toFixed(1)} 秒` : `${row.correct} 字` }}</em>
+                </li>
+              </ol>
+            </div>
+            <i v-if="resultThumb.visible" class="scroll-thumb" :style="{ height: `${resultThumb.height}px`, transform: `translateY(${resultThumb.top}px)` }" aria-hidden="true"></i>
           </div>
           <div v-else-if="eventCanType && eventState?.me" class="competition-event-practice" :class="{ english: eventState?.config?.language === 'en' }">
             <PinyinLineInput
@@ -637,8 +665,8 @@ onBeforeUnmount(() => {
             <small>成绩已记录，统一计时结束后会公布最终排名。</small>
           </div>
           <div v-else class="competition-event-waiting">
-            <strong>{{ !props.user ? '请先登录学生账号' : !eventState ? '暂无开放的个人赛' : eventState.round?.status === 'countdown' ? '倒计时结束后统一开始输入' : eventJoined ? '已报名，等待老师开始' : `加入这场${eventIsSpeed ? eventLanguage : '1v1'}比赛` }}</strong>
-            <small>{{ !props.user ? '登录后会自动显示老师开启检录的中文或英文个人赛。' : !eventState ? '老师在后台创建并开启检录后，这里会自动显示。' : eventState.round?.status === 'countdown' ? '选手名单已锁定，统一计时即将开始。' : eventState.status === 'registration' ? '检录期间可以加入，开赛后将锁定选手。' : '这场比赛已经开始，暂时不能加入。' }}</small>
+            <strong>{{ !props.user ? '请先登录学生账号' : !eventState ? '暂无开放的个人赛' : eventTerminated ? '比赛已终止' : eventState.round?.status === 'countdown' ? '倒计时结束后统一开始输入' : eventJoined ? '已自动报名，等待老师开始' : '本场已开赛' }}</strong>
+            <small>{{ !props.user ? '登录后会自动显示老师开启检录的中文或英文个人赛。' : !eventState ? '老师在后台创建并开启检录后，这里会自动显示。' : eventTerminated ? '老师已终止本场比赛，可以返回其他页面继续练习。' : eventState.round?.status === 'countdown' ? '选手名单已锁定，统一计时即将开始。' : eventState.status === 'registration' ? '检录期间打开本页即自动报名，开赛后将锁定选手。' : '这场比赛已经开始，暂时不能加入。' }}</small>
           </div>
 
           <div v-if="eventState?.me && (eventRunning || eventFinished)" class="competition-event-metrics" aria-label="本场打字数据">
@@ -648,15 +676,14 @@ onBeforeUnmount(() => {
             <span>正确率 <b>{{ eventTypedAccuracy }}%</b></span>
           </div>
 
-          <div v-if="!eventJoined && eventState?.status === 'registration' && eventIsTeam" class="competition-event-side-picker">
-            <span>选择参赛方</span>
-            <button v-for="side in eventState.sides" :key="side.id" type="button" :class="{ selected: side.id === eventSideId }" @click="eventSideId = side.id"><i :style="{ background: side.color }"></i>{{ side.name }}<small>{{ side.members }}/{{ eventState.config?.teamSize || 0 }}</small></button>
-          </div>
           <div class="competition-event-actions">
-            <button v-if="!eventJoined && eventState?.status === 'registration'" type="button" class="competition-event-primary" :disabled="eventBusy || (eventIsTeam && !eventSideId)" @click="eventJoin">加入比赛</button>
-            <span v-else-if="eventJoined && eventState?.status === 'registration'" class="competition-event-note">已加入，等待主持台开赛</span>
+            <template v-if="eventTerminated">
+              <span class="competition-event-note">比赛已被老师终止，可以返回其他页面了。</span>
+              <button type="button" class="competition-event-primary" @click="emit('back')">返回比赛项目</button>
+            </template>
             <button v-else-if="!props.user" type="button" class="competition-event-primary" @click="emit('login')">登录 / 注册</button>
-            <span v-else-if="eventState && !eventJoined" class="competition-event-note">本场已开赛，无法加入</span>
+            <span v-else-if="eventJoined" class="competition-event-note">已自动报名，等待主持台开赛</span>
+            <span v-else-if="eventState" class="competition-event-note">本场已开赛，无法加入</span>
           </div>
           <p v-if="eventMessage" class="competition-event-message" role="status">{{ eventMessage }}</p>
         </article>
@@ -666,13 +693,16 @@ onBeforeUnmount(() => {
           <div v-if="eventIsTeam" class="competition-event-sides">
             <div v-for="side in (eventState.standings || eventState.sides)" :key="side.id" :class="{ winner: eventState.match?.winnerSideId === side.id }"><span><i :style="{ background: side.color }"></i>{{ side.name }}</span><strong>{{ side.completed }}/{{ side.members }}</strong><small>{{ side.score }} 分</small></div>
           </div>
-          <ol>
-            <li v-for="(row, index) in eventRanking" :key="row.userId" :class="{ mine: row.userId === props.user?.id }">
-              <span>{{ row.rank || index + 1 }}</span>
-              <div><strong>{{ row.name }}<small v-if="row.userId === props.user?.id">我</small></strong><em>{{ eventIsSpeed ? `${row.correct} 字 · ${row.speed || 0} 字/分 · ${eventFinished ? `${((row.timeMs ?? 0) / 1000).toFixed(1)} 秒 · ` : ''}${row.accuracy}%` : row.finished ? `${(row.elapsedMs / 1000).toFixed(1)} 秒` : `${row.correct} 字 · ${row.accuracy}%` }}</em></div>
-            </li>
-            <li v-if="!eventRanking.length" class="empty">等待选手加入</li>
-          </ol>
+          <div class="competition-event-rank-frame">
+            <ol ref="rankScrollEl" @scroll="updateRankThumb">
+              <li v-for="(row, index) in eventRanking" :key="row.userId" :class="{ mine: row.userId === props.user?.id }">
+                <span>{{ row.rank || index + 1 }}</span>
+                <div><strong>{{ row.name }}<small v-if="row.userId === props.user?.id">我</small></strong><em>{{ eventIsSpeed ? `${row.correct} 字 · ${row.speed || 0} 字/分 · ${eventFinished ? `${((row.timeMs ?? 0) / 1000).toFixed(1)} 秒 · ` : ''}${row.accuracy}%` : row.finished ? `${(row.elapsedMs / 1000).toFixed(1)} 秒` : `${row.correct} 字 · ${row.accuracy}%` }}</em></div>
+              </li>
+              <li v-if="!eventRanking.length" class="empty">等待选手加入</li>
+            </ol>
+            <i v-if="rankThumb.visible" class="scroll-thumb" :style="{ height: `${rankThumb.height}px`, transform: `translateY(${rankThumb.top}px)` }" aria-hidden="true"></i>
+          </div>
         </aside>
       </section>
     </main>
@@ -683,7 +713,7 @@ onBeforeUnmount(() => {
       title="打字比赛"
       subtitle="QUALIFIER · FINAL"
       :icon="Trophy"
-      back-label="返回比赛项目"
+      :back-label="props.locked ? '' : '返回比赛项目'"
       :user="props.user"
       @back="leave"
       @account="emit('login')"
@@ -780,7 +810,7 @@ onBeforeUnmount(() => {
             <button v-if="!joined && phase === 'waiting'" type="button" class="competition-primary" :disabled="busy" @click="join">{{ props.user ? '加入比赛' : '登录后加入' }}</button>
             <button v-else-if="isHost && phase === 'waiting'" type="button" class="competition-primary" :disabled="busy" @click="action('/start')">立即开始初赛</button>
             <button v-else-if="running && task && draft.length === task.text.length" type="button" class="competition-primary" @click="nextSegment">下一段 ↵</button>
-            <button v-if="joined && phase !== 'finished'" type="button" class="competition-secondary" @click="leave">退出比赛</button>
+            <button v-if="joined && phase !== 'finished' && !props.locked" type="button" class="competition-secondary" @click="leave">退出比赛</button>
           </div>
 
           <p v-if="message" class="competition-message" role="status">{{ message }}</p>
@@ -912,16 +942,16 @@ onBeforeUnmount(() => {
 .competition-ranking li>em{font:700 14px Consolas,monospace;color:#2d7bca}
 .competition-ranking .flag{font-style:normal;padding:1px 5px;border-radius:4px;background:#fdecec;color:#c0392b;font-size:10px}
 .competition-ranking .empty{justify-content:center;color:#a7bccd;font-size:12px;border:0}
-.competition-event-page{min-height:100vh;background:linear-gradient(180deg,#eff7ff,#f8fbff 58%,#edf5fd);color:#203b59;font-family:"Microsoft YaHei UI",system-ui,sans-serif}
-.competition-event-main{width:min(1920px,calc(100% - 64px));margin:auto;padding:24px 0}
-.competition-event-toolbar{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:18px}
+.competition-event-page{height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#eff7ff,#f8fbff 58%,#edf5fd);color:#203b59;font-family:"Microsoft YaHei UI",system-ui,sans-serif}
+.competition-event-main{flex:1;min-height:0;display:flex;flex-direction:column;width:min(1920px,calc(100% - 64px));margin:0 auto;padding:24px 0 20px}
+.competition-event-toolbar{flex:0 0 auto;display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:18px}
 .competition-event-kicker,.competition-event-card header span{color:#7d97ae;font-size:11px;letter-spacing:.08em}
 .competition-event-toolbar h1{margin:5px 0 0;color:#183b5f;font-size:28px}
 .competition-event-select{display:grid;gap:5px;color:#7d97ae;font-size:11px}
 .competition-event-select select{min-width:220px;padding:10px 12px;border:1px solid #cfe0ef;border-radius:9px;background:#fff;color:#244b70}
-.competition-event-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(280px,21vw,340px);gap:20px;min-height:calc(100dvh - 195px)}
-.competition-event-card{border:1px solid #d5e4f0;border-radius:15px;background:#fff;box-shadow:0 12px 30px #2b65960d}
-.competition-event-stage{display:flex;flex-direction:column;min-width:0;padding:24px}
+.competition-event-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(280px,21vw,340px);gap:20px}
+.competition-event-card{min-height:0;border:1px solid #d5e4f0;border-radius:15px;background:#fff;box-shadow:0 12px 30px #2b65960d}
+.competition-event-stage{display:flex;flex-direction:column;min-width:0;min-height:0;padding:24px}
 .competition-event-stage>header,.competition-event-ranking>header{display:flex;align-items:flex-start;justify-content:space-between}
 .competition-event-stage h2,.competition-event-ranking h2{margin:5px 0 0;color:#183b5f;font-size:18px}
 .competition-event-stage>header>strong{color:#1f6bb0;font:700 34px Consolas,monospace}
@@ -936,15 +966,40 @@ onBeforeUnmount(() => {
 .competition-event-practice :deep(.native-pinyin-editor:focus){outline:2px solid #4d9cec;outline-offset:-2px}
 .competition-event-metrics{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0;min-height:40px;margin:14px auto 0;padding:5px 12px;border:1px solid #cbd9e5;border-radius:999px;background:linear-gradient(#fff,#f3f7fa);box-shadow:0 2px 5px #24496c12;color:#5f7d9a;font-size:11px}
 .competition-event-metrics span{padding:2px 13px;white-space:nowrap}.competition-event-metrics span+span{border-left:1px solid #d7e2eb}.competition-event-metrics b{margin-left:5px;color:#e07518;font:700 12px Consolas,"Microsoft YaHei UI",sans-serif}
-.competition-event-waiting,.competition-event-result{min-height:150px;padding:22px;border:1px dashed #cfe0ef;border-radius:12px;background:#f6faff}.competition-event-result{flex:1;max-height:70vh;overflow:auto;scrollbar-width:thin}
+.competition-event-waiting,.competition-event-result{min-height:150px;padding:22px;border:1px dashed #cfe0ef;border-radius:12px;background:#f6faff}/* 人数多时列表内部滚动：页面锁在一屏内，只有这两个列表滚，滚动条必须看得见
+   （scrollbar-width 只有 Firefox 认，Chrome 得写 ::-webkit-scrollbar）。 */
+.competition-event-result{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c3d7e8 transparent}
+.competition-event-result::-webkit-scrollbar{width:9px}
+.competition-event-result::-webkit-scrollbar-track{background:transparent}
+.competition-event-result::-webkit-scrollbar-thumb{border:2px solid #f6faff;border-radius:6px;background:#c3d7e8}
+.competition-event-result::-webkit-scrollbar-thumb:hover{background:#a9c6df}
 .competition-event-waiting{display:flex;flex-direction:column;justify-content:center;gap:8px}.competition-event-waiting strong,.competition-event-result>b{color:#1f5c92;font-size:17px}.competition-event-waiting small{color:#7d97ae}
-.competition-event-result ol{display:grid;gap:8px;margin:14px 0 0;padding:0;list-style:none}.competition-event-result li{display:flex;align-items:center;gap:10px}.competition-event-result li>span{width:24px;color:#2d7bca;font-weight:800}.competition-event-result li>strong{flex:1}.competition-event-result li>em{color:#7d97ae;font-style:normal;font-family:Consolas,monospace}
+.competition-event-result ol{display:grid;gap:8px;margin:14px 0 0;padding:0;list-style:none}.competition-event-result li{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid #eef4fa}
+.competition-event-result li:last-child{border-bottom:0}.competition-event-result li>span{width:24px;color:#2d7bca;font-weight:800}.competition-event-result li>strong{flex:1}.competition-event-result li>em{color:#7d97ae;font-style:normal;font-family:Consolas,monospace}
 .competition-event-input-label{display:block;margin:16px 0 6px;color:#7d97ae;font-size:11px}.competition-event-stage textarea{width:100%;min-height:78px;padding:12px 14px;border:1px solid #cfe0ef;border-radius:11px;background:#fff;color:#183b5f;font-size:17px;line-height:1.6;resize:vertical}.competition-event-stage textarea:focus{outline:none;border-color:#3988d5;box-shadow:0 0 0 3px #3988d51f}.competition-event-stage textarea:disabled{background:#f4f8fc;color:#9db3c6}
 .competition-event-actions:empty{display:none}.competition-event-actions{display:flex;align-items:center;min-height:42px;margin-top:12px}.competition-event-primary{padding:10px 20px;border:0;border-radius:10px;background:#1f6bb0;color:#fff;cursor:pointer}.competition-event-primary:disabled{opacity:.5;cursor:not-allowed}.competition-event-note{color:#7d97ae;font-size:12px}.competition-event-message{margin:8px 0 0;color:#b4472f;font-size:12px}
 .competition-event-side-picker{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:14px;color:#7d97ae;font-size:11px}.competition-event-side-picker>span{width:100%}.competition-event-side-picker button{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid #d5e4f0;border-radius:9px;background:#fff;color:#315879;cursor:pointer}.competition-event-side-picker button.selected{border-color:#2d7bca;background:#eaf5ff;color:#2167a6}.competition-event-side-picker i,.competition-event-sides i{width:9px;height:9px;border-radius:50%}.competition-event-side-picker small{color:#8ba3b8;font:11px Consolas,monospace}
 .competition-event-sides{display:grid;gap:8px;margin-top:14px}.competition-event-sides>div{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 11px;border:1px solid #e6eef5;border-radius:9px;background:#f8fbfe}.competition-event-sides>div.winner{border-color:#e8b04b;background:#fff9eb}.competition-event-sides span{display:flex;align-items:center;gap:7px;color:#315879;font-weight:700}.competition-event-sides strong{font:700 15px Consolas,monospace;color:#2d7bca}.competition-event-sides small{color:#8ba3b8}
-.competition-event-ranking{align-self:stretch;max-height:max(500px,calc(100dvh - 195px));overflow:auto;padding:20px;scrollbar-width:thin}.competition-event-ranking header b{color:#7d97ae;font:600 12px Consolas,monospace}.competition-event-ranking ol{display:grid;gap:2px;margin:12px 0 0;padding:0;list-style:none}.competition-event-ranking li{display:flex;align-items:center;gap:10px;padding:11px 7px;border-bottom:1px solid #eef4fa}.competition-event-ranking li.mine{border-radius:8px;background:#f2f9ff}.competition-event-ranking li>span{width:20px;color:#9db3c6;font:700 12px Consolas,monospace;text-align:right}.competition-event-ranking li>div{display:grid;gap:3px;min-width:0;flex:1}.competition-event-ranking li strong{overflow:hidden;color:#22496c;text-overflow:ellipsis;white-space:nowrap}.competition-event-ranking li strong small{margin-left:6px;padding:1px 5px;border-radius:4px;background:#2d7bca;color:#fff;font-size:10px}.competition-event-ranking li em{color:#8ba3b8;font:11px Consolas,"Microsoft YaHei",sans-serif;font-style:normal}.competition-event-ranking .empty{justify-content:center;color:#a7bccd;font-size:12px;border:0}
-@media (max-width:900px){.competition-event-toolbar{align-items:stretch;flex-direction:column}.competition-event-grid{grid-template-columns:1fr;min-height:0}.competition-event-main{width:calc(100% - 32px)}.competition-event-ranking{max-height:420px}.competition-event-select select{width:100%}}
+/* 自绘滚动条的框架：滑块挂在 frame 上，跟着滚动容器走。 */
+.competition-event-result-frame,.competition-event-rank-frame{position:relative;display:flex;flex:1;min-height:0}
+.competition-event-result-frame>.competition-event-result,.competition-event-rank-frame>ol{flex:1;min-width:0;min-height:0}
+.scroll-thumb{position:absolute;top:0;right:2px;width:7px;border-radius:4px;background:#b7d0e4;pointer-events:none}
+.competition-event-ranking{align-self:stretch;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:20px}
+.competition-event-ranking>header,.competition-event-ranking .competition-event-sides{flex:0 0 auto}.competition-event-ranking header b{color:#7d97ae;font:600 12px Consolas,monospace}.competition-event-ranking ol{flex:1;min-height:0;display:grid;gap:2px;margin:12px 0 0;padding:0 6px 0 0;list-style:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c3d7e8 transparent}
+.competition-event-ranking ol::-webkit-scrollbar{width:9px}
+.competition-event-ranking ol::-webkit-scrollbar-track{background:transparent}
+.competition-event-ranking ol::-webkit-scrollbar-thumb{border:2px solid #fff;border-radius:6px;background:#c3d7e8}
+.competition-event-ranking ol::-webkit-scrollbar-thumb:hover{background:#a9c6df}.competition-event-ranking li{display:flex;align-items:center;gap:10px;padding:11px 7px;border-bottom:1px solid #eef4fa}.competition-event-ranking li.mine{border-radius:8px;background:#f2f9ff}.competition-event-ranking li>span{width:20px;color:#9db3c6;font:700 12px Consolas,monospace;text-align:right}.competition-event-ranking li>div{display:grid;gap:3px;min-width:0;flex:1}.competition-event-ranking li strong{overflow:hidden;color:#22496c;text-overflow:ellipsis;white-space:nowrap}.competition-event-ranking li strong small{margin-left:6px;padding:1px 5px;border-radius:4px;background:#2d7bca;color:#fff;font-size:10px}.competition-event-ranking li em{color:#8ba3b8;font:11px Consolas,"Microsoft YaHei",sans-serif;font-style:normal}.competition-event-ranking .empty{justify-content:center;color:#a7bccd;font-size:12px;border:0}
+@media (max-width:900px){.competition-event-toolbar{align-items:stretch;flex-direction:column}.competition-event-grid{grid-template-columns:1fr;min-height:0}.competition-event-main{width:calc(100% - 32px)}.competition-event-ranking{max-height:420px}.competition-event-select select{width:100%}
+  /* 窄屏改回整页滚动：手机上没有固定高度可言，锁死 100dvh 会把内容切掉。 */
+  .competition-event-page{height:auto;min-height:100dvh;overflow:visible}
+  .competition-event-main{flex:0 0 auto;padding-bottom:28px}
+  .competition-event-grid{flex:0 0 auto}
+  .competition-event-result-frame,.competition-event-rank-frame{flex:0 0 auto}
+  .competition-event-result-frame>.competition-event-result{max-height:56vh}
+  .competition-event-rank-frame>ol{max-height:340px}
+  .competition-event-ranking{flex:0 0 auto;max-height:none;overflow:hidden}
+}
 @media (max-width:620px){.competition-event-page :deep(.app-header.compact){display:grid;grid-template-columns:1fr 1fr;gap:8px;height:auto;min-height:94px;padding:10px 14px}.competition-event-page :deep(.ah-brand){justify-self:end}.competition-event-page :deep(.ah-status){margin:0;gap:8px;font-size:11px}.competition-event-page :deep(.ah-actions){justify-self:end;margin:0;gap:6px}.competition-event-page :deep(.ah-link){font-size:11px;padding:0 8px}.competition-event-stage{padding:15px}.competition-event-practice :deep(.native-pinyin-line){font-size:17px}.competition-event-practice.english :deep(.native-pinyin-line){font-size:15px}.competition-event-metrics{border-radius:14px}.competition-event-metrics span{width:50%;padding:5px 8px;text-align:center}.competition-event-metrics span:nth-child(3){border-left:0}}
 @media (max-width:900px){.competition-layout{grid-template-columns:1fr}.competition-stats{grid-template-columns:repeat(2,1fr)}}
 </style>
