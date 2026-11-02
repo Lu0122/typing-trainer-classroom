@@ -148,18 +148,46 @@
 }
 
 .admin-shell { min-height: 100vh; padding-left: 244px; }
-.admin-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; display: flex; flex-direction: column; width: 244px; padding: 24px 18px; border-right: 1px solid #29342d; color: #fff; background: var(--ink); }
+.admin-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; display: flex; flex-direction: column; width: 244px; padding: 24px 18px; overflow: hidden; border-right: 1px solid #29342d; color: #fff; background: var(--ink); }
 .admin-sidebar .brand { margin: 0 7px 40px; color: #fff; }
 .admin-sidebar .brand-mark { color: var(--ink); background: var(--green-soft); }
 .admin-sidebar .brand small { color: #9faba4; }
-.admin-nav { display: grid; gap: 5px; }
+/* align-content:start 不能省：nav 是 flex:1 撑满侧栏的 grid，默认 stretch 会把「概览 + 4 个组头」
+   这几行均摊掉剩余高度，每行被拉成大方块。 */
+.admin-nav { display: grid; align-content: start; gap: 5px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #4a5a51 transparent; }
+.admin-nav::-webkit-scrollbar { width: 6px; }
+.admin-nav::-webkit-scrollbar-thumb { border-radius: 3px; background: #4a5a51; }
+/* 二级菜单：组头只负责展开/收起，点它不切页。同一时间只展开一组，侧栏高度始终可控。 */
+.admin-nav-group { display: grid; gap: 5px; }
+/* 组头高度对齐二级菜单项（43px / 10px 内边距），否则一行矮一截显得小气。 */
+.admin-nav-group-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 43px; padding: 10px 12px; border: 0; border-radius: 6px; color: #97a49d; background: transparent; font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .02em; text-align: left; cursor: pointer; }
+.admin-nav-group-head:hover { color: #d5ded8; background: rgba(255, 255, 255, 0.05); }
+.admin-nav-group-head:focus-visible { outline: 2px solid var(--green-soft); outline-offset: 1px; }
+.admin-nav-caret { display: inline-flex; margin-left: auto; transition: transform 180ms ease; }
+.admin-nav-caret svg { width: 14px; height: 14px; }
+.admin-nav-group[data-collapsed="false"] .admin-nav-caret { transform: rotate(180deg); }
+/* 0fr → 1fr 是唯一能对「高度未知」做平滑折叠的写法；visibility 延迟到动画结束再隐藏，否则动画看不见。 */
+.admin-nav-group-body { display: grid; grid-template-rows: 1fr; visibility: visible; transition: grid-template-rows 180ms ease, visibility 0s; }
+.admin-nav-group[data-collapsed="true"] .admin-nav-group-body { grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows 180ms ease, visibility 0s linear 180ms; }
+.admin-nav-group-inner { display: grid; gap: 5px; min-height: 0; overflow: hidden; }
+.admin-nav-group-inner .admin-nav-item { padding-left: 22px; }
 .admin-nav-item, .sidebar-bottom button, .sidebar-bottom a { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 43px; padding: 10px 12px; border: 0; border-radius: 6px; color: #abb5af; background: transparent; font-size: 13px; font-weight: 700; text-decoration: none; }
 .admin-nav-item svg, .sidebar-bottom svg { width: 17px; }
 .admin-nav-item:hover, .admin-nav-item.is-active, .sidebar-bottom button:hover, .sidebar-bottom a:hover { color: #fff; background: rgba(255, 255, 255, 0.09); }
 .admin-nav-item.is-active { box-shadow: inset 3px 0 var(--green); }
-.sidebar-bottom { display: grid; gap: 4px; margin-top: auto; padding-top: 18px; border-top: 1px solid #344139; }
+.sidebar-bottom { display: grid; gap: 4px; flex: 0 0 auto; margin-top: 0; padding-top: 18px; border-top: 1px solid #344139; }
 .sidebar-github-link { color: #b9d7c4 !important; }
 .sidebar-github-link:hover { color: #fff !important; background: rgba(76, 175, 117, 0.18) !important; }
+/* 高度不足时压缩侧栏行高，让 13 个菜单和底部入口同时放得下（900 以下原尺寸差 8px 会切掉最后一项）。 */
+@media (max-height: 960px) {
+  .admin-sidebar { padding-block: 16px; }
+  .admin-sidebar .brand { margin-bottom: 18px; }
+  .admin-nav { gap: 3px; }
+  .admin-nav-item { min-height: 36px; padding-block: 6px; }
+  .admin-nav-group-head { min-height: 36px; padding-block: 6px; }
+  .sidebar-bottom { gap: 2px; padding-top: 12px; }
+  .sidebar-bottom a, .sidebar-bottom button { min-height: 36px; padding-block: 6px; }
+}
 
 .admin-mobile-header { display: none; }
 .admin-main { padding: 28px clamp(30px, 5vw, 72px) 70px; }
@@ -494,6 +522,13 @@ tbody tr:hover { background: #f8faf6; }
   .admin-sidebar .brand { margin-inline: 6px; }
   .admin-sidebar .brand > span:last-child, .admin-nav-item span, .sidebar-bottom span { display: none; }
   .admin-nav-item, .sidebar-bottom button, .sidebar-bottom a { justify-content: center; }
+  /* 76px 图标条放不下组名：隐藏组头、强制全部展开，退回原来的扁平图标列表，用分隔线区分分组。 */
+  .admin-nav-group-head { display: none; }
+  .admin-nav-group-body,
+  .admin-nav-group[data-collapsed="true"] .admin-nav-group-body { grid-template-rows: 1fr; visibility: visible; transition: none; }
+  .admin-nav-group-inner { overflow: visible; }
+  .admin-nav-group-inner .admin-nav-item { padding-left: 12px; }
+  .admin-nav-group + .admin-nav-group { padding-top: 5px; border-top: 1px solid #344139; }
   .admin-metrics { grid-template-columns: 1fr 1fr; }
   .admin-metrics article:nth-child(2) { border-right: 0; }
   .admin-metrics article:nth-child(-n+2) { border-bottom: 1px solid var(--line); }

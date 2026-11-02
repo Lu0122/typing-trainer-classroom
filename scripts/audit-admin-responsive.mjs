@@ -81,8 +81,10 @@ for (const vp of VIEWPORTS) {
       const navRect = nav?.getBoundingClientRect();
       const navItems = [...document.querySelectorAll('.admin-nav-item')].map((b) => {
         const r = b.getBoundingClientRect();
+        // 二级菜单收起时项高为 0，不参与裁切统计；11 个视图轮一遍能把四个分组都覆盖到。
+        if (r.width === 0 || r.height === 0) return null;
         return { label: b.textContent.trim(), w: Math.round(r.width), overflow: b.scrollWidth > b.clientWidth + 1 };
-      });
+      }).filter(Boolean);
       return {
         vw,
         docOverflow,

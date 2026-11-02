@@ -60,18 +60,46 @@
       </a>
         <nav class="admin-nav" id="admin-nav" aria-label="后台导航">
           <button class="admin-nav-item is-active" type="button" data-view="overview"><i data-lucide="layout-dashboard"></i><span>概览</span></button>
-          <button class="admin-nav-item" type="button" data-view="passages"><i data-lucide="notebook-tabs"></i><span>练习文章</span></button>
-          <button class="admin-nav-item" type="button" data-view="users"><i data-lucide="users-round"></i><span>学生账号</span></button>
-          <button class="admin-nav-item" type="button" data-view="admins"><i data-lucide="shield-check"></i><span>后台账号</span></button>
-          <button class="admin-nav-item" type="button" data-view="classes"><i data-lucide="school"></i><span>班级分组</span></button>
-          <button class="admin-nav-item" type="button" data-view="progress"><i data-lucide="trending-up"></i><span>学习进步</span></button>
-          <button class="admin-nav-item" type="button" data-view="assignments"><i data-lucide="clipboard-check"></i><span>教学任务</span></button>
-          <button class="admin-nav-item" type="button" data-view="competitions"><i data-lucide="trophy"></i><span>比赛赛事</span></button>
-          <button class="admin-nav-item" type="button" data-view="scores"><i data-lucide="trophy"></i><span>竞速成绩</span></button>
-          <button class="admin-nav-item" type="button" data-view="ai-settings"><i data-lucide="bot"></i><span>AI服务设置</span></button>
-          <button class="admin-nav-item" type="button" data-view="bug-reports"><i data-lucide="message-square-warning"></i><span>意见反馈</span></button>
-          <button class="admin-nav-item" type="button" data-view="agent"><i data-lucide="sparkles"></i><span>管理助手</span></button>
-          <button class="admin-nav-item" type="button" data-view="agent-logs"><i data-lucide="scroll-text"></i><span>助手审计</span></button>
+          <section class="admin-nav-group" data-group="teach" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-teach"><span>教学管理</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-teach">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="passages"><i data-lucide="notebook-tabs"></i><span>练习文章</span></button>
+                <button class="admin-nav-item" type="button" data-view="assignments"><i data-lucide="clipboard-check"></i><span>教学任务</span></button>
+                <button class="admin-nav-item" type="button" data-view="progress"><i data-lucide="trending-up"></i><span>学习进步</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="admin-nav-group" data-group="match" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-match"><span>赛事成绩</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-match">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="competitions"><i data-lucide="trophy"></i><span>比赛赛事</span></button>
+                <button class="admin-nav-item" type="button" data-view="scores"><i data-lucide="trophy"></i><span>竞速成绩</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="admin-nav-group" data-group="account" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-account"><span>账号管理</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-account">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="users"><i data-lucide="users-round"></i><span>学生账号</span></button>
+                <button class="admin-nav-item" type="button" data-view="classes"><i data-lucide="school"></i><span>班级分组</span></button>
+                <button class="admin-nav-item" type="button" data-view="admins"><i data-lucide="shield-check"></i><span>后台账号</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="admin-nav-group" data-group="system" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-system"><span>AI 与系统</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-system">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="agent"><i data-lucide="sparkles"></i><span>管理助手</span></button>
+                <button class="admin-nav-item" type="button" data-view="agent-logs"><i data-lucide="scroll-text"></i><span>助手审计</span></button>
+                <button class="admin-nav-item" type="button" data-view="ai-settings"><i data-lucide="bot"></i><span>AI服务设置</span></button>
+                <button class="admin-nav-item" type="button" data-view="bug-reports"><i data-lucide="message-square-warning"></i><span>意见反馈</span></button>
+              </div>
+            </div>
+          </section>
         </nav>
       <div class="sidebar-bottom">
         <a class="sidebar-github-link" href="https://github.com/Lu0122/typing-trainer-classroom" target="_blank" rel="noopener noreferrer"><i data-lucide="github"></i><span>GitHub 开源仓库</span></a>

@@ -19,6 +19,9 @@ import { expandPracticeBank } from './lesson-expansion';
 import { readPracticeIndex, savePracticeIndex } from './practice-progress.mjs';
 import { AlertTriangle, ArrowLeft, ArrowUpRight, BarChart3, ChevronRight, Flame, Keyboard as KeyboardIcon, ListChecks, LogOut, ShieldCheck, Target, Timer, Trophy, UserRound } from 'lucide-vue-next';
 const page = ref('home'); const category = ref('英文打字'); const passage = ref(null); const typed = ref(''); const pressedCode = ref(null); const wrongCode = ref(null); const wrongNotice = ref(''); const lastCode = ref('KeyboardEvent.code'); const beginnerSequence = ref([]); const beginnerIndex = ref(0); const beginnerCorrect = ref(0); const beginnerWrong = ref(0); const beginnerStartedAt = ref(null); const practiceStartedAt = ref(null); const now = ref(Date.now()); let timer; let wrongFeedbackTimer;
+// 右下角浮动 GitHub 入口只在普通页面出现：整页一屏的联机游戏与挑战进行中会盖住操作区。
+const FULLSCREEN_PAGES = ['battle', 'battle-competition', 'boss', 'race', 'rhythm', 'chase', 'runner', 'competition', 'competition-hub', 'games', 'bug-feedback'];
+const showGithubEntry = computed(() => !challenge.value && !FULLSCREEN_PAGES.includes(page.value));
 const user = ref(null);
 const authOpen = ref(false);
 const returnAfterLogin = ref(null);
@@ -1065,7 +1068,6 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
     <p v-else class="leaderboard-empty">暂无成绩<br/><small>完成一次挑战后登上榜单</small></p>
   </section>
 </div>
-<small class="copyright-mark" aria-label="版权 lulu">© lulu</small>
 </div>
 <div v-if="authOpen" class="modal-backdrop" @mousedown.self="authOpen=false">
   <section class="auth-modal" :class="{ 'profile-modal': authView === 'profile' && user }" role="dialog" aria-modal="true" :aria-label="authView === 'profile' ? '个人中心' : '学生账号'">
@@ -1096,6 +1098,9 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
       <p class="auth-message" :class="{success:authMessage.includes('成功') || authMessage.includes('提交')}">{{ authMessage }}</p>
     </template>
   </section>
-  <footer class="app-footer"><span>字练场 · 开源课堂打字训练平台</span><a href="https://github.com/Lu0122/typing-trainer-classroom" target="_blank" rel="noopener noreferrer">GitHub 仓库 <ArrowUpRight :size="13"/></a></footer>
+</div>
+<div v-if="showGithubEntry" class="app-corner">
+  <small class="copyright-mark" aria-label="版权 lulu">© lulu</small>
+  <a class="app-github-float" href="https://github.com/Lu0122/typing-trainer-classroom" target="_blank" rel="noopener noreferrer">GitHub 开源 <ArrowUpRight :size="13"/></a>
 </div>
 </template>

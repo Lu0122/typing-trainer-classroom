@@ -344,6 +344,53 @@ function setNavOpen(open) {
   el.mobileMenu?.setAttribute('aria-expanded', String(open));
 }
 
+// 侧栏二级菜单：各组独立展开，互不影响。
+// 展开状态记在 localStorage —— 老师常同时开着两个组（比如教学管理 + 账号管理），刷新后要保持原样。
+const NAV_GROUPS_KEY = 'typing-admin-nav-groups';
+
+function readOpenNavGroups() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NAV_GROUPS_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((id) => typeof id === 'string') : [];
+  } catch { return []; }
+}
+
+function writeOpenNavGroups(ids) {
+  try { localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(ids)); } catch { /* 隐私模式忽略 */ }
+}
+
+function paintNavGroup(group, open) {
+  group.dataset.collapsed = open ? 'false' : 'true';
+  group.querySelector('.admin-nav-group-head')?.setAttribute('aria-expanded', String(open));
+}
+
+function setNavGroup(groupId, open) {
+  const ids = readOpenNavGroups().filter((id) => id !== groupId);
+  if (open) ids.push(groupId);
+  writeOpenNavGroups(ids);
+  document.querySelectorAll('.admin-nav-group').forEach((group) => {
+    if (group.dataset.group === groupId) paintNavGroup(group, open);
+  });
+}
+
+// 只负责把当前页所在的分组打开，不收起别的组；概览不在任何分组里，什么都不动。
+function syncNavGroupForView(view) {
+  const group = document.querySelector(`.admin-nav-item[data-view="${view}"]`)?.closest('.admin-nav-group');
+  if (group && group.dataset.collapsed !== 'false') setNavGroup(group.dataset.group, true);
+}
+
+function restoreNavGroups() {
+  const ids = readOpenNavGroups();
+  document.querySelectorAll('.admin-nav-group').forEach((group) => paintNavGroup(group, ids.includes(group.dataset.group)));
+}
+
+document.querySelectorAll('.admin-nav-group-head').forEach((head) => head.addEventListener('click', () => {
+  const group = head.closest('.admin-nav-group');
+  setNavGroup(group.dataset.group, group.dataset.collapsed === 'true');
+}));
+
+restoreNavGroups();
+
 function renderAdminAccounts(rows) {
   el.adminAccountCount.textContent = `共 ${adminState.adminAccountsTotal ?? rows.length} 个`;
   el.adminAccountEmpty.hidden = rows.length > 0;
@@ -2210,6 +2257,7 @@ async function switchView(view) {
   try { localStorage.setItem('typing-admin-view', view); } catch { /* private mode */ }
   if (location.hash !== `#${view}`) history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
   el.navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
+  syncNavGroupForView(view);
   el.breadcrumbCurrent.textContent = viewLabels[view];
   el.breadcrumbHome.disabled = view === 'overview';
   el.views.forEach((section) => { section.hidden = section.id !== `view-${view}`; });

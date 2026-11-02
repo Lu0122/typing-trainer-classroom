@@ -5,7 +5,9 @@
 .challenge-ranking-scope{display:flex;align-items:center;justify-content:space-between;gap:12px;grid-column:1 / -1;padding:12px 14px;border:1px solid #c7dce9;border-radius:12px;background:#fff;box-shadow:0 6px 16px #1c507110}.challenge-ranking-scope>div:first-child{display:grid;gap:3px}.challenge-ranking-scope strong{color:#244b70;font-size:14px}.challenge-ranking-scope small{color:#8498a8;font-size:10px}.challenge-ranking-scope>div:last-child{display:flex;gap:4px;padding:3px;border-radius:7px;background:#f1f7fb}.challenge-ranking-scope button{min-height:30px;padding:0 10px;border:0;border-radius:5px;color:#6e879b;background:transparent;font-size:11px;font-weight:700;cursor:pointer}.challenge-ranking-scope button.active{color:#216da2;background:#fff;box-shadow:0 2px 6px #376e9c16}.challenge-ranking-scope button:disabled{opacity:.45;cursor:not-allowed}
 
 /* Copyright mark */
-.copyright-mark{position:fixed;right:12px;bottom:8px;z-index:90;color:#8197a8;font:10px/1 Consolas,"Microsoft YaHei",sans-serif;letter-spacing:.04em;opacity:.72;pointer-events:none;user-select:none}
+/* 版权和 GitHub 入口同一组固定在右下角：两者各自 fixed 会互相压住（版权 z-index 90 盖在按钮上）。 */
+.app-corner{position:fixed;right:18px;bottom:14px;z-index:90;display:flex;align-items:center;gap:9px;pointer-events:none}
+.copyright-mark{color:#8197a8;font:10px/1 Consolas,"Microsoft YaHei",sans-serif;letter-spacing:.04em;opacity:.72;pointer-events:none;user-select:none}
 @media(max-width:620px){.leaderboard-modal{padding:18px}.leaderboard-modal-head h2{font-size:24px}.leaderboard-mode-tabs{overflow-x:auto}.leaderboard-mode-tabs button{flex:1;min-width:92px;padding:0 8px}.leaderboard-summary b{font-size:17px}.leaderboard-list li{grid-template-columns:32px minmax(0,1fr) 72px 42px;padding-inline:4px}}
 
 /* 前台可读性基线：辅助文字不再低于 12px，移动端保留足够的触控和阅读空间。 */
@@ -17,7 +19,8 @@
 .app-shell .footnote{font-size:12px}
 .app-shell .course-card small{font-size:12px}
 .app-shell .lesson-title p:last-child,.app-shell .lesson-tag,.app-shell .lesson-footer{font-size:13px}
-.app-footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:0 18px 24px;color:#7890a6;font-size:11px}.app-footer a{display:inline-flex;align-items:center;gap:4px;color:#2874b9;text-decoration:none}.app-footer a:hover{text-decoration:underline}
+/* 全站 GitHub 入口只保留右下角浮动按钮，不再占页面内容流，避免把刚好一屏的页面顶出滚动条。 */
+.app-github-float{position:relative;z-index:40;display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 11px;border:1px solid #9fc7e5;border-radius:999px;color:#286b9f;background:#f8fcffdd;box-shadow:0 5px 16px #376e9c22;font-size:11px;text-decoration:none;pointer-events:auto;backdrop-filter:blur(5px)}.app-github-float:hover{border-color:#4c99ed;color:#14598c;background:#fff;box-shadow:0 7px 20px #376e9c38}
 .app-shell .metrics div span,.app-shell .practice-metrics span{font-size:12px}
 .app-shell .auth-intro,.app-shell .auth-modal label,.app-shell .auth-message{font-size:13px}
 .profile-modal-header p:last-child{font-size:13px}
