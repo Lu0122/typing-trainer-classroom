@@ -72,13 +72,22 @@ function formatStamp(value) {
   return text;
 }
 
+function readableStamp(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const text = String(value);
+  const date = /^\d+$/u.test(text) ? new Date(Number(text)) : new Date(text.replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return text;
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function scoreRowsToCsv(rows) {
   const headers = ['姓名', '账号', '学号', '班级', '成绩', '准确率', '错字', '文章', '时间'];
   const lines = [headers.map(csvCell).join(',')];
   for (const row of rows) {
     lines.push([
       row.nickname, row.username, row.studentId, row.className, row.score, `${row.accuracy}%`, row.wrongChars,
-      row.passageTitle, formatStamp(row.createdAt)
+      row.passageTitle, readableStamp(row.createdAt)
     ].map(csvCell).join(','));
   }
   return `\ufeff${lines.join('\r\n')}\r\n`;

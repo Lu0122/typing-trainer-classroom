@@ -1,5 +1,7 @@
 # 字练场
 
+English documentation: [README.en.md](README.en.md) · GitHub: https://github.com/Lu0122/typing-trainer-classroom
+
 当前 1.1 教学闭环计划和实施状态见 [PLAN-1.1.md](docs/PLAN-1.1.md)；1.2 班级与分组阶段计划见 [PLAN-1.2.md](docs/PLAN-1.2.md)。四种联机玩法的机制升级与验证见 [GAMEPLAY-QA.md](docs/GAMEPLAY-QA.md)。
 
 近期功能与修复记录见 [更新日志](docs/CHANGELOG.md)。
@@ -36,7 +38,7 @@ npm start
 
 后台还提供“管理助手”。管理员登录后可以用自然语言查询概览、学生训练、班级、教学任务和意见反馈。助手只使用白名单只读工具，查询记录会写入 `agent_audit_logs`；配置了 AI 服务时使用模型分析，没有 API Key 时自动使用内置查询模式。当前版本不会自动修改账号、任务或比赛状态。
 
-学生账号可以在后台“学生账号”页点「导入学生」批量导入：下载 Excel 模板填好后上传（也支持粘贴文本），导入时可指定班级，学生导入后直接进班。导入后使用姓名登录、学号作为初始密码。`.env` 中 `STUDENT_REGISTRATION_ENABLED=false` 时，学生端注册入口和注册接口都会关闭。
+学生账号可以在后台“学生账号”页单独创建，也可以点「导入学生」批量导入：下载 Excel 模板填好后上传（也支持粘贴文本），导入时可指定班级，学生导入后直接进班。单独创建时可填写姓名、学号、初始密码和班级，密码留空则使用学号。导入后使用姓名登录、学号作为初始密码。`.env` 中 `STUDENT_REGISTRATION_ENABLED=false` 时，学生端注册入口和注册接口都会关闭。
 
 `npm run dev` 会先构建前端页面，再启动后端，默认监听 `0.0.0.0:3000`，同一局域网设备可使用启动日志中显示的 `http://本机IP:3000` 访问。若 Windows 防火墙首次询问是否允许 Node.js 访问专用网络，需要选择允许。开发模式采用稳定启动方式；修改前端或后端代码后停止并重新运行一次 `npm run dev` 即可加载更新。首次运行前请先执行 `npm install`。`public/index.html` 和前端构建文件不纳入 Git，直接运行 `node backend/server.js` 前需要先执行 `npm run build`，否则首页会显示 `Cannot GET /`。
 

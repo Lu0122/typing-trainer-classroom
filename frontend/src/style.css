@@ -17,6 +17,7 @@
 .app-shell .footnote{font-size:12px}
 .app-shell .course-card small{font-size:12px}
 .app-shell .lesson-title p:last-child,.app-shell .lesson-tag,.app-shell .lesson-footer{font-size:13px}
+.app-footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:0 18px 24px;color:#7890a6;font-size:11px}.app-footer a{display:inline-flex;align-items:center;gap:4px;color:#2874b9;text-decoration:none}.app-footer a:hover{text-decoration:underline}
 .app-shell .metrics div span,.app-shell .practice-metrics span{font-size:12px}
 .app-shell .auth-intro,.app-shell .auth-modal label,.app-shell .auth-message{font-size:13px}
 .profile-modal-header p:last-child{font-size:13px}

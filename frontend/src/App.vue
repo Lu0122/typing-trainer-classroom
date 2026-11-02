@@ -1096,5 +1096,6 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
       <p class="auth-message" :class="{success:authMessage.includes('成功') || authMessage.includes('提交')}">{{ authMessage }}</p>
     </template>
   </section>
+  <footer class="app-footer"><span>字练场 · 开源课堂打字训练平台</span><a href="https://github.com/Lu0122/typing-trainer-classroom" target="_blank" rel="noopener noreferrer">GitHub 仓库 <ArrowUpRight :size="13"/></a></footer>
 </div>
 </template>

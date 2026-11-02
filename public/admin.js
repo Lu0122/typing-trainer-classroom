@@ -28,6 +28,7 @@ const el = {
   closeDialog: document.querySelector('#close-passage-dialog'), cancelPassage: document.querySelector('#cancel-passage'),
   resetDialog: document.querySelector('#password-reset-dialog'), resetForm: document.querySelector('#password-reset-form'), resetUserId: document.querySelector('#reset-user-id'), resetUserName: document.querySelector('#reset-user-name'), resetPassword: document.querySelector('#reset-password-input'), resetPasswordConfirm: document.querySelector('#reset-password-confirm'), resetError: document.querySelector('#reset-password-error'), closeReset: document.querySelector('#close-password-reset'), cancelReset: document.querySelector('#cancel-password-reset'),
   studentProfileDialog: document.querySelector('#student-profile-dialog'), studentProfileForm: document.querySelector('#student-profile-form'), studentProfileId: document.querySelector('#student-profile-id'), studentProfileName: document.querySelector('#student-profile-name'), studentProfileStudentId: document.querySelector('#student-profile-student-id'), studentProfileClass: document.querySelector('#student-profile-class'), studentProfileAvatar: document.querySelector('#student-profile-avatar'), studentProfileAvatarPreview: document.querySelector('#student-profile-avatar-preview'), studentProfileError: document.querySelector('#student-profile-error'), closeStudentProfile: document.querySelector('#close-student-profile'), cancelStudentProfile: document.querySelector('#cancel-student-profile'),
+  studentCreateDialog: document.querySelector('#student-create-dialog'), studentCreateForm: document.querySelector('#student-create-form'), studentCreateName: document.querySelector('#student-create-name'), studentCreateStudentId: document.querySelector('#student-create-student-id'), studentCreatePassword: document.querySelector('#student-create-password'), studentCreateClass: document.querySelector('#student-create-class'), studentCreateError: document.querySelector('#student-create-error'), studentCreateOpen: document.querySelector('#student-create-open'), closeStudentCreate: document.querySelector('#close-student-create'), cancelStudentCreate: document.querySelector('#cancel-student-create'),
   progressDialog: document.querySelector('#progress-dialog'), closeProgressDialog: document.querySelector('#close-progress-dialog'), progressStudentName: document.querySelector('#progress-student-name'), progressDialogSummary: document.querySelector('#progress-dialog-summary'), progressChart: document.querySelector('#progress-chart'), progressModeList: document.querySelector('#progress-mode-list'), progressRecentList: document.querySelector('#progress-recent-list'),
   mobileMenu: document.querySelector('#mobile-menu-button'), navScrim: document.querySelector('#admin-nav-scrim'), sidebar: document.querySelector('.admin-sidebar'), toast: document.querySelector('#admin-toast')
 };
@@ -393,6 +394,12 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
+function localFileDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 async function loadStats() {
   const stats = await api('/api/admin/stats');
   el.statAttempts.textContent = stats.attempts;
@@ -446,14 +453,67 @@ function clearAgentPending(body) {
   if (body) body.classList.remove('is-pending');
 }
 
+// 解析 CSV 的引号、逗号和换行，预览与实际下载内容保持一致。
+function parseAgentCsv(text) {
+  const rows = []; let row = []; let cell = ''; let quoted = false;
+  text = text.replace(/^\uFEFF/u, '');
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quoted && ch === '"' && text[i + 1] === '"') { cell += '"'; i += 1; }
+    else if (ch === '"') quoted = !quoted;
+    else if (!quoted && ch === ',') { row.push(cell); cell = ''; }
+    else if (!quoted && (ch === '\n' || ch === '\r')) {
+      if (ch === '\r' && text[i + 1] === '\n') i += 1;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+async function openAgentPreview(item) {
+  const panel = document.querySelector('#agent-preview');
+  const content = document.querySelector('#agent-preview-content');
+  const status = document.querySelector('#agent-preview-status');
+  panel.hidden = false;
+  document.querySelector('.agent-page').classList.add('has-preview');
+  const previewLabel = (item.label || '导出数据').replace(/^导出/u, '').replace(/\s*CSV$/iu, '').trim();
+  document.querySelector('#agent-preview-title').textContent = `${previewLabel || '数据'} · CSV`;
+  const download = document.querySelector('#agent-preview-download');
+  download.href = item.url; download.hidden = true;
+  content.replaceChildren(); status.textContent = '正在加载…';
+  try {
+    const response = await fetch(item.url);
+    if (!response.ok) throw new Error(response.status === 404 ? '文件已过期，请重新导出' : `加载失败 (${response.status})`);
+    const rows = parseAgentCsv(await response.text());
+    const table = document.createElement('table');
+    rows.forEach((row, index) => {
+      const tr = document.createElement('tr');
+      row.forEach((value) => { const cell = document.createElement(index ? 'td' : 'th'); cell.textContent = value; tr.append(cell); });
+      table.append(tr);
+    });
+    content.append(table); status.textContent = `共 ${Math.max(0, rows.length - 1)} 行`;
+    download.hidden = false;
+  } catch (error) { status.textContent = error.message; }
+}
+
+function closeAgentPreview() {
+  const panel = document.querySelector('#agent-preview');
+  panel?.setAttribute('hidden', '');
+  document.querySelector('.agent-page')?.classList.remove('has-preview');
+  document.querySelector('#agent-preview-content')?.replaceChildren();
+}
+
+document.querySelector('#agent-preview-close')?.addEventListener('click', closeAgentPreview);
+
 function appendAgentDownloads(message, downloads) {
   for (const item of downloads || []) {
-    const link = document.createElement('a');
-    link.className = 'primary-button agent-download-link';
-    link.href = item.url;
-    link.download = '';
-    link.textContent = `下载${String(item.label || '').replace(/^导出/u, '') || '数据'} CSV`;
-    message.append(link);
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'primary-button agent-download-link';
+    const label = String(item.label || '数据').replace(/^导出/u, '').replace(/\s*CSV$/iu, '').trim() || '数据';
+    button.textContent = `预览${label} CSV`;
+    button.addEventListener('click', () => openAgentPreview(item));
+    message.append(button);
   }
 }
 
@@ -618,6 +678,7 @@ async function deleteAgentConversation(id) {
 
 function startNewAgentConversation() {
   adminState.agentConversationId = null;
+  closeAgentPreview();
   try { localStorage.removeItem(AGENT_CONVERSATION_KEY); } catch { /* 隐私模式 */ }
   if (!el.agentMessages) return;
   el.agentMessages.replaceChildren();
@@ -915,6 +976,41 @@ async function saveStudentProfile(event) {
   } catch (error) { el.studentProfileError.textContent = error.message; }
 }
 
+async function openStudentCreate() {
+  el.studentCreateForm.reset();
+  el.studentCreateError.textContent = '';
+  el.studentCreateClass.replaceChildren(new Option('暂不分班', ''));
+  try {
+    const data = await api('/api/admin/classes?all=true');
+    el.studentCreateClass.replaceChildren(new Option('暂不分班', ''), ...(data.rows || []).filter((item) => item.isActive).map((item) => new Option(item.term ? `${item.name} · ${item.term}` : item.name, String(item.id))));
+    el.studentCreateDialog.showModal();
+    el.studentCreateName.focus();
+  } catch (error) {
+    toast(error.message, true);
+  }
+  window.lucide?.createIcons();
+}
+
+async function saveStudentCreate(event) {
+  event.preventDefault();
+  el.studentCreateError.textContent = '';
+  const displayName = el.studentCreateName.value.trim();
+  const studentId = el.studentCreateStudentId.value.trim();
+  const password = el.studentCreatePassword.value.trim();
+  try {
+    const result = await api('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ displayName, studentId, password, classId: el.studentCreateClass.value || null })
+    });
+    el.studentCreateDialog.close();
+    const classText = result.className ? `，已加入${result.className}` : '，暂未分班';
+    toast(`账号已创建：${result.user.displayName}，初始密码 ${result.initialPassword}${classText}`);
+    await loadUsers(1);
+  } catch (error) {
+    el.studentCreateError.textContent = error.message;
+  }
+}
+
 async function loadUsers(page = pagers.users?.page || 1) {
   const query = filterQuery({ page, q: el.userSearch.value.trim(), classId: el.userClassFilter.value });
   const data = await api(`/api/admin/users?${query}`);
@@ -1055,7 +1151,7 @@ async function exportWeeklyProgress() {
     XLSX.utils.book_append_sheet(workbook, sheet, '每周打字情况');
     const classLabel = data.className || el.progressClassFilter.selectedOptions?.[0]?.textContent || '全部班级';
     const safeLabel = classLabel.replace(/[\\/:*?"<>|]/g, '_').trim() || '全部班级';
-    XLSX.writeFile(workbook, `学生每周打字情况-${safeLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(workbook, `学生每周打字情况-${safeLabel}-${localFileDate()}.xlsx`);
     toast(`已导出 ${rows.length} 条学生周记录`);
   } catch (error) {
     toast(error.message || '导出失败，请稍后重试', true);
@@ -1602,7 +1698,7 @@ async function exportScores() {
     sheet['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 28 }, { wch: 20 }];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, '竞速成绩');
-    XLSX.writeFile(workbook, `竞速成绩-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(workbook, `竞速成绩-${localFileDate()}.xlsx`);
     toast(`已导出 ${rows.length} 条竞速成绩`);
   } catch (error) { toast(error.message || '导出失败，请稍后重试', true); }
   finally { button.disabled = false; }
@@ -2610,6 +2706,10 @@ el.studentProfileForm.addEventListener('submit', saveStudentProfile);
 el.closeStudentProfile.addEventListener('click', () => el.studentProfileDialog.close());
 el.cancelStudentProfile.addEventListener('click', () => el.studentProfileDialog.close());
 el.studentProfileAvatar.addEventListener('change', () => { const file = el.studentProfileAvatar.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { el.studentProfileAvatarPreview.style.backgroundImage = `url(${reader.result})`; el.studentProfileAvatarPreview.classList.add('has-image'); }; reader.readAsDataURL(file); });
+el.studentCreateOpen.addEventListener('click', openStudentCreate);
+el.studentCreateForm.addEventListener('submit', saveStudentCreate);
+el.closeStudentCreate.addEventListener('click', () => el.studentCreateDialog.close());
+el.cancelStudentCreate.addEventListener('click', () => el.studentCreateDialog.close());
 el.aiSettingsForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   el.aiMessage.textContent = '';

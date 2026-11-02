@@ -60,6 +60,23 @@ test('imports real-name student accounts and can disable self-registration', asy
   db.close();
 });
 
+test('creates one student account from the admin UI payload and optionally assigns a class', async () => {
+  const context = setup();
+  const admin = request.agent(context.app);
+  await admin.post('/api/admin/login').send({ username: 'admin', password: 'test-pass' }).expect(200);
+  const createdClass = await admin.post('/api/admin/classes').send({ name: '25软件技术1班', term: '2026-2027-1' }).expect(201);
+  const created = await admin.post('/api/admin/users').send({
+    displayName: '单独创建', studentId: '20251101', classId: createdClass.body.id
+  }).expect(201);
+  assert.equal(created.body.user.displayName, '单独创建');
+  assert.equal(created.body.initialPassword, '20251101');
+  assert.equal(created.body.className, '25软件技术1班');
+  await request(context.app).post('/api/auth/login').send({ username: '单独创建', password: '20251101' }).expect(200);
+  await admin.post('/api/admin/users').send({ displayName: '单独创建', studentId: '20251102' }).expect(409);
+  await admin.post('/api/admin/users').send({ displayName: '另一个学生', studentId: '20251101' }).expect(409);
+  context.db.close();
+});
+
 test('registers with name and password only, logs in by name, and blocks duplicate or sensitive names', async () => {
   const context = setup();
   const registration = await request(context.app).post('/api/auth/register').send({

@@ -1506,6 +1506,65 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     } catch (error) { next(error); }
   });
 
+  // 单独创建学生账号：与批量导入保持同一套姓名、学号和分班规则。
+  // 未填写初始密码时默认使用学号，方便老师现场快速建号。
+  app.post('/api/admin/users', requireAdmin, async (request, response, next) => {
+    try {
+      const displayName = normalizeDisplayName(request.body?.displayName);
+      const nameError = validateDisplayName(displayName);
+      if (nameError) return response.status(400).json({ message: nameError });
+      const studentId = String(request.body?.studentId || '').trim();
+      if (!/^[A-Za-z0-9_-]{4,32}$/.test(studentId)) return response.status(400).json({ message: '学号需为 4-32 位字母、数字、下划线或短横线' });
+      const providedPassword = String(request.body?.password ?? '').trim();
+      const password = providedPassword || studentId;
+      // 留空时沿用批量导入规则，学号本身可以是 4-32 位；手动填写密码时走登录密码校验。
+      const passwordError = providedPassword ? validatePassword(password) : null;
+      if (passwordError) return response.status(400).json({ message: `初始密码无效：${passwordError}` });
+      const classIdValue = request.body?.classId;
+      const classId = classIdValue === '' || classIdValue === null || classIdValue === undefined ? null : Number.parseInt(classIdValue, 10);
+      let targetClass = null;
+      if (classId !== null) {
+        if (!Number.isInteger(classId) || classId <= 0) return response.status(400).json({ message: '请选择有效的启用班级' });
+        targetClass = db.prepare('SELECT id, name, is_active AS isActive FROM classes WHERE id = ?').get(classId);
+        if (!targetClass || !targetClass.isActive) return response.status(400).json({ message: '请选择有效的启用班级' });
+      }
+      const duplicate = db.prepare(`
+        SELECT display_name AS displayName, student_id AS studentId, username
+        FROM users
+        WHERE lower(display_name) = lower(?) OR lower(username) = lower(?) OR lower(student_id) = lower(?)
+        LIMIT 1
+      `).get(displayName, displayName, studentId);
+      if (duplicate) {
+        const field = duplicate.studentId && duplicate.studentId.toLowerCase() === studentId.toLowerCase() ? '学号' : '姓名';
+        return response.status(409).json({ message: `${field}已存在，请先处理已有账号` });
+      }
+      const passwordHash = await hashPassword(password);
+      const create = db.transaction(() => {
+        const result = db.prepare(`
+          INSERT INTO users (username, display_name, student_id, password_hash, is_active, last_login_at)
+          VALUES (?, ?, ?, ?, 1, NULL)
+        `).run(displayName, displayName, studentId, passwordHash);
+        const userId = Number(result.lastInsertRowid);
+        if (targetClass) db.prepare(`
+          INSERT INTO class_members (class_id, user_id, joined_at, left_at)
+          VALUES (?, ?, ?, NULL)
+          ON CONFLICT(class_id, user_id) DO UPDATE SET left_at = NULL
+        `).run(targetClass.id, userId, now());
+        return userId;
+      });
+      const userId = create();
+      return response.status(201).json({
+        user: { id: userId, username: displayName, displayName, studentId, isActive: true },
+        initialPassword: password,
+        classId: targetClass?.id || null,
+        className: targetClass?.name || null
+      });
+    } catch (error) {
+      if (String(error.code || '').includes('SQLITE_CONSTRAINT')) return response.status(409).json({ message: '姓名或学号已存在，请先处理已有账号' });
+      return next(error);
+    }
+  });
+
   app.get('/api/admin/users', requireAdmin, (request, response) => {
     const keyword = cleanText(request.query.q, 80);
     const classFilter = cleanText(request.query.classId, 30);

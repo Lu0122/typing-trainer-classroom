@@ -188,7 +188,7 @@
               <span class="filter-label">班级</span>
               <select id="user-class-filter" class="admin-filter-select"><option value="">全部班级</option><option value="unassigned">待分班</option></select>
             </div>
-            <div class="table-toolbar-actions"><button class="primary-button" id="student-import-open" type="button"><i data-lucide="file-spreadsheet"></i><span>导入学生</span></button><button class="secondary-button" id="refresh-users" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="user-count">0 个账号</span></div>
+            <div class="table-toolbar-actions"><button class="primary-button" id="student-create-open" type="button"><i data-lucide="user-plus"></i><span>新建学生</span></button><button class="secondary-button" id="student-import-open" type="button"><i data-lucide="file-spreadsheet"></i><span>导入学生</span></button><button class="secondary-button" id="refresh-users" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="user-count">0 个账号</span></div>
           </div>
           <div class="table-scroll">
             <table>
@@ -549,6 +549,11 @@
               <footer><span id="agent-status" class="form-message" role="status"></span><small class="agent-send-hint">Ctrl + 回车 发送</small></footer>
             </form>
           </section>
+          <aside class="agent-preview" id="agent-preview" hidden aria-label="导出文件预览">
+            <header><div><strong id="agent-preview-title">文件预览</strong><small id="agent-preview-status"></small></div><button type="button" id="agent-preview-close" aria-label="关闭预览">✕</button></header>
+            <div class="agent-preview-content" id="agent-preview-content"></div>
+            <footer><a class="primary-button" id="agent-preview-download" download>下载 CSV</a></footer>
+          </aside>
         </div>
       </section>
     </main>
@@ -614,6 +619,22 @@
       <div class="student-profile-avatar-field"><span>头像</span><div class="student-profile-avatar-row"><div class="student-profile-avatar-preview" id="student-profile-avatar-preview">字</div><input id="student-profile-avatar" type="file" accept="image/png,image/jpeg,image/webp"><small>支持 PNG、JPG、WEBP，最大约 160KB</small></div></div>
       <p class="reset-error" id="student-profile-error" role="alert"></p>
       <footer><button class="secondary-button" id="cancel-student-profile" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="save"></i><span>保存资料</span></button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="student-create-dialog" id="student-create-dialog">
+    <form id="student-create-form">
+      <button class="dialog-close" id="close-student-create" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">实名账号</p><h2>新建学生账号</h2>
+      <p class="student-create-intro">填写一名学生即可立即创建账号。初始密码留空时默认使用学号，学生可以用姓名或学号登录。</p>
+      <div class="form-grid">
+        <label><span>学生姓名</span><input id="student-create-name" type="text" maxlength="12" autocomplete="off" required></label>
+        <label><span>学号</span><input id="student-create-student-id" type="text" maxlength="32" autocomplete="off" required placeholder="4-32 位字母或数字"></label>
+        <label><span>初始密码 <small>可留空</small></span><input id="student-create-password" type="text" minlength="6" maxlength="12" autocomplete="off" placeholder="留空则使用学号"></label>
+        <label><span>所属班级</span><select id="student-create-class"><option value="">暂不分班</option></select></label>
+      </div>
+      <p class="reset-error" id="student-create-error" role="alert"></p>
+      <footer><button class="secondary-button" id="cancel-student-create" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="user-plus"></i><span>创建账号</span></button></footer>
     </form>
   </dialog>
 
