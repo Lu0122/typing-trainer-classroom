@@ -1910,10 +1910,32 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   const publicPath = path.join(__dirname, '..', 'public');
+  // 赛事进行中（检录 / 比赛 / 暂停）临时关闭其他玩法的入场接口：
+  // 全班几十台机器同时开房间轮询会抢掉比赛需要的并发，老师也顾不上处理。
+  // 只拦「进入房间」这一类 POST，不影响已在对局里的读写和后台操作。
+  const GAME_ENTRY_ROUTES = [
+    /^\/api\/battle\/join$/,
+    /^\/api\/battle\/competition\/join$/,
+    /^\/api\/boss\/join$/,
+    /^\/api\/arena\/[^/]+\/join$/,
+    /^\/api\/arena\/[^/]+\/join-code$/,
+    /^\/api\/arena\/[^/]+\/create$/,
+    /^\/api\/chase\/create$/,
+    /^\/api\/chase\/join-code$/,
+    /^\/api\/runner\/start$/
+  ];
+  let competitionEvent = null;
+  app.use((request, response, next) => {
+    if (request.method !== 'POST' || !competitionEvent) return next();
+    const path = request.path.replace(/\/+$/, '') || '/';
+    if (!GAME_ENTRY_ROUTES.some((pattern) => pattern.test(path))) return next();
+    if (!competitionEvent.hasActive()) return next();
+    response.status(423).json({ message: '比赛正在进行，其他玩法暂时关闭，请回到比赛页面。' });
+  });
   require('./battle').installBattle(app, { db, requireUser, requireAdmin, now });
   require('./boss').installBoss(app, { db, requireUser, now });
   require('./competition').installCompetition(app, { db, requireUser, requireAdmin, now });
-  require('./competition-event').installCompetitionEvent(app, { db, requireUser, requireAdmin, now });
+  competitionEvent = require('./competition-event').installCompetitionEvent(app, { db, requireUser, requireAdmin, now });
   require('./arena').installArena(app, { db, requireUser, now });
   require('./customer-service').installCustomerService(app, { db, requireUser, requireAdmin, now });
   require('./agent').installAgent(app, { db, requireAdmin, now });

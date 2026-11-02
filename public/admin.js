@@ -1751,7 +1751,7 @@ async function exportScores() {
   finally { button.disabled = false; }
 }
 
-const competitionStatusNames = { draft: '草稿', registration: '检录中', running: '比赛中', paused: '已暂停', finished: '已结束' };
+const competitionStatusNames = { draft: '草稿', registration: '检录中', running: '比赛中', paused: '已暂停', finished: '已结束', terminated: '已终止' };
 function renderCompetitions() {
   const rows = adminState.competitions;
   el.competitionCount.textContent = `共 ${adminState.competitionTotal || rows.length} 场`;
@@ -1761,10 +1761,16 @@ function renderCompetitions() {
     const name = document.createElement('td'); name.className = 'article-cell';
     const strong = document.createElement('strong'); strong.textContent = item.name;
     const small = document.createElement('span'); small.textContent = item.id.slice(0, 8); name.append(strong, small);
-    const mode = document.createElement('td'); mode.textContent = item.mode === 'speed' ? `个人赛 · ${item.language === 'en' ? '英文' : '中文'}` : item.mode === 'duel' ? '旧版 1v1' : '旧版团队同题赛';
+    const mode = document.createElement('td'); mode.dataset.label = '模式'; mode.textContent = item.mode === 'speed' ? `个人赛 · ${item.language === 'en' ? '英文' : '中文'}` : item.mode === 'duel' ? '旧版 1v1' : '旧版团队同题赛';
     const status = document.createElement('td');
-    const pill = document.createElement('span'); pill.className = `status-pill ${item.status === 'running' ? '' : item.status === 'finished' ? 'is-inactive' : ''}`; pill.textContent = competitionStatusNames[item.status] || item.status; status.append(pill);
-    const created = document.createElement('td'); created.textContent = formatDate(item.createdAt);
+    const pill = document.createElement('span'); pill.className = `status-pill ${item.status === 'running' ? '' : ['finished', 'terminated'].includes(item.status) ? 'is-inactive' : ''}`; pill.textContent = competitionStatusNames[item.status] || item.status; status.append(pill);
+    const attendance = document.createElement('td'); attendance.className = 'competition-attendance'; attendance.dataset.label = '检录情况';
+    const ready = Number(item.readyCount || 0); const online = Number(item.onlineCount || 0); const capacity = Number(item.capacity || 0);
+    const attendanceStrong = document.createElement('strong'); attendanceStrong.textContent = capacity ? `${ready}/${capacity} 人已准备` : `${ready} 人已准备`;
+    const attendanceSmall = document.createElement('small'); attendanceSmall.textContent = `${Number(item.playerCount || 0)} 人已报名 · ${online} 人在线`;
+    attendance.append(attendanceStrong, attendanceSmall);
+    status.dataset.label = '状态';
+    const created = document.createElement('td'); created.dataset.label = '创建时间'; created.textContent = formatDate(item.createdAt);
     const actions = document.createElement('td'); actions.className = 'table-actions';
     if (item.status === 'draft') actions.append(actionButton('clipboard-check', '开启检录', '', () => openCompetitionRegistration(item)));
     if (item.status === 'registration') actions.append(actionButton('play', '开始比赛', '', () => startCompetition(item)));
@@ -1774,6 +1780,10 @@ function renderCompetitions() {
       if (item.mode !== 'speed') actions.append(actionButton('plus-circle', '本轮加时', '', () => addCompetitionTime(item)));
     }
     if (item.status === 'paused') actions.append(actionButton('play', '继续赛事', '', () => resumeCompetition(item)));
+    // 终止是唯一能把学生从比赛页放出来的操作，检录中/比赛中/暂停中都允许。
+    if (['registration', 'running', 'paused'].includes(item.status)) {
+      actions.append(actionButton('octagon-x', '终止比赛', '', () => terminateCompetition(item)));
+    }
     if (['running', 'paused', 'finished'].includes(item.status)) {
       const boardLink = document.createElement('a'); boardLink.className = 'table-action'; boardLink.href = `/board?competition=${item.id}`; boardLink.target = '_blank'; boardLink.rel = 'noopener'; boardLink.title = '打开大屏'; boardLink.setAttribute('aria-label', '打开大屏'); boardLink.innerHTML = '<i data-lucide="monitor-up"></i>'; actions.append(boardLink);
     }
@@ -1786,7 +1796,7 @@ function renderCompetitions() {
       label.textContent = action.getAttribute('aria-label') || action.title;
       action.append(label);
     }
-    row.append(name, mode, status, created, actions);
+    row.append(name, mode, status, attendance, created, actions);
     return row;
   }));
   window.lucide?.createIcons();
@@ -2083,6 +2093,15 @@ async function pauseCompetition(item) {
 async function resumeCompetition(item) {
   try { await api(`/api/competitions/${item.id}/resume`, { method: 'POST' }); toast('赛事已继续'); await loadCompetitions(); }
   catch (error) { toast(error.message, true); }
+}
+
+async function terminateCompetition(item) {
+  if (!window.confirm(`确定终止「${item.name}」吗？\n终止后学生会被放回其他页面，成绩不再更新，且无法恢复。`)) return;
+  try {
+    await api(`/api/competitions/${item.id}/terminate`, { method: 'POST', body: JSON.stringify({ reason: 'teacher' }) });
+    toast('赛事已终止，学生已可以离开比赛页');
+    await loadCompetitions();
+  } catch (error) { toast(error.message, true); }
 }
 
 async function addCompetitionTime(item) {
@@ -2896,7 +2915,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 setInterval(() => {
-  if (adminState.activeView === 'competitions' && !el.adminShell.hidden) loadBattleCompetition().catch(() => {});
+  if (adminState.activeView === 'competitions' && !el.adminShell.hidden) {
+    loadBattleCompetition().catch(() => {});
+    loadCompetitions().catch(() => {});
+  }
 }, 2000);
 
 

@@ -460,6 +460,10 @@ tbody tr:hover { background: #f8faf6; }
 .student-create-dialog input, .student-create-dialog select { width: 100%; height: 42px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--paper); }
 .student-create-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
 
+/* #view-progress 是 flex 列容器，指标卡必须锁住自身高度。
+   .admin-metrics 带 overflow:hidden，flex 项的 min-height:auto 会退化成 0，
+   不写 flex:0 0 auto 就会被下面的表格区挤成一条缝、内容被裁掉。 */
+.progress-metrics { flex: 0 0 auto; margin-bottom: 18px; }
 .progress-metrics article:nth-child(2) { color: #1f7a54; background: #eef8f2; }
 .progress-change { color: var(--ink-soft); font-family: Consolas, monospace; font-weight: 800; }
 .assignment-students-field { display: none; grid-column: 1 / -1; }
@@ -604,6 +608,10 @@ tbody tr:hover { background: #f8faf6; }
 #competition-table .table-actions { display: table-cell; text-align: right; }
 #competition-table .table-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; min-height: 34px; height: auto; margin: 3px 0 3px 6px; padding: 7px 10px; color: #3b5d49; font-size: 12px; text-decoration: none; }
 #competition-table .article-cell strong { font-size: 13px; }
+#competition-table .competition-attendance { min-width: 150px; }
+#competition-table .competition-attendance strong, #competition-table .competition-attendance small { display: block; }
+#competition-table .competition-attendance strong { color: #24744e; font-size: 12px; }
+#competition-table .competition-attendance small { margin-top: 4px; color: var(--competition-muted); font-size: 11px; }
 .competition-actions-heading { text-align: right; }
 @media (max-width: 600px) { #view-competitions .view-heading h1 { font-size: 25px; } .competition-panel-heading { padding: 18px 16px; gap: 9px; flex-wrap: wrap; } .competition-panel-heading p { font-size: 11px; } .competition-room-status { margin-left: 0; } #competition-form { padding: 18px 16px; } .competition-referee-controls { padding: 18px 16px; } .competition-steps { margin: 18px 16px 0; padding: 10px 8px; } .competition-steps li { gap: 4px; font-size: 11px; } .competition-room-config { flex-wrap: wrap; } .competition-room-config label { min-width: 100px; } .competition-team-roster { gap: 8px; } .competition-side { padding: 12px; } }
 #view-competitions .view-heading > button { flex-shrink: 0; white-space: nowrap; }

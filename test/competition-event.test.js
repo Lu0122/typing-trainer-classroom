@@ -120,11 +120,43 @@ test('rejects out-of-order input and oversized batches', () => {
   assert.throws(() => engine.submit(event.id, 1, text.slice(0, 40)), /按顺序输入/, '单批上限 16 字');
 });
 
-test('refuses to start a round with fewer than two players', () => {
+test('allows a solo round so a teacher can rehearse alone', () => {
   const { engine, addUser, event, joinAll } = setup();
   addUser(1);
   joinAll([1]);
-  assert.throws(() => engine.beginRound(event.id), /至少需要 2 名选手/);
+  const started = engine.beginRound(event.id);
+  assert.equal(started.status, 'running');
+  assert.equal(started.players.length, 1);
+});
+
+test('still refuses to start a round with nobody enrolled', () => {
+  const { engine, event } = setup();
+  assert.throws(() => engine.beginRound(event.id), /至少需要 1 名选手/);
+});
+
+test('entering the page enrols the student automatically', () => {
+  const { engine, addUser, event } = setup();
+  addUser(1);
+  // 学生端只是轮询自己的赛事状态，没有单独调用 join，也应该成为正式选手。
+  const state = engine.state(event.id, 1);
+  assert.ok(state.me, '进入赛事页即自动报名');
+  assert.equal(state.playerCount, 1);
+  assert.equal(engine.state(event.id, 1).me.userId, 1);
+});
+
+test('terminating a competition releases students and blocks further results', () => {
+  const { engine, addUser, event, joinAll } = setup();
+  [1, 2].forEach((id) => addUser(id));
+  joinAll([1, 2]);
+  const started = engine.beginRound(event.id);
+  assert.equal(engine.hasActive(), true, '比赛中的赛事会让并发锁生效');
+
+  const terminated = engine.terminate(event.id, 'teacher');
+  assert.equal(terminated.status, 'terminated');
+  assert.equal(terminated.round?.status, 'terminated', '进行中的轮次一起收掉');
+  assert.equal(engine.hasActive(), false, '终止后其他玩法立刻恢复');
+  assert.throws(() => engine.submit(event.id, 1, started.round.text.slice(0, 2)), /不在进行中|结束/);
+  assert.throws(() => engine.terminate(event.id), /结束/, '不能重复终止');
 });
 
 test('cannot join after registration closes', () => {

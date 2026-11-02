@@ -36,7 +36,8 @@ const DEFAULT_CONFIG = Object.freeze({
 });
 
 const FINAL_ROUND_SIZE = 3; // 剩 3 人及以下进决赛轮
-const MIN_PLAYERS = 2;
+const MIN_PLAYERS = 1;
+const PRESENCE_TTL_MS = 10_000;
 
 function accuracyOf(correct, attempted) {
   return attempted ? Math.round((correct / attempted) * 100) : 100;
@@ -96,6 +97,14 @@ class CompetitionEvent {
         reached_round INTEGER NOT NULL DEFAULT 0,
         final_rank INTEGER,
         status TEXT NOT NULL DEFAULT 'active',
+        PRIMARY KEY (competition_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS competition_presence (
+        competition_id TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        entered_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        ready_at INTEGER,
         PRIMARY KEY (competition_id, user_id)
       );
       CREATE TABLE IF NOT EXISTS competition_sides (
@@ -261,30 +270,65 @@ class CompetitionEvent {
     return this.state(id);
   }
 
-  join(id, user, { sideId = null } = {}) {
+  ensureEntry(id, userId, { sideId = null, automatic = false } = {}) {
     const row = this.get(id);
-    if (row.status !== 'registration') fail('赛事不在检录阶段，无法加入');
-    const config = this.configOf(row);
-    const existing = this.db.prepare('SELECT * FROM competition_entries WHERE competition_id = ? AND user_id = ?').get(id, user.id);
+    // 自动报名（学生只是打开比赛页）不该报错，安静跳过即可；
+    // 但学生主动点「加入」时仍要明确告诉他检录已经结束。
+    if (row.status !== 'registration') {
+      if (automatic) return null;
+      fail('赛事不在检录阶段，无法加入');
+    }
+    const existing = this.db.prepare('SELECT * FROM competition_entries WHERE competition_id = ? AND user_id = ?').get(id, userId);
     if (existing) return existing;
-    const total = this.db.prepare('SELECT COUNT(*) AS n FROM competition_entries WHERE competition_id = ?').get(id).n;
+    const config = this.configOf(row);
+    const total = this.db.prepare(`SELECT COUNT(*) AS n FROM competition_entries
+      WHERE competition_id = ? AND status = 'active'`).get(id).n;
     if (total >= config.capacity) fail('报名人数已满', 409);
     let selectedSide = null;
     if (row.kind === 'team') {
-      if (!sideId) fail('请先选择参赛方');
-      selectedSide = this.db.prepare('SELECT * FROM competition_sides WHERE id = ? AND competition_id = ?').get(sideId, id);
-      if (!selectedSide) fail('参赛方不存在', 404);
+      const sides = this.sidesOf(id);
+      if (sideId) selectedSide = sides.find((side) => side.id === sideId) || null;
+      if (!selectedSide && automatic) {
+        const counts = this.db.prepare(`SELECT team_id AS teamId, COUNT(*) AS n FROM competition_entries
+          WHERE competition_id = ? AND status = 'active' GROUP BY team_id`).all(id);
+        const countBySide = new Map(counts.map((item) => [item.teamId, Number(item.n)]));
+        selectedSide = sides
+          .filter((side) => (countBySide.get(side.id) || 0) < config.teamSize)
+          .sort((a, b) => (countBySide.get(a.id) || 0) - (countBySide.get(b.id) || 0))[0] || null;
+      }
+      if (!selectedSide) fail('请先选择参赛方');
       const sideCount = this.db.prepare(`SELECT COUNT(*) AS n FROM competition_entries
-        WHERE competition_id = ? AND team_id = ? AND status = 'active'`).get(id, sideId).n;
+        WHERE competition_id = ? AND team_id = ? AND status = 'active'`).get(id, selectedSide.id).n;
       if (sideCount >= config.teamSize) fail('该参赛方出场名额已满', 409);
     }
     const seat = crypto.randomUUID();
-    this.db.prepare(`INSERT INTO competition_entries (competition_id, user_id, seat, joined_at, status)
-      VALUES (?, ?, ?, ?, 'active')`).run(id, user.id, seat, this.now());
-    if (selectedSide) this.db.prepare('UPDATE competition_entries SET team_id = ? WHERE competition_id = ? AND user_id = ?')
-      .run(selectedSide.id, id, user.id);
-    this.recordEvent(id, 'joined', { userId: user.id, sideId: selectedSide?.id || null });
-    return this.db.prepare('SELECT * FROM competition_entries WHERE competition_id = ? AND user_id = ?').get(id, user.id);
+    this.db.prepare(`INSERT INTO competition_entries (competition_id, user_id, seat, joined_at, status, team_id)
+      VALUES (?, ?, ?, ?, 'active', ?)`)
+      .run(id, userId, seat, this.now(), selectedSide?.id || null);
+    this.recordEvent(id, automatic ? 'auto_joined' : 'joined', { userId, sideId: selectedSide?.id || null });
+    return this.db.prepare('SELECT * FROM competition_entries WHERE competition_id = ? AND user_id = ?').get(id, userId);
+  }
+
+  join(id, user, { sideId = null } = {}) {
+    return this.ensureEntry(id, user.id, { sideId });
+  }
+
+  terminate(id, reason = 'teacher') {
+    const row = this.get(id);
+    if (['finished', 'terminated'].includes(row.status)) fail('赛事已经结束');
+    const at = this.now();
+    this.db.prepare("UPDATE competitions SET status = 'terminated', ended_at = ? WHERE id = ?").run(at, id);
+    // 进行中的轮次一起收掉：否则学生端仍会看到「比赛进行中」并继续上报成绩。
+    this.db.prepare(`UPDATE competition_rounds SET status = 'terminated', ended_at = ?
+      WHERE competition_id = ? AND status IN ('countdown', 'running', 'paused', 'scheduled')`).run(at, id);
+    this.recordEvent(id, 'terminated', { reason: String(reason || 'teacher').slice(0, 120) });
+    return this.state(id);
+  }
+
+  // 有赛事正处于检录 / 比赛中 / 暂停时，其他玩法入口会被临时关闭，保证比赛期间的服务端并发。
+  hasActive() {
+    return Boolean(this.db.prepare(`SELECT 1 FROM competitions
+      WHERE status IN ('registration', 'running', 'paused') LIMIT 1`).get());
   }
 
   // ------------------------------------------------------------ 轮次
@@ -752,6 +796,24 @@ class CompetitionEvent {
   state(id, viewerId = null) {
     this.tick(id);
     const row = this.get(id);
+    const now = this.now();
+    if (viewerId !== null) {
+      if (row.status === 'registration') {
+        try { this.ensureEntry(id, viewerId, { automatic: true }); } catch (error) {
+          if (error.status !== 409) throw error;
+        }
+      }
+      const currentPresence = this.db.prepare('SELECT last_seen_at FROM competition_presence WHERE competition_id = ? AND user_id = ?').get(id, viewerId);
+      if (!currentPresence) {
+        this.db.prepare(`INSERT INTO competition_presence
+          (competition_id, user_id, entered_at, last_seen_at, ready_at)
+          VALUES (?, ?, ?, ?, ?)`)
+          .run(id, viewerId, now, now, now);
+      } else if (now - currentPresence.last_seen_at >= 2_000) {
+        this.db.prepare('UPDATE competition_presence SET last_seen_at = ? WHERE competition_id = ? AND user_id = ?')
+          .run(now, id, viewerId);
+      }
+    }
     const config = this.configOf(row);
     const round = this.runningRound(id) || this.latestRound(id);
     const entries = this.db.prepare(`SELECT e.*, u.display_name AS name
@@ -812,6 +874,10 @@ class CompetitionEvent {
       : [];
     const match = matches.length === 1 ? matches[0] : (matches.at(-1) || null);
     const standings = row.kind === 'team' ? this.standingsOf(id, sides) : [];
+    const presence = this.db.prepare(`SELECT
+      COUNT(*) AS readyCount,
+      SUM(CASE WHEN last_seen_at >= ? THEN 1 ELSE 0 END) AS onlineCount
+      FROM competition_presence WHERE competition_id = ?`).get(now - PRESENCE_TTL_MS, id);
 
     return {
       id: row.id,
@@ -837,6 +903,10 @@ class CompetitionEvent {
         : null,
       serverNow: this.now(),
       playerCount: players.filter((player) => player.status === 'active').length,
+      presence: {
+        readyCount: Number(presence?.readyCount || 0),
+        onlineCount: Number(presence?.onlineCount || 0)
+      },
       players,
       ranking,
       sides,
@@ -890,9 +960,14 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const total = db.prepare(`SELECT COUNT(*) AS count FROM competitions ${where}`).get(...params).count;
     const pagination = listPage(request.query, total);
+    const presenceCutoff = now() - PRESENCE_TTL_MS;
     const rows = db.prepare(`
-    SELECT id, name, kind AS mode, json_extract(config_json, '$.language') AS language, schedule, status, created_at AS createdAt,
-           started_at AS startedAt, ended_at AS endedAt
+    SELECT id, name, kind AS mode, json_extract(config_json, '$.language') AS language,
+           json_extract(config_json, '$.capacity') AS capacity, schedule, status, created_at AS createdAt,
+           started_at AS startedAt, ended_at AS endedAt,
+           (SELECT COUNT(*) FROM competition_entries e WHERE e.competition_id = competitions.id AND e.status = 'active') AS playerCount,
+           (SELECT COUNT(*) FROM competition_presence p WHERE p.competition_id = competitions.id AND p.ready_at IS NOT NULL) AS readyCount,
+           (SELECT COUNT(*) FROM competition_presence p WHERE p.competition_id = competitions.id AND p.last_seen_at >= ${presenceCutoff}) AS onlineCount
     FROM competitions ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
   `).all(...params, pagination.pageSize, pagination.offset);
     return { rows, total, ...pagination };
@@ -942,6 +1017,8 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
     engine.join(request.params.id, request.user, { sideId: request.body?.sideId || null })));
   app.post('/api/competitions/:id/start', requireAdmin, route((request) =>
     engine.beginRound(request.params.id, { plannedAt: request.body?.plannedAt ?? null })));
+  app.post('/api/competitions/:id/terminate', requireAdmin, route((request) =>
+    engine.terminate(request.params.id, request.body?.reason)));
   app.post('/api/competitions/:id/submit', requireUser, route((request) =>
     engine.submit(request.params.id, request.user.id, request.body?.text, request.body?.seat ?? null)));
   app.post('/api/competitions/:id/settle', requireAdmin, route((request) =>
@@ -994,4 +1071,4 @@ function installCompetitionEvent(app, { db, requireUser, requireAdmin, now }) {
   return engine;
 }
 
-module.exports = { CompetitionEvent, DEFAULT_CONFIG, FINAL_ROUND_SIZE, MIN_PLAYERS, accuracyOf, installCompetitionEvent };
+module.exports = { CompetitionEvent, DEFAULT_CONFIG, FINAL_ROUND_SIZE, MIN_PLAYERS, PRESENCE_TTL_MS, accuracyOf, installCompetitionEvent };

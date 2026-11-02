@@ -33,6 +33,10 @@ test('runs a persisted 1v1 event through the new API and hides other seat tokens
   const available = await first.get('/api/competitions/available').expect(200);
   assert.equal(available.body[0].id, created.body.id);
   assert.equal(available.body[0].config, undefined);
+  const firstReady = await first.get(`/api/competitions/${created.body.id}`).expect(200);
+  assert.deepEqual(firstReady.body.presence, { readyCount: 1, onlineCount: 1 });
+  const adminRegistration = await admin.get('/api/competitions?status=registration').expect(200);
+  assert.equal(adminRegistration.body.rows[0].readyCount, 1);
   await first.post(`/api/competitions/${created.body.id}/join`).expect(200);
   await second.post(`/api/competitions/${created.body.id}/join`).expect(200);
   await admin.post(`/api/competitions/${created.body.id}/start`).expect(200);
@@ -353,4 +357,39 @@ test('filters the admin competition list by status, language and keyword', async
   assert.equal((await admin.get('/api/competitions?q=初赛').expect(200)).body.total, 2);
   assert.equal((await admin.get('/api/competitions?language=zh&q=决赛').expect(200)).body.total, 1);
   db.close();
+});
+
+test('a solo event can start, locks other games, and is released by terminate', async () => {
+  const { app } = setup();
+  const admin = request.agent(app);
+  await admin.post('/api/admin/login').send({ password: 'test-pass' }).expect(200);
+  const solo = await register(app, 'student911', '单人选手');
+
+  const created = await admin.post('/api/competitions').send({
+    name: '单人演练赛',
+    mode: 'speed',
+    config: { roundMs: 60_000, language: 'zh' }
+  }).expect(200);
+  await admin.post(`/api/competitions/${created.body.id}/registration`).expect(200);
+
+  // 只是打开赛事页，不调用 join，也应该成为正式选手。
+  const entered = await solo.get(`/api/competitions/${created.body.id}`).expect(200);
+  assert.ok(entered.body.me, '进入赛事页即自动报名');
+
+  // 赛事进行中，其他玩法入口被临时关闭。
+  const blocked = await solo.post('/api/battle/join').send({});
+  assert.equal(blocked.status, 423);
+  assert.match(blocked.body.message, /比赛正在进行/);
+
+  // 单人也能开赛，老师不用凑人就能演练。
+  await admin.post(`/api/competitions/${created.body.id}/start`).expect(200);
+
+  const terminated = await admin.post(`/api/competitions/${created.body.id}/terminate`).send({ reason: 'teacher' }).expect(200);
+  assert.equal(terminated.body.status, 'terminated');
+
+  // 终止后学生可以回到其他页面：赛事不再出现在列表，其他玩法入口恢复。
+  const available = await solo.get('/api/competitions/available').expect(200);
+  assert.equal(available.body.length, 0);
+  const released = await solo.post('/api/battle/join').send({});
+  assert.notEqual(released.status, 423);
 });

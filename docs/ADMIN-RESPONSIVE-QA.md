@@ -112,6 +112,31 @@
 刷新后展开状态保持、深链 `#scores` 自动展开「赛事成绩」、以及 900×800 图标条下 13 项全可见。
 四个视口两组同时展开时导航区都不需要滚动（551/551 @1366×768）。
 
+### 6. 「学习进步」指标卡被表格挤成一条缝（2026-11-02）
+
+现象：`#view-progress` 顶部四张指标卡（`.admin-metrics.progress-metrics`）只剩顶上一条边，
+下面的筛选栏和表格把它们盖住了。
+
+原因不是 z-index，也不是被 `overflow:hidden` 的父元素裁掉，而是 **flex 布局把它压缩了**：
+
+- `#view-progress` 是 `display:flex; flex-direction:column; overflow:hidden` 的整页一屏容器；
+- `> .table-section` 有 `flex:1 1 auto`，会吃掉全部剩余空间；
+- `.admin-metrics` 是普通 flex 项，默认 `flex:0 1 auto`，**可以被压缩**；
+- 关键点：`.admin-metrics` 带 `overflow:hidden`。按规范，非 `visible` 的 flex 项
+  其 `min-height:auto` 会退化成 **0**，于是它能被压到只剩几像素，`article` 的 175px 被裁掉。
+
+修法：
+
+```css
+.progress-metrics { flex: 0 0 auto; margin-bottom: 18px; }
+```
+
+概览页的 `.admin-metrics`（`#view-overview`）不在 flex 容器里，一直正常，所以只修 progress 这一处。
+
+验收：1366×768 / 1440×900 / 1280×720 / 1024×768 / 1920×1080 五档下
+指标卡都是 177px（`article` 175px）、页面 `scrollHeight - innerHeight = 0`，
+表格区拿到剩余高度并内部滚动（768 高时 417px、720 高时 369px）。
+
 ## 验收方法与结论
 
 ```bash
