@@ -158,6 +158,8 @@
 .admin-nav-item:hover, .admin-nav-item.is-active, .sidebar-bottom button:hover, .sidebar-bottom a:hover { color: #fff; background: rgba(255, 255, 255, 0.09); }
 .admin-nav-item.is-active { box-shadow: inset 3px 0 var(--green); }
 .sidebar-bottom { display: grid; gap: 4px; margin-top: auto; padding-top: 18px; border-top: 1px solid #344139; }
+.sidebar-github-link { color: #b9d7c4 !important; }
+.sidebar-github-link:hover { color: #fff !important; background: rgba(76, 175, 117, 0.18) !important; }
 
 .admin-mobile-header { display: none; }
 .admin-main { padding: 28px clamp(30px, 5vw, 72px) 70px; }
@@ -169,6 +171,8 @@
 .admin-breadcrumb > svg { width: 13px; color: #9aa69e; }
 .admin-breadcrumb > span { color: var(--ink); font-weight: 800; }
 .view-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 0; margin-bottom: 20px; }
+.admin-view > .view-heading h1 { display: none; }
+.admin-view > .view-heading { margin-bottom: 8px; }
 .view-heading h1 { margin: 0; font-family: SimSun, serif; font-size: 29px; letter-spacing: 0; }
 .view-heading > div > p:last-child:not(.eyebrow) { margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; }
 .view-heading > span { color: var(--ink-soft); font-family: Consolas, monospace; font-size: 12px; }
