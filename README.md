@@ -24,6 +24,11 @@ English documentation: [README.en.md](README.en.md) · GitHub: https://github.co
 运行包支持重复启动检测、自动打开浏览器和局域网访问，详细使用与数据迁移见 [Windows 运行版说明](docs/WINDOWS-RUNTIME.md)。
 执行 `npm run verify:runtime` 可将最新运行包解压到项目外目录，验证离线启动、静态资源、原生数据库、数据持久化及端口冲突处理。
 
+**一键更新**：运行包内自带 `更新字练场.bat`，关掉服务窗口后双击即可从 GitHub 的 `release` 分支拉取新版，
+只下载内容变化的文件（代码级更新约 2MB），逐个校验 SHA-256 后覆盖 `public/`、`backend/server.js`、`launcher.cjs`；
+`data/`、`.env`、`runtime/` 不会被改动。更新后异常可双击 `回滚字练场.bat` 退回上一版。
+发布新版本执行 `npm run publish:update`，机制与边界见 [应用更新机制](docs/UPDATE.md)。
+
 ### 开发环境
 
 ```bash

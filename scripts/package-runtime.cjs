@@ -2,13 +2,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-const esbuild = require('esbuild');
+const { buildPayload } = require('./lib/build-payload.cjs');
 
 const root = path.resolve(__dirname, '..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 const release = path.join(root, 'output', 'packages', `字练场-Windows-x64-${stamp}`);
 const archive = `${release}.zip`;
-const generatedAsset = /-[A-Za-z0-9_-]{8}\.(?:js|css)(?:\.map)?$/;
 
 function copy(source, destination, filter = () => true) {
   const info = fs.statSync(source);
@@ -38,17 +37,8 @@ async function main() {
   // Verify the native module against the exact Node executable shipped below.
   const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.close();
   fs.mkdirSync(release, { recursive: true });
-  const publicPath = path.join(release, 'public');
-  const viteCli = path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js');
-  run(process.execPath, [viteCli, 'build', '--config', path.join(root, 'vite.config.js'), '--outDir', publicPath, '--emptyOutDir', '--manifest']);
-  // Copy stable artwork and admin pages, never historic hashed bundles.
-  copy(path.join(root, 'public'), publicPath, (file, info) => {
-    const relative = path.relative(path.join(root, 'public'), file).replaceAll('\\', '/');
-    if (info.isDirectory()) return !['.vite', '.playwright-cli'].includes(path.basename(file));
-    return !['index.html', 'board.html'].includes(relative) && !generatedAsset.test(path.basename(file)) && !/\.(?:log|map)$/i.test(file);
-  });
-  const server = await esbuild.build({ entryPoints: [path.join(root, 'backend', 'server.js')], outfile: path.join(release, 'backend', 'server.js'), bundle: true, platform: 'node', target: 'node20', external: ['better-sqlite3'], minify: true, metafile: true, legalComments: 'eof' });
-  const launcher = await esbuild.build({ entryPoints: [path.join(__dirname, 'runtime-launcher.cjs')], outfile: path.join(release, 'launcher.cjs'), bundle: true, platform: 'node', target: 'node20', external: ['./backend/server.js'], minify: true, metafile: true, legalComments: 'eof' });
+  // 构建 public/ + backend/server.js + launcher.cjs，与发布更新包共用同一套逻辑。
+  const { server, launcher } = await buildPayload(release);
   // Only these modules are required at runtime after bundling the server.
   for (const name of ['bindings', 'file-uri-to-path']) {
     const directory = packageRoot(name);
@@ -66,7 +56,23 @@ async function main() {
   copy(path.join(root, '.env'), path.join(release, '.env'));
   copy(path.join(root, '.env.example'), path.join(release, '.env.example'));
   fs.writeFileSync(path.join(release, '启动字练场.bat'), '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0launcher.cjs" %*\r\nif errorlevel 1 pause\r\n');
+  // 一键更新 / 回滚：都用包内自带的 node 跑 update.cjs，不依赖系统环境。
+  fs.writeFileSync(path.join(release, '更新字练场.bat'), '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0update.cjs" %*\r\npause\r\n');
+  fs.writeFileSync(path.join(release, '回滚字练场.bat'), '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0update.cjs" --rollback\r\npause\r\n');
+  copy(path.join(root, 'scripts', 'update-runtime.cjs'), path.join(release, 'update.cjs'));
   copy(path.join(root, 'docs', 'WINDOWS-RUNTIME.md'), path.join(release, '使用说明.md'));
+
+  // version.json 只描述「可被更新覆盖的代码文件」，供更新器比对与校验。
+  const payloadFiles = walk(path.join(release, 'public')).map((file) => `public/${path.relative(path.join(release, 'public'), file).replaceAll('\\', '/')}`)
+    .concat(['backend/server.js', 'launcher.cjs']);
+  fs.writeFileSync(path.join(release, 'version.json'), JSON.stringify({
+    version: JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version,
+    builtAt: new Date().toISOString(),
+    files: payloadFiles.sort().map((relative) => {
+      const file = path.join(release, relative);
+      return { path: relative, size: fs.statSync(file).size, sha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') };
+    })
+  }, null, 2));
 
   const names = new Set(['better-sqlite3', 'bindings', 'file-uri-to-path', 'lucide', 'echarts', 'zrender', 'tslib',
     'vue', '@vue/shared', '@vue/reactivity', '@vue/runtime-core', '@vue/runtime-dom', 'three', 'lucide-vue-next']);

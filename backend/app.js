@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const path = require('node:path');
+const fs = require('node:fs');
 const express = require('express');
 const { scoreTyping, visibleCharacters } = require('./scoring');
 const { countScoreRows, selectScoreRows, scoreRowsToCsv } = require('./score-filters');
@@ -79,6 +80,16 @@ function assignmentIncludesStudent(assignment, userId, db = null) {
   } catch {
     return false;
   }
+}
+
+function appVersion() {
+  for (const file of [path.join(__dirname, '..', 'version.json'), path.join(__dirname, '..', 'package.json')]) {
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (data.version) return data.version;
+    } catch { /* 文件不存在就试下一个 */ }
+  }
+  return 'unknown';
 }
 
 function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), secureCookies = false, requireAccountApproval = true, studentRegistrationEnabled = true }) {
@@ -549,9 +560,11 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   // Portable launcher readiness check; instance identifies this process without exposing configuration.
+  // 运行版本：运行包根目录有 version.json，开发环境退回 package.json。
+  // 后台和更新器都靠它确认「现在跑的是哪一版」。
   app.get('/api/health', (request, response) => {
     response.set('Cache-Control', 'no-store');
-    response.json({ status: 'ok', app: 'hanzi-sprint', instance: process.env.TYPING_RUNTIME_INSTANCE || null });
+    response.json({ status: 'ok', app: 'hanzi-sprint', version: appVersion(), instance: process.env.TYPING_RUNTIME_INSTANCE || null });
   });
   app.get('/api/auth/me', (request, response) => {
     response.json({ authenticated: Boolean(request.user), user: request.user ? publicUser(request.user) : null });
