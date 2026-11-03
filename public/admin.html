@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <meta name="author" content="lulu">
+  <title>字练场 · 管理后台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin.css">
+  <script src="/vendor/lucide/lucide.js" defer></script>
+  <script src="/vendor/echarts/echarts.min.js" defer></script>
+  <script src="/vendor/xlsx/xlsx.full.min.js" defer></script>
+  <script src="/admin.js" defer></script>
+</head>
+<body class="admin-body">
+  <section class="login-view" id="login-view" hidden>
+    <div class="login-showcase" aria-hidden="true">
+      <a class="brand login-brand" href="/">
+        <span class="brand-mark">字</span>
+        <span><strong>字练场</strong><small>管理后台</small></span>
+      </a>
+      <div class="login-showcase-copy">
+        <span class="login-showcase-kicker">CLASSROOM CONTROL CENTER</span>
+        <h2>让每一次练习，<br><em>都有迹可循。</em></h2>
+        <p>统一管理学生账号、班级、练习内容与现场比赛。</p>
+      </div>
+      <div class="login-showcase-orbit"><span>字</span><span>练</span><span>场</span></div>
+      <small class="login-showcase-foot">教学 · 练习 · 比赛 · 成长</small>
+    </div>
+    <form class="login-panel" id="login-form">
+      <p class="eyebrow">管理员验证</p>
+      <h1>欢迎回来</h1>
+      <p class="login-panel-subtitle">登录后台，继续管理今天的课堂。</p>
+      <label>
+        <span>后台账号</span>
+        <input id="admin-username-input" type="text" required autocomplete="username" value="admin" placeholder="请输入后台账号">
+      </label>
+      <label>
+        <span>管理密码</span>
+        <div class="password-wrap">
+          <i data-lucide="lock-keyhole"></i>
+          <input id="password-input" type="password" required autocomplete="current-password" placeholder="请输入管理密码">
+          <button id="toggle-password" type="button" title="显示密码" aria-label="显示密码"><i data-lucide="eye"></i></button>
+        </div>
+      </label>
+      <button class="primary-button" type="submit"><i data-lucide="log-in"></i><span>进入后台</span></button>
+      <p class="login-panel-hint"><i data-lucide="shield-check"></i> 后台账号由超级管理员统一创建和维护</p>
+      <p class="login-error" id="login-error" role="alert"></p>
+    </form>
+    <a class="back-link" href="/"><i data-lucide="arrow-left"></i>返回练习前台</a>
+  </section>
+
+  <div class="admin-shell" id="admin-shell" hidden>
+    <aside class="admin-sidebar">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">字</span>
+        <span><strong>字练场</strong><small>管理后台</small></span>
+      </a>
+        <nav class="admin-nav" id="admin-nav" aria-label="后台导航">
+          <button class="admin-nav-item is-active" type="button" data-view="overview"><i data-lucide="layout-dashboard"></i><span>概览</span></button>
+          <section class="admin-nav-group" data-group="teach" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-teach"><span>教学管理</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-teach">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="passages"><i data-lucide="notebook-tabs"></i><span>练习文章</span></button>
+                <button class="admin-nav-item" type="button" data-view="assignments"><i data-lucide="clipboard-check"></i><span>教学任务</span></button>
+                <button class="admin-nav-item" type="button" data-view="progress"><i data-lucide="trending-up"></i><span>学习进步</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="admin-nav-group" data-group="match" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-match"><span>赛事成绩</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-match">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="competitions"><i data-lucide="trophy"></i><span>比赛赛事</span></button>
+                <button class="admin-nav-item" type="button" data-view="scores"><i data-lucide="trophy"></i><span>竞速成绩</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="admin-nav-group" data-group="account" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-account"><span>账号管理</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-account">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="users"><i data-lucide="users-round"></i><span>学生账号</span></button>
+                <button class="admin-nav-item" type="button" data-view="classes"><i data-lucide="school"></i><span>班级分组</span></button>
+                <button class="admin-nav-item" type="button" data-view="admins"><i data-lucide="shield-check"></i><span>后台账号</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="admin-nav-group" data-group="system" data-collapsed="true">
+            <button class="admin-nav-group-head" type="button" aria-expanded="false" aria-controls="nav-group-system"><span>AI 与系统</span><span class="admin-nav-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div class="admin-nav-group-body" id="nav-group-system">
+              <div class="admin-nav-group-inner">
+                <button class="admin-nav-item" type="button" data-view="agent"><i data-lucide="sparkles"></i><span>管理助手</span></button>
+                <button class="admin-nav-item" type="button" data-view="agent-logs"><i data-lucide="scroll-text"></i><span>助手审计</span></button>
+                <button class="admin-nav-item" type="button" data-view="ai-settings"><i data-lucide="bot"></i><span>AI服务设置</span></button>
+                <button class="admin-nav-item" type="button" data-view="bug-reports"><i data-lucide="message-square-warning"></i><span>意见反馈</span></button>
+              </div>
+            </div>
+          </section>
+        </nav>
+      <div class="sidebar-bottom">
+        <a class="sidebar-github-link" href="https://github.com/Lu0122/typing-trainer-classroom" target="_blank" rel="noopener noreferrer"><i data-lucide="github"></i><span>GitHub 开源仓库</span></a>
+        <a href="/"><i data-lucide="external-link"></i><span>打开练习前台</span></a>
+        <button id="logout-button" type="button"><i data-lucide="log-out"></i><span>退出登录</span></button>
+      </div>
+    </aside>
+
+    <div class="admin-nav-scrim" id="admin-nav-scrim" hidden></div>
+
+    <header class="admin-mobile-header">
+      <strong>字练场后台</strong>
+      <button class="icon-button" id="mobile-menu-button" type="button" aria-label="打开导航" aria-controls="admin-nav" aria-expanded="false"><i data-lucide="menu"></i></button>
+    </header>
+
+    <main class="admin-main">
+      <nav class="admin-breadcrumb" id="admin-breadcrumb" aria-label="当前位置">
+        <button class="admin-breadcrumb-link" id="breadcrumb-home" type="button" data-view="overview">后台首页</button>
+        <i data-lucide="chevron-right" aria-hidden="true"></i>
+        <span id="breadcrumb-current" aria-current="page">概览</span>
+      </nav>
+      <section class="admin-view" id="view-overview">
+        <div class="overview-title-row">
+          <h1>训练数据一览</h1>
+          <span class="view-heading-date"><i data-lucide="calendar-days" aria-hidden="true"></i><span id="current-date"></span></span>
+        </div>
+        <div class="admin-metrics">
+          <article><i data-lucide="keyboard"></i><span>竞速次数</span><strong id="stat-attempts">0</strong><small>累计提交</small></article>
+          <article><i data-lucide="users"></i><span>注册账号</span><strong id="stat-participants">0</strong><small id="stat-participant-note">0 人参加竞速</small></article>
+          <article><i data-lucide="gauge"></i><span>平均字数</span><strong id="stat-average">0</strong><small>字 / 分钟</small></article>
+          <article><i data-lucide="award"></i><span>最高纪录</span><strong id="stat-top">0</strong><small>字 / 分钟</small></article>
+        </div>
+        <section class="admin-section quick-section">
+          <header><div><h2>内容状态</h2><p>当前可用的练习素材</p></div></header>
+          <div class="content-health">
+            <div class="health-mark"><i data-lucide="circle-check-big"></i></div>
+            <div><strong id="stat-passages">0 篇文章正在使用</strong><p>自由练习与一分钟竞速文章均可在文章管理中维护。</p></div>
+            <button class="secondary-button jump-button" type="button" data-jump="passages">管理文章<i data-lucide="arrow-right"></i></button>
+          </div>
+        </section>
+        <section class="admin-chart-grid">
+          <article class="admin-section chart-section"><header><div><h2>速度趋势</h2><p>近 14 天学生平均训练速度</p></div></header><div id="overview-speed-chart" class="overview-chart"></div></article>
+          <article class="admin-section chart-section"><header><div><h2>训练活动</h2><p>每天完成的练习记录</p></div></header><div id="overview-activity-chart" class="overview-chart"></div></article>
+          <article class="admin-section chart-section chart-wide"><header><div><h2>训练模式分布</h2><p>查看学生主要使用哪些训练内容</p></div></header><div id="overview-mode-chart" class="overview-chart overview-mode-chart"></div></article>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-admins" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">权限与协作</p><h1>后台账号</h1><p>超级管理员可以创建、停用和重置其他后台管理员。</p></div>
+          
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>管理员列表</strong><div class="table-toolbar-actions"><button class="primary-button" id="admin-account-open" type="button"><i data-lucide="user-plus"></i><span>创建管理员</span></button><span id="admin-account-count">共 0 个</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="admin-account-search" type="search" placeholder="搜索账号或姓名"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">角色</span>
+              <select id="admin-account-role-filter" class="admin-filter-select" aria-label="按角色筛选"><option value="">全部角色</option><option value="superadmin">超级管理员</option><option value="manager">普通管理员</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">状态</span>
+              <select id="admin-account-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="1">启用</option><option value="0">停用</option></select>
+            </div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>账号</th><th>角色</th><th>状态</th><th>最后登录</th><th>创建时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="admin-account-table"></tbody></table></div>
+          <p class="table-empty" id="admin-account-empty" hidden>暂无管理员账号。</p>
+          <div class="pagination" id="admin-account-pagination" hidden><button class="icon-button" id="admin-account-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="admin-account-page-label">第 1 / 1 页</span><button class="icon-button" id="admin-account-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-passages" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">内容管理</p><h1>练习文章</h1><p>“一分钟挑战”分类的文章只会用于竞速模式。</p></div>
+          
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar is-filtered">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="passage-search" type="search" placeholder="搜索标题或分类"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">分类</span>
+              <select id="passage-category-filter" class="admin-filter-select" aria-label="按分类筛选"><option value="">全部分类</option></select>
+            </div>
+            <div class="table-toolbar-actions"><button class="primary-button" id="add-passage" type="button"><i data-lucide="plus"></i><span>新增文章</span></button><span id="passage-count">0 篇</span></div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>文章</th><th>分类</th><th>字数</th><th>状态</th><th>更新时间</th><th><span class="sr-only">操作</span></th></tr></thead>
+              <tbody id="passage-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="passage-empty" hidden>没有找到匹配的文章。</p>
+          <div class="pagination" id="passage-pagination" hidden><button class="icon-button" id="passage-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="passage-page-label">第 1 / 1 页</span><button class="icon-button" id="passage-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-users" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">账号管理</p><h1>学生账号</h1><p>账号被停用后会立即退出登录，并从排行榜中隐藏。</p></div>
+          
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar is-filtered">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="user-search" type="search" placeholder="搜索姓名、昵称或学号"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">班级</span>
+              <select id="user-class-filter" class="admin-filter-select"><option value="">全部班级</option><option value="unassigned">待分班</option></select>
+            </div>
+            <div class="table-toolbar-actions"><button class="primary-button" id="student-create-open" type="button"><i data-lucide="user-plus"></i><span>新建学生</span></button><button class="secondary-button" id="student-import-open" type="button"><i data-lucide="file-spreadsheet"></i><span>导入学生</span></button><button class="secondary-button" id="refresh-users" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="user-count">0 个账号</span></div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>学生</th><th>学号</th><th>班级</th><th>竞速次数</th><th>个人最好</th><th>状态</th><th>最后登录</th><th>注册时间</th><th><span class="sr-only">操作</span></th></tr></thead>
+              <tbody id="user-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="user-empty" hidden>没有找到匹配的学生账号。</p>
+          <div class="pagination" id="user-pagination" hidden><button class="icon-button" id="user-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="user-page-label">第 1 / 1 页</span><button class="icon-button" id="user-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-classes" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">班级与分组 · 1.2</p><h1>班级分组</h1><p>已有注册学生会保留原账号和历史数据，未分班学生会显示在“待分班”列表。</p></div>
+          
+        </header>
+        <section class="admin-section table-section class-list-section">
+          <div class="table-toolbar"><strong>班级列表</strong><div class="table-toolbar-actions"><button class="primary-button" id="class-create-open" type="button"><i data-lucide="plus"></i><span>新建班级</span></button><button class="secondary-button" id="refresh-classes" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="class-count">共 0 个班级</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="class-search" type="search" placeholder="搜索班级名或说明"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">状态</span>
+              <select id="class-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="1">启用</option><option value="0">停用</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">学期</span>
+              <select id="class-term-filter" class="admin-filter-select" aria-label="按学期筛选"><option value="">全部学期</option></select>
+            </div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>班级</th><th>学期/届次</th><th>学生人数</th><th>状态</th><th>说明</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="class-table"></tbody></table></div>
+          <p class="table-empty" id="class-empty" hidden>还没有创建班级。</p>
+          <div class="pagination" id="class-pagination" hidden><button class="icon-button" id="class-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="class-page-label">第 1 / 1 页</span><button class="icon-button" id="class-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+        <section class="admin-section table-section unassigned-section">
+          <div class="table-toolbar"><strong>待分班学生</strong><span id="unassigned-count">0 人</span></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="unassigned-search" type="search" placeholder="搜索姓名或账号"></label>
+            </div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>学生</th><th>学号</th><th>注册时间</th><th>最后登录</th></tr></thead><tbody id="unassigned-table"></tbody></table></div>
+          <p class="table-empty" id="unassigned-empty" hidden>所有已启用学生都已分班。</p>
+          <div class="pagination" id="unassigned-pagination" hidden><button class="icon-button" id="unassigned-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="unassigned-page-label">第 1 / 1 页</span><button class="icon-button" id="unassigned-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-progress" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">学习监测</p><h1>学生打字进步</h1><p>首次三次与最近三次训练对比。至少完成四次训练后显示变化。</p></div>
+        </header>
+        <div class="admin-metrics progress-metrics">
+          <article><i data-lucide="users-round"></i><span>已监测学生</span><strong id="progress-monitored">0</strong><small>完成过训练</small></article>
+          <article><i data-lucide="trending-up"></i><span>有进步学生</span><strong id="progress-improving">0</strong><small>速度或准确率提升</small></article>
+          <article><i data-lucide="gauge"></i><span>平均速度变化</span><strong id="progress-speed-change">0</strong><small>字 / 分</small></article>
+          <article><i data-lucide="calendar-check"></i><span>近 7 天训练</span><strong id="progress-week-sessions">0</strong><small>次完成记录</small></article>
+        </div>
+        <section class="admin-section table-section">
+          <div class="table-toolbar progress-toolbar is-filtered">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="progress-search" type="search" placeholder="搜索学生姓名或账号"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">班级</span>
+              <select id="progress-class-filter" class="admin-filter-select" aria-label="按班级筛选"><option value="">全部班级</option><option value="unassigned">待分班</option></select>
+            </div>
+            <div class="progress-toolbar-actions"><button class="secondary-button" id="export-progress-weekly" type="button" title="请选择具体班级后导出，单次最多 2000 条周记录"><i data-lucide="download"></i><span>导出周报</span></button><button class="secondary-button" id="refresh-progress" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="progress-count">0 名学生</span></div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th><button class="sort-button" type="button" data-sort="name">学生</button></th><th><button class="sort-button" type="button" data-sort="sessions">训练次数</button></th><th><button class="sort-button" type="button" data-sort="dailyHours">日均练习</button></th><th><button class="sort-button" type="button" data-sort="firstSpeed">首次速度</button></th><th><button class="sort-button" type="button" data-sort="recentSpeed">近期速度</button></th><th><button class="sort-button" type="button" data-sort="speedChange">速度变化</button></th><th><button class="sort-button" type="button" data-sort="accuracyChange">准确率变化</button></th><th><button class="sort-button" type="button" data-sort="latestAt">最近训练</button></th><th><span class="sr-only">详情</span></th></tr></thead>
+              <tbody id="progress-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="progress-empty" hidden>暂无学生训练数据，学生完成一关练习后会自动出现。</p>
+          <div class="pagination" id="progress-pagination" hidden><button class="icon-button" id="progress-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="progress-page-label">第 1 / 1 页</span><button class="icon-button" id="progress-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-assignments" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">教学闭环 · 1.1</p><h1>教学任务</h1><p>可面向全体或指定学生布置任务，完成记录会自动关联训练结果。</p></div>
+          
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>任务列表</strong><div class="table-toolbar-actions"><button class="primary-button" id="assignment-open" type="button"><i data-lucide="plus"></i><span>发布任务</span></button><button class="secondary-button" id="refresh-assignments" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="assignment-count">共 0 个</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="assignment-search" type="search" placeholder="搜索任务名称或说明"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">状态</span>
+              <select id="assignment-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="1">进行中</option><option value="0">已停用</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">课程</span>
+              <select id="assignment-mode-filter" class="admin-filter-select" aria-label="按课程类型筛选"><option value="">全部课程</option><option value="beginner">新手入门</option><option value="english-word">英文单词</option><option value="english-phrase">英文语句</option><option value="english-article">英文文章</option><option value="pinyin-syllable">拼音音节</option><option value="pinyin-word">拼音词组</option><option value="pinyin-article">拼音文章</option><option value="all">所有课程</option></select>
+            </div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>任务</th><th>课程</th><th>目标</th><th>截止时间</th><th>完成情况</th><th>状态</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="assignment-table"></tbody></table></div>
+          <p class="table-empty" id="assignment-empty" hidden>还没有教学任务。</p>
+          <div class="pagination" id="assignment-pagination" hidden><button class="icon-button" id="assignment-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="assignment-page-label">第 1 / 1 页</span><button class="icon-button" id="assignment-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-competitions" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">赛事主持</p><h1>现场打字比赛</h1><p>个人赛按中文或英文同题限时比速度；团队赛使用阵营占领，由裁判统一开赛。</p></div>
+          
+        </header>
+        <section class="admin-section competition-bar">
+          <div class="competition-bar-main">
+            <span class="competition-panel-icon"><i data-lucide="flag"></i></span>
+            <div>
+              <strong>团队阵营赛</strong>
+              <p id="battle-competition-summary" class="competition-room-summary">选手选好红蓝阵营后，裁判再开始。</p>
+            </div>
+          </div>
+          <div class="competition-bar-side">
+            <span id="battle-competition-status" class="competition-room-status">读取中</span>
+            <button class="secondary-button" id="battle-console-open" type="button"><i data-lucide="settings-2"></i><span>打开控制台</span></button>
+          </div>
+        </section>
+
+        <dialog class="competition-dialog" id="competition-dialog">
+          <button class="dialog-close" id="close-competition" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+          <div class="competition-dialog-head">
+            <p class="eyebrow">赛事主持</p>
+            <h2>创建个人打字赛</h2>
+            <p>中文 / 英文 · 同题限时，比打字速度。创建后在「赛事管理」里开启检录。</p>
+            <ol class="competition-steps" aria-label="个人赛流程"><li><b>1</b> 创建赛事</li><li><b>2</b> 开启检录</li><li><b>3</b> 裁判开赛</li></ol>
+          </div>
+          <form id="competition-form" class="form-grid">
+            <label class="competition-name-field"><span>赛事名称</span><input id="competition-name-input" type="text" maxlength="40" required placeholder="例如：25级中文打字个人赛"></label>
+            <label><span>比赛语言</span><select id="competition-mode-input"><option value="speed-zh">中文打字</option><option value="speed-en">英文打字</option></select></label>
+            <label><span>赛程</span><select id="competition-schedule-input"><option value="single">单日</option><option value="multi_day">跨天</option></select></label>
+            <label><span>比赛时长</span><select id="competition-duration-input"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option><option value="300000">5 分钟</option></select></label>
+            <label><span>题面长度</span><select id="competition-text-length-input"><option value="">跟随时长（推荐）</option><option value="300">约 300 字</option><option value="400">约 400 字</option><option value="600">约 600 字</option><option value="800">约 800 字</option></select></label>
+            <label class="competition-team-field" hidden><span>团体赛制</span><select id="competition-series-input"><option value="single">单场</option><option value="league">循环赛</option></select></label>
+            <label class="competition-team-field" hidden><span>甲方名称</span><input id="competition-side-a-input" type="text" maxlength="40" placeholder="例如：一班"></label>
+            <label class="competition-team-field" hidden><span>乙方名称</span><input id="competition-side-b-input" type="text" maxlength="40" placeholder="例如：二班"></label>
+            <label class="competition-team-field competition-league-field" hidden><span>循环赛参赛方</span><input id="competition-side-names-input" type="text" maxlength="300" placeholder="例如：一班、二班、三班、四班"></label>
+            <label class="competition-team-field" hidden><span>每方出场人数</span><input id="competition-team-size-input" type="number" min="1" max="30" value="5"></label>
+            <details class="competition-pool" id="competition-pool">
+              <summary><span>指定文章（可选）</span><small id="competition-pool-count">未指定 · 按轮次自动取题</small></summary>
+              <p class="competition-pool-hint">候选项就是「练习文章」里的文章，按分类分组，不用另外维护。勾选后每轮从选中的文章里随机抽一篇（优先抽本场没用过的）。速度赛抽中的那篇作为开头，系统会自动衔接同分类的其它文章补足到 400 字左右，保证时限内打不完。不勾选则按内置题库自动取题。事后停用文章不影响已建赛事，但删除会让该赛事开赛时报错。</p>
+              <div class="competition-pool-toolbar">
+                <span id="competition-pool-tip">正在读取题库…</span>
+                <button class="text-button" id="competition-pool-clear" type="button">清空选择</button>
+              </div>
+              <div class="competition-pool-list" id="competition-pool-list" role="group" aria-label="可选文章"></div>
+            </details>
+            <div class="form-actions"><p>创建后在「赛事管理」里开启检录，等学生到齐再开始。</p><div class="form-actions-buttons"><button class="secondary-button" id="cancel-competition" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="plus"></i><span>创建个人赛</span></button></div></div>
+          </form>
+        </dialog>
+
+        <dialog class="battle-console-dialog" id="battle-console-dialog">
+          <button class="dialog-close" id="close-battle-console" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+          <div class="battle-console-head">
+            <p class="eyebrow">红蓝对抗</p>
+            <h2>团队阵营赛控制台</h2>
+            <p>时间结束，占领更多的一方获胜。学生从首页「打字比赛 → 团队阵营赛」加入。</p>
+          </div>
+            <div class="competition-referee-controls">
+              <div class="competition-room-config"><label><span>每局时长</span><select id="battle-competition-duration"><option value="60000">1 分钟</option><option value="90000">90 秒</option><option value="120000" selected>2 分钟</option><option value="180000">3 分钟</option><option value="240000">4 分钟</option></select></label><button class="secondary-button" id="battle-competition-prepare" type="button"><i data-lucide="plus"></i>新建比赛房间</button></div>
+              <details class="competition-pool" id="battle-pool">
+                <summary><span>指定文章（可选）</span><small id="battle-pool-count">未指定 · 用默认短句</small></summary>
+                <p class="competition-pool-hint">候选项就是「练习文章」里的中文文章。勾选后建房间时随机抽一篇，补足长度后按句末标点切成 30–48 字的段，全场共用这套段序列（每打完一段攻占 1% 领地）。不勾选则用内置的 12 条短句。</p>
+                <div class="competition-pool-toolbar">
+                  <span id="battle-pool-tip">正在读取题库…</span>
+                  <button class="text-button" id="battle-pool-clear" type="button">清空选择</button>
+                </div>
+                <div class="competition-pool-list" id="battle-pool-list" role="group" aria-label="团队赛可选文章"></div>
+              </details>
+              <div id="battle-competition-roster" class="competition-team-roster" aria-live="polite">正在读取阵营名单…</div>
+              <div class="competition-room-actions"><button class="primary-button" id="battle-competition-start" type="button"><i data-lucide="play"></i>裁判开始本局</button><a class="secondary-button" href="/#battle-competition" target="_blank" rel="noopener"><i data-lucide="monitor-up"></i>投影战况</a></div>
+              <p class="competition-room-help">学生从首页「打字比赛 → 团队阵营赛」加入，双方有人后即可开赛。</p>
+            </div>
+        </dialog>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><div><strong>赛事管理</strong><p class="competition-list-hint">开启检录、统一开赛，结束后可导出成绩。</p></div><div class="table-toolbar-actions"><button class="primary-button" id="competition-open" type="button"><i data-lucide="plus"></i><span>创建赛事</span></button><button class="secondary-button" id="refresh-competitions" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="competition-count">共 0 场</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="competition-search" type="search" placeholder="搜索赛事名称"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">状态</span>
+              <select id="competition-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="draft">草稿</option><option value="registration">检录中</option><option value="running">比赛中</option><option value="paused">已暂停</option><option value="finished">已结束</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">语言</span>
+              <select id="competition-language-filter" class="admin-filter-select" aria-label="按语言筛选"><option value="">全部语言</option><option value="zh">中文</option><option value="en">英文</option></select>
+            </div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>赛事</th><th>模式</th><th>状态</th><th>检录情况</th><th>创建时间</th><th class="competition-actions-heading">操作</th></tr></thead><tbody id="competition-table"></tbody></table></div>
+          <p class="table-empty" id="competition-empty" hidden>还没有创建比赛赛事。</p>
+          <div class="pagination" id="competition-pagination" hidden><button class="icon-button" id="competition-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="competition-page-label">第 1 / 1 页</span><button class="icon-button" id="competition-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-scores" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">竞速管理</p><h1>成绩记录</h1><p>可清理测试数据或明显异常的排行榜记录。</p></div>
+          
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>最近提交</strong><div class="table-toolbar-actions"><button class="secondary-button" id="export-scores" type="button" title="导出当前筛选（含班级）下的全部竞速成绩"><i data-lucide="download"></i><span>导出成绩</span></button><button class="secondary-button" id="refresh-scores" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="score-count">共 0 条</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="score-search" type="search" placeholder="搜索学生姓名或账号"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">班级</span>
+              <select id="score-class-filter" class="admin-filter-select" aria-label="按班级筛选"><option value="">全部班级</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">时间</span>
+              <select id="score-range-filter" class="admin-filter-select" aria-label="按时间筛选"><option value="">全部时间</option><option value="today">今天</option><option value="7d">近 7 天</option><option value="30d">近 30 天</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">分类</span>
+              <select id="score-category-filter" class="admin-filter-select" aria-label="按文章分类筛选"><option value="">全部分类</option></select>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>学生账号</th><th>班级</th><th>正确字数</th><th>正确率</th><th>错字</th><th>挑战文章</th><th>提交时间</th><th><span class="sr-only">操作</span></th></tr></thead>
+              <tbody id="score-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="score-empty" hidden>暂时还没有竞速成绩。</p>
+          <div class="pagination" id="score-pagination" hidden>
+            <button class="icon-button" id="previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button>
+            <span id="page-label">第 1 / 1 页</span>
+            <button class="icon-button" id="next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button>
+          </div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-ai-settings" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">趣味游戏 · AI 配置</p><h1>AI 服务设置</h1><p>配置电商客服挑战使用的模型。密钥只在服务端保存，学生端不会读取。</p></div>
+        </header>
+        <section class="admin-section ai-settings-section">
+          <form id="ai-settings-form" class="ai-settings-form">
+            <div class="ai-settings-note"><i data-lucide="shield-check"></i><div><strong>安全提示</strong><p>建议使用百炼专用 API Key，并限制额度。保存后前台只会拿到场景、对话和评分结果。</p></div><span id="ai-settings-status" class="status-badge">未配置</span></div>
+            <section class="ai-settings-subsection">
+              <header><div><strong>模型连接</strong><span>告诉系统应该调用哪一个兼容接口。</span></div><i data-lucide="plug-zap"></i></header>
+              <div class="form-grid ai-settings-grid">
+                <label><span>服务商</span><input id="ai-provider-input" type="text" maxlength="80" value="阿里云百炼"></label>
+                <label><span>模型名称</span><input id="ai-model-input" type="text" maxlength="120" placeholder="例如：qwen-flash" required></label>
+                <label class="full"><span>Base URL</span><input id="ai-base-url-input" type="url" maxlength="500" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" required><small>填写兼容 OpenAI Chat Completions 的基础地址，不要重复填写 /chat/completions。</small></label>
+                <label class="full"><span>API Key</span><input id="ai-api-key-input" type="password" maxlength="300" autocomplete="new-password" placeholder="已配置时留空表示保持原密钥"><small>页面不会回显原密钥；只有填写新值时才会替换。</small></label>
+                <label class="full"><span>消费者角色提示词</span><textarea id="ai-role-prompt-input" rows="4" maxlength="2000" placeholder="定义 AI 消费者的身份、语气和行为边界"></textarea><small>只影响电商客服挑战中的消费者角色，不会把提示词返回给学生端。</small></label>
+              </div>
+            </section>
+            <section class="ai-settings-subsection ai-settings-policy">
+              <header><div><strong>使用策略</strong><span>控制学生端是否可以进入 AI 客服挑战。</span></div><i data-lucide="toggle-right"></i></header>
+              <label class="switch-field"><input id="ai-enabled-input" type="checkbox"><span class="switch-control"></span><span><strong>启用 AI 客服挑战</strong><small>关闭后仍可进入内置训练场景，不调用外部模型。</small></span></label>
+            </section>
+            <p id="ai-settings-message" class="form-message" role="status"></p>
+            <footer class="ai-settings-actions"><button class="secondary-button" id="ai-test-button" type="button"><i data-lucide="plug-zap"></i><span>测试连接</span></button><button class="primary-button" type="submit"><i data-lucide="save"></i><span>保存设置</span></button></footer>
+          </form>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-bug-reports" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">学生反馈</p><h1>意见反馈</h1><p>学生在游戏大厅「问题反馈」提交的内容，处理后可以把状态改成「处理中 / 已处理」。</p></div>
+          
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>反馈列表</strong><div class="table-toolbar-actions"><button class="secondary-button" id="refresh-bug-reports" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="bug-report-count">共 0 条</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="bug-report-search" type="search" placeholder="搜索标题或学生姓名"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">状态</span>
+              <select id="bug-report-status-filter" class="admin-filter-select" aria-label="按状态筛选"><option value="">全部状态</option><option value="待处理">待处理</option><option value="处理中">处理中</option><option value="已处理">已处理</option></select>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">优先级</span>
+              <select id="bug-report-priority-filter" class="admin-filter-select" aria-label="按优先级筛选"><option value="">全部优先级</option><option value="P0">P0 阻断</option><option value="P1">P1 严重</option><option value="P2">P2 一般</option><option value="P3">P3 轻微</option></select>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>反馈</th><th>学生</th><th>优先级</th><th>状态</th><th>提交时间</th><th>附件</th><th><span class="sr-only">操作</span></th></tr></thead>
+              <tbody id="bug-report-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="bug-report-empty" hidden>还没有学生提交反馈。</p>
+          <div class="pagination" id="bug-report-pagination" hidden><button class="icon-button" id="bug-report-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="bug-report-page-label">第 1 / 1 页</span><button class="icon-button" id="bug-report-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-agent-logs" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">AI 管理助手</p><h1>助手审计</h1><p>管理助手每次提问、调用了哪些工具、AI 回了什么，都会记在这里。助手只能查和导出，不能改数据。</p></div>
+        </header>
+        <section class="admin-section table-section">
+          <div class="table-toolbar"><strong>提问记录</strong><div class="table-toolbar-actions"><button class="secondary-button" id="refresh-agent-logs" type="button"><i data-lucide="refresh-cw"></i><span>刷新</span></button><span id="agent-log-count">共 0 条</span></div></div>
+          <div class="table-filters">
+            <div class="filter-field">
+              <span class="filter-label">关键词</span>
+              <label class="search-field"><i data-lucide="search"></i><input id="agent-log-search" type="search" placeholder="搜索提问或管理员"></label>
+            </div>
+            <div class="filter-field">
+              <span class="filter-label">时间</span>
+              <select id="agent-log-range" class="admin-filter-select" aria-label="按时间筛选"><option value="">全部时间</option><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option></select>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>提问</th><th>管理员</th><th>调用工具</th><th>来源</th><th>时间</th><th>AI 回复摘要</th></tr></thead>
+              <tbody id="agent-log-table"></tbody>
+            </table>
+          </div>
+          <p class="table-empty" id="agent-log-empty" hidden>还没有提问记录。打开右下角的「管理助手」问一句试试。</p>
+          <div class="pagination" id="agent-log-pagination" hidden><button class="icon-button" id="agent-log-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="agent-log-page-label">第 1 / 1 页</span><button class="icon-button" id="agent-log-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+        </section>
+      </section>
+      <section class="admin-view" id="view-agent" hidden>
+        <header class="view-heading">
+          <div><p class="eyebrow">AI 管理助手</p><h1>管理助手</h1><p>用自然语言查数据、看趋势、导出成绩。只读，不能改数据；每次提问都会记录到「助手审计」。</p></div>
+          <button class="primary-button" id="agent-new-chat" type="button"><i data-lucide="plus"></i><span>新对话</span></button>
+        </header>
+        <div class="agent-page">
+          <aside class="agent-sidebar" aria-label="历史对话">
+            <div class="agent-sidebar-head"><strong>历史对话</strong><span id="agent-conversation-count">共 0 个</span></div>
+            <ul class="agent-conversation-list" id="agent-conversation-list"></ul>
+            <p class="agent-conversation-empty" id="agent-conversation-empty" hidden>还没有历史对话</p>
+          </aside>
+          <section class="agent-chat">
+            <div class="agent-messages" id="agent-messages" aria-live="polite"></div>
+            <form class="agent-form" id="agent-form">
+              <div class="agent-quick-prompts" aria-label="常用问题">
+                <button type="button" class="agent-quick-prompt" data-prompt="本周比上周怎么样">本周 vs 上周</button>
+                <button type="button" class="agent-quick-prompt" data-prompt="谁最近没练习">谁没练习</button>
+                <button type="button" class="agent-quick-prompt" data-prompt="哪些键最容易打错">易错键</button>
+                <button type="button" class="agent-quick-prompt" data-prompt="各班对比">各班对比</button>
+              </div>
+              <label class="sr-only" for="agent-input">输入管理问题</label>
+              <div class="agent-compose">
+                <textarea id="agent-input" rows="3" maxlength="2000" placeholder="输入您的问题..."></textarea>
+                <button class="agent-send" type="submit" aria-label="发送"><i data-lucide="send"></i></button>
+              </div>
+              <footer><span id="agent-status" class="form-message" role="status"></span><small class="agent-send-hint">Ctrl + 回车 发送</small></footer>
+            </form>
+          </section>
+          <aside class="agent-preview" id="agent-preview" hidden aria-label="导出文件预览">
+            <header><div><strong id="agent-preview-title">文件预览</strong><small id="agent-preview-status"></small></div><button type="button" id="agent-preview-close" aria-label="关闭预览">✕</button></header>
+            <div class="agent-preview-content" id="agent-preview-content"></div>
+            <footer><a class="primary-button" id="agent-preview-download" download>下载 CSV</a></footer>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+
+  </div>
+
+  <dialog class="bug-report-dialog" id="bug-report-dialog">
+    <button class="dialog-close" id="close-bug-report" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow" id="bug-report-code">BUG</p>
+    <h2 id="bug-report-title">反馈</h2>
+    <p class="bug-report-meta" id="bug-report-meta"></p>
+    <div class="bug-report-fields" id="bug-report-fields"></div>
+    <p class="bug-report-attachment" id="bug-report-attachment" hidden></p>
+    <footer>
+      <label class="bug-report-status-field"><span>处理状态</span><select id="bug-report-status-select"><option value="待处理">待处理</option><option value="处理中">处理中</option><option value="已处理">已处理</option></select></label>
+      <div class="bug-report-actions">
+        <button class="secondary-button" id="cancel-bug-report" type="button">关闭</button>
+        <button class="primary-button" id="save-bug-report-status" type="button"><i data-lucide="check"></i><span>保存状态</span></button>
+      </div>
+    </footer>
+  </dialog>
+
+  <dialog class="passage-dialog" id="passage-dialog">
+    <form id="passage-form">
+      <header><div><p class="eyebrow">文章编辑</p><h2 id="passage-dialog-title">新增文章</h2></div><button class="dialog-close" id="close-passage-dialog" type="button" aria-label="关闭"><i data-lucide="x"></i></button></header>
+      <input id="passage-id" type="hidden">
+      <div class="form-grid">
+        <label><span>文章标题</span><input id="passage-title-input" type="text" maxlength="60" required placeholder="例如：清晨的校园"></label>
+        <label><span>文章分类</span><select id="passage-category-input" required><option value="">请选择分类</option></select></label>
+      </div>
+      <label class="content-field"><span>练习正文</span><textarea id="passage-content-input" rows="11" minlength="20" maxlength="2000" required placeholder="输入至少 20 个字符的中文练习内容"></textarea><small id="content-counter">0 / 2000</small></label>
+      <div class="passage-ai-tools"><button class="secondary-button" id="generate-passage-ai" type="button" disabled><i data-lucide="sparkles"></i><span>AI 生成文章</span></button><small id="passage-ai-hint">先填写文章标题和分类，再根据这两个信息生成正文。</small></div>
+      <label class="switch-field"><input id="passage-active-input" type="checkbox" checked><span class="switch-control"></span><span><strong>立即启用</strong><small>关闭后，前台不会抽取这篇文章</small></span></label>
+      <footer><button class="secondary-button" id="cancel-passage" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="save"></i><span>保存文章</span></button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="password-reset-dialog" id="password-reset-dialog">
+    <form id="password-reset-form">
+      <button class="dialog-close" id="close-password-reset" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">账号安全</p>
+      <h2>重置学生密码</h2>
+      <p>正在为 <strong id="reset-user-name">学生</strong> 设置新密码。保存后，该账号在其他设备上的登录状态会立即失效。</p>
+      <input id="reset-user-id" type="hidden">
+      <label><span>新密码</span><input id="reset-password-input" type="password" minlength="6" maxlength="12" pattern="(?:[0-9]{6,12}|(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,12})" autocomplete="new-password" required placeholder="6-12 位纯数字，或字母数字组合"></label>
+      <label><span>确认新密码</span><input id="reset-password-confirm" type="password" minlength="6" maxlength="12" pattern="(?:[0-9]{6,12}|(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,12})" autocomplete="new-password" required placeholder="再次输入新密码"></label>
+      <p class="reset-error" id="reset-password-error" role="alert"></p>
+      <footer><button class="secondary-button" id="cancel-password-reset" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="key-round"></i><span>确认重置</span></button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="student-profile-dialog" id="student-profile-dialog">
+    <form id="student-profile-form">
+      <button class="dialog-close" id="close-student-profile" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">账号资料</p><h2>编辑学生账号</h2><p class="student-profile-intro">可修改姓名、学号、班级和头像，保存后立即生效。</p>
+      <input id="student-profile-id" type="hidden">
+      <div class="form-grid">
+        <label><span>学生姓名</span><input id="student-profile-name" type="text" maxlength="12" required></label>
+        <label><span>学号</span><input id="student-profile-student-id" type="text" maxlength="32" placeholder="可留空"></label>
+        <label class="full"><span>所属班级</span><select id="student-profile-class"><option value="">暂不分班</option></select></label>
+      </div>
+      <div class="student-profile-avatar-field"><span>头像</span><div class="student-profile-avatar-row"><div class="student-profile-avatar-preview" id="student-profile-avatar-preview">字</div><input id="student-profile-avatar" type="file" accept="image/png,image/jpeg,image/webp"><small>支持 PNG、JPG、WEBP，最大约 160KB</small></div></div>
+      <p class="reset-error" id="student-profile-error" role="alert"></p>
+      <footer><button class="secondary-button" id="cancel-student-profile" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="save"></i><span>保存资料</span></button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="student-create-dialog" id="student-create-dialog">
+    <form id="student-create-form">
+      <button class="dialog-close" id="close-student-create" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">实名账号</p><h2>新建学生账号</h2>
+      <p class="student-create-intro">填写一名学生即可立即创建账号。初始密码留空时默认使用学号，学生可以用姓名或学号登录。</p>
+      <div class="form-grid">
+        <label><span>学生姓名</span><input id="student-create-name" type="text" maxlength="12" autocomplete="off" required></label>
+        <label><span>学号</span><input id="student-create-student-id" type="text" maxlength="32" autocomplete="off" required placeholder="4-32 位字母或数字"></label>
+        <label><span>初始密码 <small>可留空</small></span><input id="student-create-password" type="text" minlength="6" maxlength="12" autocomplete="off" placeholder="留空则使用学号"></label>
+        <label><span>所属班级</span><select id="student-create-class"><option value="">暂不分班</option></select></label>
+      </div>
+      <p class="reset-error" id="student-create-error" role="alert"></p>
+      <footer><button class="secondary-button" id="cancel-student-create" type="button">取消</button><button class="primary-button" type="submit"><i data-lucide="user-plus"></i><span>创建账号</span></button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="progress-dialog" id="progress-dialog">
+    <section>
+      <button class="dialog-close" id="close-progress-dialog" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">学习轨迹</p><h2 id="progress-student-name">学生</h2>
+      <p class="progress-dialog-summary" id="progress-dialog-summary"></p>
+      <div class="progress-chart-wrap"><svg id="progress-chart" viewBox="0 0 680 240" role="img" aria-label="速度变化趋势"></svg></div>
+      <div class="progress-mode-list" id="progress-mode-list"></div>
+      <h3>最近训练</h3><div class="progress-recent-list" id="progress-recent-list"></div>
+    </section>
+  </dialog>
+
+  <dialog class="student-import-dialog" id="student-import-dialog">
+    <button class="dialog-close" id="close-student-import" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow">实名账号</p>
+    <h2>批量导入学生</h2>
+    <p class="import-intro">导入后账号就是学生姓名，学生使用姓名登录；初始密码默认为学号。提交前可在右侧修改或删除名单行。导入部分失败时，成功行会自动移出，失败行会标红并保留，修正后可继续导入。</p>
+    <section class="import-class-step" aria-labelledby="student-import-class-step-title">
+      <div class="import-class-step-head"><span class="import-step-number">1</span><div><strong id="student-import-class-step-title">先选择班级</strong><small>导入后学生会自动加入所选班级</small></div></div>
+      <div class="import-class-field"><label for="student-import-class">导入到班级</label><select id="student-import-class"><option value="">请选择班级（推荐）</option></select><button class="text-button import-add-class" id="student-import-add-class" type="button"><i data-lucide="plus"></i><span>新建班级</span></button></div>
+    </section>
+    <div class="student-import-layout">
+      <div class="student-import-form-column">
+        <div class="import-tabs" role="tablist">
+          <button class="import-tab is-active" id="import-tab-excel" type="button" role="tab" aria-selected="true" aria-controls="import-panel-excel">Excel 导入</button>
+          <button class="import-tab" id="import-tab-paste" type="button" role="tab" aria-selected="false" aria-controls="import-panel-paste">粘贴文本</button>
+        </div>
+
+        <section class="import-panel" id="import-panel-excel" role="tabpanel" aria-labelledby="import-tab-excel">
+          <div class="import-excel-head">
+            <span>按模板填写后上传，支持 .xlsx / .xls / .csv</span>
+            <button class="secondary-button" id="student-import-template" type="button"><i data-lucide="download"></i><span>下载模板</span></button>
+          </div>
+          <label class="student-import-drop" id="student-import-drop" for="student-import-file">
+            <i data-lucide="file-spreadsheet"></i>
+            <strong id="student-import-file-name">点击选择 Excel，或把文件拖到这里</strong>
+            <small>单次最多 2000 人</small>
+            <input id="student-import-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+          </label>
+          <p class="import-result" id="student-import-result">还没有选择文件。</p>
+          <footer>
+            <button class="secondary-button" id="cancel-student-import" type="button">取消</button>
+            <button class="primary-button" id="student-import-submit" type="button" disabled><i data-lucide="upload"></i><span>导入学生</span></button>
+          </footer>
+        </section>
+
+        <section class="import-panel" id="import-panel-paste" role="tabpanel" aria-labelledby="import-tab-paste" hidden>
+          <p class="import-hint">每行一个学生，用逗号、制表符或空格分隔学号和姓名。</p>
+          <textarea id="student-import-text" rows="10" placeholder="20250101,张三&#10;20250102,李四"></textarea>
+          <p class="import-result" id="student-import-paste-result"></p>
+          <footer>
+            <button class="secondary-button" id="cancel-student-import-paste" type="button">取消</button>
+            <button class="primary-button" id="student-import-paste-submit" type="button"><i data-lucide="clipboard-paste"></i><span>导入粘贴内容</span></button>
+          </footer>
+        </section>
+      </div>
+      <aside class="student-import-preview-panel" aria-live="polite">
+        <div class="student-import-preview-heading"><strong>名单预览</strong><small>可编辑或删除；红色行表示上次导入失败</small></div>
+        <div class="student-import-preview" id="student-import-preview" hidden></div>
+        <p class="student-import-preview-empty" id="student-import-preview-empty">上传 Excel 或粘贴名单后，这里会显示全部数据。</p>
+      </aside>
+    </div>
+  </dialog>
+
+  <dialog class="student-import-status-dialog" id="student-import-status-dialog" aria-labelledby="student-import-status-title">
+    <div class="student-import-status-content">
+      <div class="student-import-status-icon is-loading" id="student-import-status-icon" aria-hidden="true"><span></span></div>
+      <p class="eyebrow">学生导入</p>
+      <h2 id="student-import-status-title">正在处理</h2>
+      <p class="student-import-status-message" id="student-import-status-message">正在读取文件，请稍候…</p>
+      <div class="student-import-status-progress" id="student-import-status-progress" aria-hidden="true"><span></span></div>
+      <div class="student-import-status-detail" id="student-import-status-detail"></div>
+      <button class="primary-button" id="student-import-status-close" type="button" hidden>知道了</button>
+    </div>
+  </dialog>
+
+  <dialog class="passage-preview-dialog" id="passage-preview-dialog">
+    <button class="dialog-close" id="close-passage-preview" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow" id="passage-preview-category">分类</p>
+    <h2 id="passage-preview-title">文章</h2>
+    <p class="passage-preview-meta" id="passage-preview-meta"></p>
+    <p class="passage-preview-body" id="passage-preview-body"></p>
+    <footer><button class="secondary-button" id="cancel-passage-preview" type="button">关闭</button></footer>
+  </dialog>
+
+  <dialog class="admin-account-dialog" id="admin-account-dialog">
+    <form id="admin-account-form">
+      <button class="dialog-close" id="close-admin-account" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">权限与协作</p>
+      <h2>创建管理员</h2>
+      <p class="account-dialog-intro">普通管理员可以管理学生、文章、班级和比赛；超级管理员额外可以管理后台账号。</p>
+      <div class="account-dialog-fields">
+        <label><span>账号</span><input id="admin-account-username" type="text" maxlength="24" required placeholder="例如：teacher01"></label>
+        <label><span>姓名/昵称</span><input id="admin-account-display-name" type="text" maxlength="20" required placeholder="例如：张老师"></label>
+        <label><span>初始密码</span><input id="admin-account-password" type="password" maxlength="12" required placeholder="6-12 位字母或数字"></label>
+        <label><span>角色</span><select id="admin-account-role"><option value="manager">普通管理员</option><option value="superadmin">超级管理员</option></select></label>
+      </div>
+      <footer>
+        <button class="secondary-button" id="cancel-admin-account" type="button">取消</button>
+        <button class="primary-button" type="submit"><i data-lucide="user-plus"></i><span>创建管理员</span></button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="class-dialog" id="class-dialog">
+    <form id="class-form">
+      <button class="dialog-close" id="close-class-dialog" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      <p class="eyebrow">班级与分组</p>
+      <h2 id="class-dialog-title">新建班级</h2>
+      <p class="class-dialog-intro">班级只是学生关系，不会改变已有账号和训练记录。</p>
+      <input id="class-id-input" type="hidden">
+      <div class="account-dialog-fields">
+        <label><span>班级名称</span><input id="class-name-input" type="text" maxlength="80" required placeholder="例如：25级软件技术1班"></label>
+        <label><span>学期/届次</span><input id="class-term-input" type="text" maxlength="40" placeholder="例如：2026-2027 第一学期"></label>
+      </div>
+      <label class="class-dialog-note"><span>说明（可选）</span><textarea id="class-description-input" rows="3" maxlength="300" placeholder="记录专业、任课教师或分组说明"></textarea></label>
+      <footer>
+        <button class="secondary-button" id="cancel-class-dialog" type="button">取消</button>
+        <button class="primary-button" id="class-submit" type="submit"><i data-lucide="plus"></i><span>创建班级</span></button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="class-assign-dialog" id="class-assign-dialog">
+    <button class="dialog-close" id="close-class-assign" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow">批量分班</p>
+    <h2 id="class-assign-title">添加学生</h2>
+    <p class="class-assign-intro">勾选要加入该班级的学生。已在其它班级的学生会被自动移过来，历史记录继续保留。</p>
+    <div class="class-assign-toolbar">
+      <label class="search-field"><i data-lucide="search"></i><input id="class-assign-search" type="search" placeholder="搜索姓名或账号"></label>
+      <select id="class-assign-scope" class="admin-filter-select" aria-label="学生范围"><option value="unassigned">只看未分班</option><option value="all">全部学生</option></select>
+      <button class="secondary-button" id="class-assign-select-all" type="button">全选</button>
+      <button class="secondary-button" id="class-assign-clear" type="button">清空</button>
+    </div>
+    <div class="class-assign-list" id="class-assign-list"></div>
+    <p class="class-assign-empty" id="class-assign-empty" hidden>没有匹配的学生。</p>
+    <p class="import-result" id="class-assign-result"></p>
+    <footer>
+      <span id="class-assign-count">已选 0 人</span>
+      <div class="class-assign-actions">
+        <button class="secondary-button" id="cancel-class-assign" type="button">取消</button>
+        <button class="primary-button" id="submit-class-assign" type="button"><i data-lucide="user-plus"></i><span>加入班级</span></button>
+      </div>
+    </footer>
+  </dialog>
+
+  <dialog class="class-members-dialog" id="class-members-dialog">
+    <button class="dialog-close" id="close-class-members" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <p class="eyebrow">班级成员</p>
+    <h2 id="class-members-title">班级成员</h2>
+    <details class="class-overview-details" id="class-overview-details">
+      <summary>班级概览（人数、活跃、任务与风险）</summary>
+      <div id="class-overview-content" class="class-overview-content" hidden>
+        <div class="class-overview-metrics"><article><span>班级人数</span><strong id="class-metric-members">0</strong><small>已启用成员</small></article><article><span>今日活跃</span><strong id="class-metric-active">0</strong><small>今天完成过训练</small></article><article><span>近 7 天训练</span><strong id="class-metric-sessions">0</strong><small id="class-metric-minutes">0 分钟</small></article><article><span>平均速度</span><strong id="class-metric-speed">0</strong><small id="class-metric-accuracy">准确率 0%</small></article></div>
+        <div class="class-overview-columns"><section><h3>班级任务</h3><div id="class-overview-tasks" class="class-overview-list"></div><p id="class-overview-tasks-empty" class="class-overview-empty" hidden>暂无班级任务。</p></section><section><h3>需要关注</h3><div id="class-overview-risks" class="class-overview-list"></div><p id="class-overview-risks-empty" class="class-overview-empty" hidden>当前没有明显风险学生。</p></section><section><h3>速度排行</h3><div id="class-overview-ranking" class="class-overview-list"></div><p id="class-overview-ranking-empty" class="class-overview-empty" hidden>暂无训练数据。</p></section></div>
+      </div>
+    </details>
+    <div class="class-members-toolbar">
+      <label class="search-field"><i data-lucide="search"></i><input id="class-members-search" type="search" placeholder="搜索成员姓名"></label>
+    </div>
+    <div class="table-scroll"><table><thead><tr><th>学生</th><th>加入时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="class-members-table"></tbody></table></div>
+    <p class="table-empty" id="class-members-empty" hidden>这个班级暂时没有成员。</p>
+    <div class="pagination" id="class-members-pagination" hidden><button class="icon-button" id="class-members-previous-page" type="button" aria-label="上一页"><i data-lucide="chevron-left"></i></button><span id="class-members-page-label">第 1 / 1 页</span><button class="icon-button" id="class-members-next-page" type="button" aria-label="下一页"><i data-lucide="chevron-right"></i></button></div>
+  </dialog>
+
+  <dialog class="assignment-dialog" id="assignment-dialog">
+    <button class="dialog-close" id="close-assignment" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+    <div class="assignment-dialog-head">
+      <p class="eyebrow">教学闭环</p>
+      <h2 id="assignment-dialog-title">发布任务</h2>
+      <p class="assignment-dialog-intro">设置课程、目标和截止时间，学生完成对应练习后自动更新状态。</p>
+    </div>
+    <form id="assignment-form" class="form-grid assignment-form">
+      <input id="assignment-id-input" type="hidden">
+      <label><span>任务名称</span><input id="assignment-title-input" type="text" maxlength="80" required placeholder="例如：第一周键位基础训练"></label>
+      <label><span>课程类型</span><select id="assignment-mode-input"><option value="all">所有课程</option><option value="beginner">新手入门</option><option value="english-word">英文单词</option><option value="english-phrase">英文语句</option><option value="english-article">英文文章</option><option value="pinyin-syllable">拼音音节</option><option value="pinyin-word">拼音词组</option><option value="pinyin-article">拼音文章</option></select></label>
+      <label><span>指定练习（可选）</span><input id="assignment-lesson-input" type="text" maxlength="80" placeholder="留空表示该类型任意练习"></label>
+      <label><span>任务对象</span><select id="assignment-audience-input"><option value="all">全部已启用学生</option><option value="class">指定班级</option><option value="selected">指定学生</option></select></label>
+      <label id="assignment-class-field" class="assignment-class-field"><span>选择班级</span><select id="assignment-class-input"></select></label>
+      <label id="assignment-students-field" class="assignment-students-field"><span>选择学生（可多选）</span><select id="assignment-students-input" multiple size="5"></select></label>
+      <label><span>目标准确率（可选）</span><input id="assignment-accuracy-input" type="number" min="0" max="100" step="1" placeholder="例如 90"></label>
+      <label><span>目标速度（可选）</span><input id="assignment-speed-input" type="number" min="0" max="1000" step="1" placeholder="字 / 分"></label>
+      <label><span>截止时间（可选）</span><input id="assignment-due-input" type="datetime-local"></label>
+      <label class="content-field"><span>任务说明</span><textarea id="assignment-description-input" rows="3" maxlength="300" placeholder="告诉学生本次练习的重点"></textarea></label>
+      <footer>
+        <button class="secondary-button" id="cancel-assignment" type="button">取消</button>
+        <button class="primary-button" id="assignment-submit" type="submit"><i data-lucide="plus"></i><span>发布任务</span></button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast" id="admin-toast" role="status" aria-live="polite"></div>
+  <small class="admin-copyright" aria-label="版权 lulu">© lulu</small>
+</body>
+</html>
+

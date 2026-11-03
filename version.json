@@ -1,0 +1,371 @@
+{
+  "version": "1.1.0",
+  "builtAt": "2026-11-03T06:19:46.119Z",
+  "files": [
+    {
+      "path": "backend/server.js",
+      "size": 1660176,
+      "sha256": "5bca78df2db5470456449e41517ed6214490447c8f834b694e3fa8051872791a"
+    },
+    {
+      "path": "launcher.cjs",
+      "size": 10211,
+      "sha256": "b33d23618c749abca7a3379da0f5f67a0f215aa62d4e5d7526955d455dde12cd"
+    },
+    {
+      "path": "public/.vite/manifest.json",
+      "size": 7331,
+      "sha256": "87b2fae6a7175ea08752b46f5d8edbd534e15ca17d5e48ba1829d0bff96a4c37"
+    },
+    {
+      "path": "public/admin.css",
+      "size": 104414,
+      "sha256": "558d8cce46a160f8232218a33ecee8f32190ca34da15a4f5ab2c517676007723"
+    },
+    {
+      "path": "public/admin.html",
+      "size": 76973,
+      "sha256": "f29cb8259460b33266f0c7e68b99499a774ee2b051864267be0588192fc68fcd"
+    },
+    {
+      "path": "public/admin.js",
+      "size": 178241,
+      "sha256": "eab51880cd2db7bd3d3845b45d2db967b53b28f17a82776da1a4c82ec3b7ca9f"
+    },
+    {
+      "path": "public/app.js",
+      "size": 40422,
+      "sha256": "a31321e623dcc847622cb5d5af98ebbe505efcf4e21e523fa558212e5ad95770"
+    },
+    {
+      "path": "public/assets/ArenaGame-C-pDeZ2-.css",
+      "size": 45305,
+      "sha256": "3c98e75362796dde54bc6396a49f408d9fb3de76ce0ec6653f99a4908f788f07"
+    },
+    {
+      "path": "public/assets/ArenaGame-DfevSeKS.js",
+      "size": 56604,
+      "sha256": "82f4c656d37363340b4240d7614fe54eb2920e2f8920c98855a0548f2d76ebf3"
+    },
+    {
+      "path": "public/assets/BattleGame-CqXw6NGL.css",
+      "size": 47445,
+      "sha256": "9041b116124b72919287ea4eab59b901745c69cf79a92f038ce5ff43de6f7268"
+    },
+    {
+      "path": "public/assets/BattleGame-DdP8uHB4.js",
+      "size": 43480,
+      "sha256": "12ae19fdf92bb091738b4315e9b7375d49f37f2b5d61f4b64baabdd5f4f84d79"
+    },
+    {
+      "path": "public/assets/BossGame-DS4wMRVf.js",
+      "size": 16306,
+      "sha256": "d7dbd68df1534f5242fa754bad1d958915d17a9740c22b082d955488ac5aece4"
+    },
+    {
+      "path": "public/assets/BossGame-DnD__4Ha.css",
+      "size": 13344,
+      "sha256": "59440d27f679b757c87e9c626f52d121ca974b5e328d8b363eedcdc3d7a48ac6"
+    },
+    {
+      "path": "public/assets/BugFeedback-BgZSnOZE.js",
+      "size": 13283,
+      "sha256": "0f789bdd53890ccfa714274928a2fe2322fdc844206c581536c0f56160078917"
+    },
+    {
+      "path": "public/assets/BugFeedback-CwngIdpE.css",
+      "size": 9247,
+      "sha256": "668ddac0cfb79c19c9009937b608a572d47ccc40a6b650316c15d9e9a5576737"
+    },
+    {
+      "path": "public/assets/ChaseGame-CAJ3xfOd.js",
+      "size": 38910,
+      "sha256": "0f9e562bc3a06e553482590ce36f1187b6ea7fe6aab7dd93383352428755a648"
+    },
+    {
+      "path": "public/assets/ChaseGame-Figu-vi2.css",
+      "size": 20403,
+      "sha256": "4cd9dceea2bf9123dcab2fb1b27f9a966a856f12b8f320425ee42a7055552c50"
+    },
+    {
+      "path": "public/assets/CompetitionGame-CKGD03Aa.css",
+      "size": 21260,
+      "sha256": "9ec9d8bce4b1d2b9e4745bc821e7c691ca01a7d5b557169dd2ccb657e4d0b69a"
+    },
+    {
+      "path": "public/assets/CompetitionGame-CQpKSlbK.js",
+      "size": 29568,
+      "sha256": "d0e3d6a4e2118fc167dad5f9bf95da4d61e5895d41a01013379093f0cc973393"
+    },
+    {
+      "path": "public/assets/CompetitionHub-7e3lmMqY.js",
+      "size": 1871,
+      "sha256": "756d84f60df7f2f1fea4135a9e602862abf7b95599f4e3223097d215d72b6411"
+    },
+    {
+      "path": "public/assets/CompetitionHub-B5SVvbQP.css",
+      "size": 2174,
+      "sha256": "a4cd3553925c2cc3bfc4fb3f3f0578f8e670248d871e87bbe25c884e7fa6b967"
+    },
+    {
+      "path": "public/assets/GameLobby-3ybJRLq_.js",
+      "size": 16247,
+      "sha256": "887e56d0262d5c1eaf14d68e7a1f793dc9311f87ef72fb087b2d93a7d23c60a4"
+    },
+    {
+      "path": "public/assets/GameLobby-BNQOGfg3.css",
+      "size": 12588,
+      "sha256": "07ae9a88c41be72f5af1b49b49ec11293e9ab681a230def6c4b2b418207df9e8"
+    },
+    {
+      "path": "public/assets/RoundedBoxGeometry-CvOFBySd.js",
+      "size": 1721,
+      "sha256": "e94cb884ca75484a8cd4e22711d5d4fd87fb61d4041c12038e1ac98c703fe60d"
+    },
+    {
+      "path": "public/assets/RunnerGame-4cfKL9Yt.js",
+      "size": 50170,
+      "sha256": "1ed12bef03e7a2454261555f9d69dcd29b1c85cacca49b71b62afedd9bc7f057"
+    },
+    {
+      "path": "public/assets/RunnerGame-DzOUuo6M.css",
+      "size": 15612,
+      "sha256": "e799bdf1411847543a3170aab7271a44f08913a569b0fdeec8b0ef649d4cea82"
+    },
+    {
+      "path": "public/assets/_plugin-vue_export-helper-Do7dgAAw.js",
+      "size": 76788,
+      "sha256": "e000e5a4a1ff1257a18e27ff92604c98f33a519c5813b35d2cb78d97d3fac158"
+    },
+    {
+      "path": "public/assets/arrow-down-UTJMmEzA.js",
+      "size": 339,
+      "sha256": "6c7a43c67642b176198dbca3226061830399e0a20b8e7049232e0375a88fa754"
+    },
+    {
+      "path": "public/assets/arrow-right-TNdm_nmY.js",
+      "size": 339,
+      "sha256": "428d1a540849388b012575f1f233d074e63102237920736cf3149cc21f7fbb7e"
+    },
+    {
+      "path": "public/assets/beginner-hands-clean.png",
+      "size": 35300,
+      "sha256": "f2ae7ea63408f85895eb9c7333ddc30b4b483a1d20234ac1d7f159af782fa099"
+    },
+    {
+      "path": "public/assets/beginner-hands-reference.png",
+      "size": 36135,
+      "sha256": "a05058b71a72603f2ae1645e2b56d1535c33ebb5d5abd54b387d903f15902e9d"
+    },
+    {
+      "path": "public/assets/board-B7N83VD6.js",
+      "size": 7478,
+      "sha256": "f646023f44dcd366a012a87ffb2d1b1dc21c60ee43e02d6d13f9c96af70422d0"
+    },
+    {
+      "path": "public/assets/board-o0JJjbyM.css",
+      "size": 6722,
+      "sha256": "ecdcb457eded1bcdbac2967a0adec79590cfda39473a41b40fd17788541c9f4e"
+    },
+    {
+      "path": "public/assets/bug-Dt8T5Is1.js",
+      "size": 841,
+      "sha256": "099b2874b0fb51583fdba5699ccd95b493b49536006b3e0f3b761a2d4fd0495c"
+    },
+    {
+      "path": "public/assets/chase-city-loop.png",
+      "size": 2904001,
+      "sha256": "206dc9955e79b2940e099510b25e740c0ee7276562db7368900274f63ab9b952"
+    },
+    {
+      "path": "public/assets/chase-police-rider.png",
+      "size": 1029734,
+      "sha256": "eae1231474bc9be3e97dada26fe1aa1a0ca70f452087ea6c2e4f14aacbefc27f"
+    },
+    {
+      "path": "public/assets/chase-thief-rider.png",
+      "size": 1039695,
+      "sha256": "241942e7b7b2c12c6c64382a86592208082d3353a6c39311916fbb7fcce84411"
+    },
+    {
+      "path": "public/assets/chase/README.md",
+      "size": 6728,
+      "sha256": "307fedc1c0649ae103d0cffec736224fc32553951bc6b894785fbf4cb7a0423d"
+    },
+    {
+      "path": "public/assets/chase/harbor-blue-hour-v2.png",
+      "size": 1987636,
+      "sha256": "aa806186392b5aaeaeef608b4c947814dea383f9e7b2b2c73fffb472a2164100"
+    },
+    {
+      "path": "public/assets/chase/police-portrait-v2.png",
+      "size": 1876886,
+      "sha256": "8c6e8e2f423259e01319b4b0470ad6b3717aec1ae6cb36ec71109ab98c11e848"
+    },
+    {
+      "path": "public/assets/chase/thief-portrait-v2.png",
+      "size": 2200554,
+      "sha256": "87c5a5a8b4bf2ddcb2e6e3b94578a3c566838af475ec9d2a82cf8410592686a9"
+    },
+    {
+      "path": "public/assets/english-article-course.png",
+      "size": 4503,
+      "sha256": "cff018c6d33a5a134a95adc4e57003fa744287130f629a7a87f9bf7eca8ad082"
+    },
+    {
+      "path": "public/assets/english-phrase-course.png",
+      "size": 4956,
+      "sha256": "295fae552dc7a0f6fc0d4fa66043f915d1b544d0835d7f4bae8aabcdbea1b429"
+    },
+    {
+      "path": "public/assets/english-stopwatch.png",
+      "size": 13620,
+      "sha256": "5153ce9e556cce1035ac2b30c377d24c635c9d0c0ae245775f4d56e2a4ef818d"
+    },
+    {
+      "path": "public/assets/english-word-course.png",
+      "size": 7573,
+      "sha256": "6dae565e653fbb9f7459c1f5428f64c3c96db20063b637d59515fbba3da63405"
+    },
+    {
+      "path": "public/assets/flag-Ab5UxQT-.js",
+      "size": 394,
+      "sha256": "97388b64c89cc57dbc64a0f69191c1bf4e8f1dffc4a25a84f4fbe40f734719d6"
+    },
+    {
+      "path": "public/assets/footprints-DMp3ywjV.js",
+      "size": 624,
+      "sha256": "763ac45b43f1e8b433e26e5ccabdf7aa0da7564a519ad68e39b3b3a072df0d59"
+    },
+    {
+      "path": "public/assets/home-beginner.png",
+      "size": 7738,
+      "sha256": "0804e67c289b059793eeae30a0c88ea608e763ea9df3235b533984eb8621eb87"
+    },
+    {
+      "path": "public/assets/home-english.png",
+      "size": 7977,
+      "sha256": "82997f6ec0450037cb786968b6ea4c88a2b25cfa201d00f0cdfc07da4fcdac2d"
+    },
+    {
+      "path": "public/assets/home-pinyin.png",
+      "size": 5739,
+      "sha256": "5d06c1509d78ae97ccac6b3c3002e32cb289a180875e4385d543de78f67183a7"
+    },
+    {
+      "path": "public/assets/main-BdBtH3g8.css",
+      "size": 86960,
+      "sha256": "0a81c0e6c58352b54ca21379d467b3ad32a24825f69f40b62be4f959bddb803d"
+    },
+    {
+      "path": "public/assets/main-DaKWD_ds.js",
+      "size": 137870,
+      "sha256": "595a53838f39dcab42c025c21dcdee9e46643aaecc367b230ac0287491d7b619"
+    },
+    {
+      "path": "public/assets/music-2-CsxBMXpm.js",
+      "size": 1091,
+      "sha256": "bb7fea4cdbdf7e660fb6d3dc4713fd97dc6777f0d5939821b49ce5ddfae7424b"
+    },
+    {
+      "path": "public/assets/play-BgjNykiJ.js",
+      "size": 309,
+      "sha256": "16ae654bd4bd9791affac0c1c29a76bf2d2b557dabbbbfffd56b824073bb2cdf"
+    },
+    {
+      "path": "public/assets/rotate-cw-Cf1OVaAp.js",
+      "size": 626,
+      "sha256": "75e1e15574e266e86b7ab47538cb23bb6d6026aef0b29d77e3e75c0797b48d73"
+    },
+    {
+      "path": "public/assets/runner/README.md",
+      "size": 2542,
+      "sha256": "33337a44ae966aeb2510dae88e6169e74a7b8bbcd28827646abd169df2dace41"
+    },
+    {
+      "path": "public/assets/runner/jungle-valley-v2.png",
+      "size": 2816536,
+      "sha256": "3510def7f127041304a064293fe5cd17f10e58c078f37bba0652e53b1797b218"
+    },
+    {
+      "path": "public/assets/runner/moss-sandstone-v2.png",
+      "size": 3350733,
+      "sha256": "04c0002ed187f72574bd2f1ff67e9b94e594578d6de6e43fe63116cea5920307"
+    },
+    {
+      "path": "public/assets/send-DnPIzLBc.js",
+      "size": 465,
+      "sha256": "addb6a2a65a0f434806b39e30e0d08310db9a4e0e5cb4aab1d6903d2b3b3d3ba"
+    },
+    {
+      "path": "public/assets/swords-DU4JAuP-.js",
+      "size": 725,
+      "sha256": "ca9a519296ba85bf5f08efa7daddca2db38637c777c7147d538965694dd50e4b"
+    },
+    {
+      "path": "public/assets/three.module-Bk7aMTW6.js",
+      "size": 512198,
+      "sha256": "9de67c240e8a874b0a20405fcf3ed58fe87fc9a9f1c8339e5dd7c0bf76f647f9"
+    },
+    {
+      "path": "public/assets/users-qcCScedI.js",
+      "size": 479,
+      "sha256": "4e4163aabc587d857f7e164506521f1bb93b8f9fa7d0b4036dd07dc0cdfd4d81"
+    },
+    {
+      "path": "public/assets/volume-2-FONGzpkZ.js",
+      "size": 564,
+      "sha256": "e21bf775bb6f2c81f2d14d4461c59ae50b5788587ca237a6448301aaf8c36007"
+    },
+    {
+      "path": "public/assets/volume-x-DIxlEfBf.js",
+      "size": 564,
+      "sha256": "0a260ee75828882e7fa47e5de79c4fe71fe4f6eb322e815a80bd861cf1621c8d"
+    },
+    {
+      "path": "public/assets/zap-DgiTU48y.js",
+      "size": 437,
+      "sha256": "b54c68df46f45a1bbb7e44a71f49a11f246b86bf705fb2f01e6333b282eaaed1"
+    },
+    {
+      "path": "public/board.html",
+      "size": 596,
+      "sha256": "659c25a00e9c1dcb1daa0b7c1f337495dde8ea62db4fd73e9c52076cee76f411"
+    },
+    {
+      "path": "public/favicon.svg",
+      "size": 228,
+      "sha256": "52c2cab0f42d593587b80c02688ce8b219fc61c225ee273f670dad19051de70b"
+    },
+    {
+      "path": "public/index.html",
+      "size": 643,
+      "sha256": "132815197ea5944ef801ba5f86617e64458d036bae51a2f616b42824fa207d53"
+    },
+    {
+      "path": "public/keyboard-layout.js",
+      "size": 3872,
+      "sha256": "248ec333b4ca7e0e27ab39588c9f9443389bd0787abceac33482543495bd879e"
+    },
+    {
+      "path": "public/keyboard.js",
+      "size": 5198,
+      "sha256": "8edf273239838ce3b17f6a44419f39ce355a744ca9fd7caa2881530f0c67e8df"
+    },
+    {
+      "path": "public/styles.css",
+      "size": 46488,
+      "sha256": "e5b5c95a4130c9f746f4f82c66e4e9f4069c68d2923f915d64364f1281118457"
+    },
+    {
+      "path": "public/vendor/echarts/echarts.min.js",
+      "size": 1034102,
+      "sha256": "bf4a223524e40b77c304bec67e1222cf551f14880cf42c69dc046558e11c07b1"
+    },
+    {
+      "path": "public/vendor/xlsx/xlsx.full.min.js",
+      "size": 881727,
+      "sha256": "c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99"
+    }
+  ]
+}
