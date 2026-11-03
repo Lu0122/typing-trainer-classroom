@@ -99,6 +99,7 @@ npm run publish:update -- --dry-run
 npm run publish:update -- --dry-run   # 先把产物构建到 output/update-payload
 node scripts/verify-update-local.mjs  # 本地模拟更新源，验证更新 + 回滚
 node scripts/verify-update-github.mjs # 走真实 GitHub 地址验证
+node scripts/verify-update-fresh.mjs  # 新包自检：应报「已经是最新」，不会刚装完就提示更新
 ```
 
 > 这两个脚本不能叫 `test-*.mjs`，否则会被 `node --test` 当成测试文件收集。
