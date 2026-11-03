@@ -3,6 +3,30 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { passages } = require('./seed');
 
+// 每次新增/修改表结构就把这个数字 +1。
+// 打开已有数据库时如果版本号落后，会先把整个库备份到 data/backup/ 再迁移，
+// 万一迁移出问题，老师可以直接把备份文件改名回去，学生成绩不会丢。
+const SCHEMA_VERSION = 1;
+const BACKUP_KEEP = 5;
+
+function tableExists(db, name) {
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+}
+
+// 用 VACUUM INTO 做一致性快照：WAL 模式下直接复制 .db 文件会漏掉还没合并的写入。
+function backupBeforeMigration(db, databasePath, fromVersion) {
+  const dir = path.join(path.dirname(databasePath), 'backup');
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const file = path.join(dir, `typing-v${fromVersion}-${stamp}.db`);
+  db.exec(`VACUUM INTO '${file.replaceAll("'", "''")}'`);
+  const old = fs.readdirSync(dir).filter((name) => name.endsWith('.db')).sort();
+  for (const name of old.slice(0, Math.max(0, old.length - BACKUP_KEEP))) {
+    fs.rmSync(path.join(dir, name), { force: true });
+  }
+  return file;
+}
+
 function createDatabase(databasePath) {
   if (databasePath !== ':memory:') {
     fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -11,6 +35,21 @@ function createDatabase(databasePath) {
   const db = new Database(databasePath);
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
+
+  // 迁移前先判断：是不是已有数据的旧库，且结构版本落后。
+  // 全新库（还没有 users 表）没什么可丢的，不备份。
+  const existing = databasePath !== ':memory:' && tableExists(db, 'users');
+  const fromVersion = Number(db.pragma('user_version', { simple: true })) || 0;
+  let backupFile = null;
+  if (existing && fromVersion < SCHEMA_VERSION) {
+    try {
+      backupFile = backupBeforeMigration(db, databasePath, fromVersion);
+      console.log(`[db] 结构升级 v${fromVersion} → v${SCHEMA_VERSION}，已备份到 ${path.basename(backupFile)}`);
+    } catch (error) {
+      // 备份失败就不要冒险改结构，直接抛出，让老师看到而不是悄悄改坏。
+      throw new Error(`数据库升级前备份失败，已停止升级以保护数据：${error.message}`);
+    }
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS passages (
@@ -313,6 +352,9 @@ function createDatabase(databasePath) {
     ));
   });
   seedAll();
+
+  // 迁移完成（或本来就是新库）后记下结构版本，下次就不会重复备份。
+  db.pragma(`user_version = ${SCHEMA_VERSION}`);
 
   return db;
 }
