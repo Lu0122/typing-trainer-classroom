@@ -1,4 +1,10 @@
 {
+  "../node_modules/xlsx/xlsx.mjs": {
+    "file": "assets/xlsx-CkFp8p6R.js",
+    "name": "xlsx",
+    "src": "../node_modules/xlsx/xlsx.mjs",
+    "isDynamicEntry": true
+  },
   "_RoundedBoxGeometry-CvOFBySd.js": {
     "file": "assets/RoundedBoxGeometry-CvOFBySd.js",
     "name": "RoundedBoxGeometry",
@@ -6,75 +12,69 @@
       "_three.module-Bk7aMTW6.js"
     ]
   },
-  "__plugin-vue_export-helper-Do7dgAAw.js": {
-    "file": "assets/_plugin-vue_export-helper-Do7dgAAw.js",
+  "__plugin-vue_export-helper-DlAUqK2U.js": {
+    "file": "assets/_plugin-vue_export-helper-DlAUqK2U.js",
     "name": "_plugin-vue_export-helper"
   },
-  "_arrow-down-UTJMmEzA.js": {
-    "file": "assets/arrow-down-UTJMmEzA.js",
+  "_arrow-down-DLS4mm40.js": {
+    "file": "assets/arrow-down-DLS4mm40.js",
     "name": "arrow-down",
     "imports": [
       "index.html"
     ]
   },
-  "_arrow-right-TNdm_nmY.js": {
-    "file": "assets/arrow-right-TNdm_nmY.js",
+  "_arrow-right-B4TVKUBS.js": {
+    "file": "assets/arrow-right-B4TVKUBS.js",
     "name": "arrow-right",
     "imports": [
       "index.html"
     ]
   },
-  "_bug-Dt8T5Is1.js": {
-    "file": "assets/bug-Dt8T5Is1.js",
-    "name": "bug",
-    "imports": [
-      "index.html"
-    ]
-  },
-  "_flag-Ab5UxQT-.js": {
-    "file": "assets/flag-Ab5UxQT-.js",
+  "_flag-DQptzDxI.js": {
+    "file": "assets/flag-DQptzDxI.js",
     "name": "flag",
     "imports": [
       "index.html"
     ]
   },
-  "_footprints-DMp3ywjV.js": {
-    "file": "assets/footprints-DMp3ywjV.js",
+  "_footprints-DTixvrj0.js": {
+    "file": "assets/footprints-DTixvrj0.js",
     "name": "footprints",
     "imports": [
       "index.html"
     ]
   },
-  "_music-2-CsxBMXpm.js": {
-    "file": "assets/music-2-CsxBMXpm.js",
+  "_music-2-DMXG15z3.js": {
+    "file": "assets/music-2-DMXG15z3.js",
     "name": "music-2",
     "imports": [
       "index.html"
     ]
   },
-  "_play-BgjNykiJ.js": {
-    "file": "assets/play-BgjNykiJ.js",
-    "name": "play",
-    "imports": [
-      "index.html"
-    ]
+  "_preload-helper-ckwbz45p.js": {
+    "file": "assets/preload-helper-ckwbz45p.js",
+    "name": "preload-helper"
   },
-  "_rotate-cw-Cf1OVaAp.js": {
-    "file": "assets/rotate-cw-Cf1OVaAp.js",
+  "_rotate-cw-DJ8C0As_.js": {
+    "file": "assets/rotate-cw-DJ8C0As_.js",
     "name": "rotate-cw",
     "imports": [
       "index.html"
     ]
   },
-  "_send-DnPIzLBc.js": {
-    "file": "assets/send-DnPIzLBc.js",
+  "_runtime-dom.esm-bundler-CykabdkM.js": {
+    "file": "assets/runtime-dom.esm-bundler-CykabdkM.js",
+    "name": "runtime-dom.esm-bundler"
+  },
+  "_send-DrtzeNGp.js": {
+    "file": "assets/send-DrtzeNGp.js",
     "name": "send",
     "imports": [
       "index.html"
     ]
   },
-  "_swords-DU4JAuP-.js": {
-    "file": "assets/swords-DU4JAuP-.js",
+  "_swords-DyybuYkM.js": {
+    "file": "assets/swords-DyybuYkM.js",
     "name": "swords",
     "imports": [
       "index.html"
@@ -84,53 +84,77 @@
     "file": "assets/three.module-Bk7aMTW6.js",
     "name": "three.module"
   },
-  "_users-qcCScedI.js": {
-    "file": "assets/users-qcCScedI.js",
+  "_users-BJ-KZRAz.js": {
+    "file": "assets/users-BJ-KZRAz.js",
     "name": "users",
     "imports": [
       "index.html"
     ]
   },
-  "_volume-2-FONGzpkZ.js": {
-    "file": "assets/volume-2-FONGzpkZ.js",
+  "_volume-2-DC_DAQAo.js": {
+    "file": "assets/volume-2-DC_DAQAo.js",
     "name": "volume-2",
     "imports": [
       "index.html"
     ]
   },
-  "_volume-x-DIxlEfBf.js": {
-    "file": "assets/volume-x-DIxlEfBf.js",
+  "_volume-x-B0e3serR.js": {
+    "file": "assets/volume-x-B0e3serR.js",
     "name": "volume-x",
     "imports": [
       "index.html"
     ]
   },
-  "_zap-DgiTU48y.js": {
-    "file": "assets/zap-DgiTU48y.js",
+  "_zap-BScZdcCq.js": {
+    "file": "assets/zap-BScZdcCq.js",
     "name": "zap",
     "imports": [
       "index.html"
     ]
   },
+  "admin-next.html": {
+    "file": "assets/adminNext-cfh7R9tA.js",
+    "name": "adminNext",
+    "src": "admin-next.html",
+    "isEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "_preload-helper-ckwbz45p.js"
+    ],
+    "dynamicImports": [
+      "src/admin-next/Students.vue",
+      "src/admin-next/Classes.vue",
+      "src/admin-next/TeachingViews.vue",
+      "src/admin-next/SystemViews.vue",
+      "src/admin-next/CompetitionView.vue",
+      "src/admin-next/OverviewCharts.vue"
+    ],
+    "css": [
+      "assets/adminNext-BNjZOwzB.css"
+    ]
+  },
   "board.html": {
-    "file": "assets/board-B7N83VD6.js",
+    "file": "assets/board-C0RGIszH.js",
     "name": "board",
     "src": "board.html",
     "isEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js"
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "css": [
-      "assets/board-o0JJjbyM.css"
+      "assets/board-FJdcJTsb.css"
     ]
   },
   "index.html": {
-    "file": "assets/main-DaKWD_ds.js",
+    "file": "assets/main-BuYwi73O.js",
     "name": "main",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js"
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "_preload-helper-ckwbz45p.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "dynamicImports": [
       "src/BattleGame.vue",
@@ -144,167 +168,271 @@
       "src/CompetitionGame.vue"
     ],
     "css": [
-      "assets/main-BdBtH3g8.css"
+      "assets/main-CKTtYW_G.css"
     ]
   },
   "src/ArenaGame.vue": {
-    "file": "assets/ArenaGame-DfevSeKS.js",
+    "file": "assets/ArenaGame-DxY9IHg6.js",
     "name": "ArenaGame",
     "src": "src/ArenaGame.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
       "_three.module-Bk7aMTW6.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
       "index.html",
-      "_music-2-CsxBMXpm.js",
-      "_zap-DgiTU48y.js",
-      "_users-qcCScedI.js",
-      "_flag-Ab5UxQT-.js",
-      "_volume-2-FONGzpkZ.js",
-      "_volume-x-DIxlEfBf.js",
-      "_play-BgjNykiJ.js"
+      "_music-2-DMXG15z3.js",
+      "_zap-BScZdcCq.js",
+      "_users-BJ-KZRAz.js",
+      "_flag-DQptzDxI.js",
+      "_volume-2-DC_DAQAo.js",
+      "_volume-x-B0e3serR.js",
+      "_preload-helper-ckwbz45p.js"
     ],
     "css": [
-      "assets/ArenaGame-C-pDeZ2-.css"
+      "assets/ArenaGame-B5YMP9iZ.css"
     ]
   },
   "src/BattleGame.vue": {
-    "file": "assets/BattleGame-DdP8uHB4.js",
+    "file": "assets/BattleGame-BETyExpB.js",
     "name": "BattleGame",
     "src": "src/BattleGame.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
       "_three.module-Bk7aMTW6.js",
       "index.html",
-      "_flag-Ab5UxQT-.js",
-      "_zap-DgiTU48y.js",
-      "_send-DnPIzLBc.js",
-      "_volume-2-FONGzpkZ.js",
-      "_arrow-down-UTJMmEzA.js"
+      "_flag-DQptzDxI.js",
+      "_zap-BScZdcCq.js",
+      "_send-DrtzeNGp.js",
+      "_volume-2-DC_DAQAo.js",
+      "_arrow-down-DLS4mm40.js",
+      "_preload-helper-ckwbz45p.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "css": [
       "assets/BattleGame-CqXw6NGL.css"
     ]
   },
   "src/BossGame.vue": {
-    "file": "assets/BossGame-DS4wMRVf.js",
+    "file": "assets/BossGame-BwaLbFa1.js",
     "name": "BossGame",
     "src": "src/BossGame.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
       "index.html",
-      "_users-qcCScedI.js",
-      "_swords-DU4JAuP-.js",
-      "_zap-DgiTU48y.js"
+      "_users-BJ-KZRAz.js",
+      "_swords-DyybuYkM.js",
+      "_zap-BScZdcCq.js",
+      "_preload-helper-ckwbz45p.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "css": [
       "assets/BossGame-DnD__4Ha.css"
     ]
   },
   "src/BugFeedback.vue": {
-    "file": "assets/BugFeedback-BgZSnOZE.js",
+    "file": "assets/BugFeedback-CNOZ6vUf.js",
     "name": "BugFeedback",
     "src": "src/BugFeedback.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
       "index.html",
-      "_bug-Dt8T5Is1.js",
-      "_rotate-cw-Cf1OVaAp.js",
-      "_send-DnPIzLBc.js"
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "_rotate-cw-DJ8C0As_.js",
+      "_send-DrtzeNGp.js",
+      "_preload-helper-ckwbz45p.js"
     ],
     "css": [
-      "assets/BugFeedback-CwngIdpE.css"
+      "assets/BugFeedback-D2ZvXLXG.css"
     ]
   },
   "src/ChaseGame.vue": {
-    "file": "assets/ChaseGame-CAJ3xfOd.js",
+    "file": "assets/ChaseGame-pk39V18C.js",
     "name": "ChaseGame",
     "src": "src/ChaseGame.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
       "index.html",
       "_three.module-Bk7aMTW6.js",
       "_RoundedBoxGeometry-CvOFBySd.js",
-      "_arrow-right-TNdm_nmY.js",
-      "_flag-Ab5UxQT-.js"
+      "_arrow-right-B4TVKUBS.js",
+      "_flag-DQptzDxI.js",
+      "_preload-helper-ckwbz45p.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "css": [
       "assets/ChaseGame-Figu-vi2.css"
     ]
   },
   "src/CompetitionGame.vue": {
-    "file": "assets/CompetitionGame-CQpKSlbK.js",
+    "file": "assets/CompetitionGame-CaSjPc6t.js",
     "name": "CompetitionGame",
     "src": "src/CompetitionGame.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
-      "index.html"
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "index.html",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "_preload-helper-ckwbz45p.js"
     ],
     "css": [
-      "assets/CompetitionGame-CKGD03Aa.css"
+      "assets/CompetitionGame-CHeNKhXb.css"
     ]
   },
   "src/CompetitionHub.vue": {
-    "file": "assets/CompetitionHub-7e3lmMqY.js",
+    "file": "assets/CompetitionHub-BNICjGPl.js",
     "name": "CompetitionHub",
     "src": "src/CompetitionHub.vue",
     "isDynamicEntry": true,
     "imports": [
       "index.html",
-      "__plugin-vue_export-helper-Do7dgAAw.js",
-      "_arrow-right-TNdm_nmY.js",
-      "_flag-Ab5UxQT-.js"
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "_arrow-right-B4TVKUBS.js",
+      "_flag-DQptzDxI.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "_preload-helper-ckwbz45p.js"
     ],
     "css": [
       "assets/CompetitionHub-B5SVvbQP.css"
     ]
   },
   "src/GameLobby.vue": {
-    "file": "assets/GameLobby-3ybJRLq_.js",
+    "file": "assets/GameLobby-Hg3qbbRj.js",
     "name": "GameLobby",
     "src": "src/GameLobby.vue",
     "isDynamicEntry": true,
     "imports": [
       "index.html",
-      "__plugin-vue_export-helper-Do7dgAAw.js",
-      "_bug-Dt8T5Is1.js",
-      "_play-BgjNykiJ.js",
-      "_music-2-CsxBMXpm.js",
-      "_footprints-DMp3ywjV.js",
-      "_users-qcCScedI.js",
-      "_arrow-right-TNdm_nmY.js",
-      "_flag-Ab5UxQT-.js",
-      "_swords-DU4JAuP-.js"
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "_send-DrtzeNGp.js",
+      "_music-2-DMXG15z3.js",
+      "_footprints-DTixvrj0.js",
+      "_users-BJ-KZRAz.js",
+      "_arrow-right-B4TVKUBS.js",
+      "_flag-DQptzDxI.js",
+      "_swords-DyybuYkM.js",
+      "_preload-helper-ckwbz45p.js"
     ],
     "css": [
-      "assets/GameLobby-BNQOGfg3.css"
+      "assets/GameLobby-D__7k0ZU.css"
     ]
   },
   "src/RunnerGame.vue": {
-    "file": "assets/RunnerGame-4cfKL9Yt.js",
+    "file": "assets/RunnerGame-BwEcQlBy.js",
     "name": "RunnerGame",
     "src": "src/RunnerGame.vue",
     "isDynamicEntry": true,
     "imports": [
-      "__plugin-vue_export-helper-Do7dgAAw.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
       "index.html",
-      "_rotate-cw-Cf1OVaAp.js",
+      "_rotate-cw-DJ8C0As_.js",
       "_three.module-Bk7aMTW6.js",
       "_RoundedBoxGeometry-CvOFBySd.js",
-      "_volume-2-FONGzpkZ.js",
-      "_volume-x-DIxlEfBf.js",
-      "_footprints-DMp3ywjV.js",
-      "_play-BgjNykiJ.js",
-      "_arrow-right-TNdm_nmY.js",
-      "_arrow-down-UTJMmEzA.js"
+      "_volume-2-DC_DAQAo.js",
+      "_volume-x-B0e3serR.js",
+      "_footprints-DTixvrj0.js",
+      "_arrow-right-B4TVKUBS.js",
+      "_arrow-down-DLS4mm40.js",
+      "_preload-helper-ckwbz45p.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "css": [
       "assets/RunnerGame-DzOUuo6M.css"
+    ]
+  },
+  "src/admin-next/Classes.vue": {
+    "file": "assets/Classes-CyIqPetr.js",
+    "name": "Classes",
+    "src": "src/admin-next/Classes.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "admin-next.html",
+      "_preload-helper-ckwbz45p.js"
+    ],
+    "css": [
+      "assets/Classes-sEk3esIi.css"
+    ]
+  },
+  "src/admin-next/CompetitionView.vue": {
+    "file": "assets/CompetitionView-3PwlD_mK.js",
+    "name": "CompetitionView",
+    "src": "src/admin-next/CompetitionView.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "admin-next.html",
+      "_preload-helper-ckwbz45p.js"
+    ]
+  },
+  "src/admin-next/OverviewCharts.vue": {
+    "file": "assets/OverviewCharts-BjPbEppB.js",
+    "name": "OverviewCharts",
+    "src": "src/admin-next/OverviewCharts.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "admin-next.html",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "_preload-helper-ckwbz45p.js"
+    ],
+    "css": [
+      "assets/OverviewCharts-DiHZrh6D.css"
+    ]
+  },
+  "src/admin-next/Students.vue": {
+    "file": "assets/Students-Jq2IsIIK.js",
+    "name": "Students",
+    "src": "src/admin-next/Students.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "../node_modules/xlsx/xlsx.mjs",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "admin-next.html",
+      "_preload-helper-ckwbz45p.js"
+    ],
+    "css": [
+      "assets/Students-yxGfdqEJ.css"
+    ]
+  },
+  "src/admin-next/SystemViews.vue": {
+    "file": "assets/SystemViews-Mo8cf-ll.js",
+    "name": "SystemViews",
+    "src": "src/admin-next/SystemViews.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "admin-next.html",
+      "_preload-helper-ckwbz45p.js"
+    ],
+    "css": [
+      "assets/SystemViews-B_RED9T8.css"
+    ]
+  },
+  "src/admin-next/TeachingViews.vue": {
+    "file": "assets/TeachingViews-CfVbt4Wk.js",
+    "name": "TeachingViews",
+    "src": "src/admin-next/TeachingViews.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_preload-helper-ckwbz45p.js",
+      "_runtime-dom.esm-bundler-CykabdkM.js",
+      "__plugin-vue_export-helper-DlAUqK2U.js",
+      "admin-next.html"
+    ],
+    "dynamicImports": [
+      "../node_modules/xlsx/xlsx.mjs"
+    ],
+    "css": [
+      "assets/TeachingViews-BzPBIH-l.css"
     ]
   }
 }

@@ -1,11 +1,11 @@
 {
   "version": "1.1.0",
-  "builtAt": "2026-11-03T06:19:46.119Z",
+  "builtAt": "2026-11-06T02:13:59.423Z",
   "files": [
     {
       "path": "backend/server.js",
-      "size": 1660176,
-      "sha256": "5bca78df2db5470456449e41517ed6214490447c8f834b694e3fa8051872791a"
+      "size": 1716918,
+      "sha256": "a31e743644d94805012fd9a31adf8c35d4c7965f3a654b56fdcd991932112998"
     },
     {
       "path": "launcher.cjs",
@@ -14,8 +14,23 @@
     },
     {
       "path": "public/.vite/manifest.json",
-      "size": 7331,
-      "sha256": "87b2fae6a7175ea08752b46f5d8edbd534e15ca17d5e48ba1829d0bff96a4c37"
+      "size": 11428,
+      "sha256": "519848be3ad824a61a02c7633b79cb07cb624f196dbc7fa92ff37b99295ea702"
+    },
+    {
+      "path": "public/admin-entry.js",
+      "size": 184,
+      "sha256": "f379e75e696aefdb45fe2f9c3094f47e83d4568b5ba198950af695a09912962b"
+    },
+    {
+      "path": "public/admin-legacy.html",
+      "size": 76981,
+      "sha256": "afe5990bf5dbff7bcd92068624531799682102d0d636d1b8678abcd06662816e"
+    },
+    {
+      "path": "public/admin-next.html",
+      "size": 658,
+      "sha256": "1b656ed7dc30972bfa764a342c8869f0a8cb41ad6130516b3dc89c3c7980a8f0"
     },
     {
       "path": "public/admin.css",
@@ -24,8 +39,8 @@
     },
     {
       "path": "public/admin.html",
-      "size": 76973,
-      "sha256": "f29cb8259460b33266f0c7e68b99499a774ee2b051864267be0588192fc68fcd"
+      "size": 423,
+      "sha256": "3aedbd2ae6a0d4afd8925519dc77dfec0f6abcbb7d90d2911c022387879317ac"
     },
     {
       "path": "public/admin.js",
@@ -38,14 +53,19 @@
       "sha256": "a31321e623dcc847622cb5d5af98ebbe505efcf4e21e523fa558212e5ad95770"
     },
     {
-      "path": "public/assets/ArenaGame-C-pDeZ2-.css",
-      "size": 45305,
-      "sha256": "3c98e75362796dde54bc6396a49f408d9fb3de76ce0ec6653f99a4908f788f07"
+      "path": "public/assets/ArenaGame-B5YMP9iZ.css",
+      "size": 45712,
+      "sha256": "767a050e3d65336a3c151f23bdb84ef75d9d04406a16d7ca6c97c202d7869ad5"
     },
     {
-      "path": "public/assets/ArenaGame-DfevSeKS.js",
-      "size": 56604,
-      "sha256": "82f4c656d37363340b4240d7614fe54eb2920e2f8920c98855a0548f2d76ebf3"
+      "path": "public/assets/ArenaGame-DxY9IHg6.js",
+      "size": 57069,
+      "sha256": "835dacbde55d88a70c6ecde994fe71b035f8734eb1ef00ce96cb0d3c6012a186"
+    },
+    {
+      "path": "public/assets/BattleGame-BETyExpB.js",
+      "size": 45091,
+      "sha256": "bee6bef62607e29569f61966c535a1eca163c0815f2c93bc44ea3bc1c8407ca0"
     },
     {
       "path": "public/assets/BattleGame-CqXw6NGL.css",
@@ -53,14 +73,9 @@
       "sha256": "9041b116124b72919287ea4eab59b901745c69cf79a92f038ce5ff43de6f7268"
     },
     {
-      "path": "public/assets/BattleGame-DdP8uHB4.js",
-      "size": 43480,
-      "sha256": "12ae19fdf92bb091738b4315e9b7375d49f37f2b5d61f4b64baabdd5f4f84d79"
-    },
-    {
-      "path": "public/assets/BossGame-DS4wMRVf.js",
-      "size": 16306,
-      "sha256": "d7dbd68df1534f5242fa754bad1d958915d17a9740c22b082d955488ac5aece4"
+      "path": "public/assets/BossGame-BwaLbFa1.js",
+      "size": 16391,
+      "sha256": "e233f43a88b8e8e5920992dbdaa5c144948eff35b2ea67e59bae9788e8c4bbd8"
     },
     {
       "path": "public/assets/BossGame-DnD__4Ha.css",
@@ -68,19 +83,14 @@
       "sha256": "59440d27f679b757c87e9c626f52d121ca974b5e328d8b363eedcdc3d7a48ac6"
     },
     {
-      "path": "public/assets/BugFeedback-BgZSnOZE.js",
-      "size": 13283,
-      "sha256": "0f789bdd53890ccfa714274928a2fe2322fdc844206c581536c0f56160078917"
+      "path": "public/assets/BugFeedback-CNOZ6vUf.js",
+      "size": 13371,
+      "sha256": "9ec8ff152ff469b3669f59a686d824d87d7d1568c651becca80957a8aabe66d5"
     },
     {
-      "path": "public/assets/BugFeedback-CwngIdpE.css",
+      "path": "public/assets/BugFeedback-D2ZvXLXG.css",
       "size": 9247,
-      "sha256": "668ddac0cfb79c19c9009937b608a572d47ccc40a6b650316c15d9e9a5576737"
-    },
-    {
-      "path": "public/assets/ChaseGame-CAJ3xfOd.js",
-      "size": 38910,
-      "sha256": "0f9e562bc3a06e553482590ce36f1187b6ea7fe6aab7dd93383352428755a648"
+      "sha256": "e047af5ac7b41ad7261ff157d973142e896264ff307ca37323534ff52e0de520"
     },
     {
       "path": "public/assets/ChaseGame-Figu-vi2.css",
@@ -88,19 +98,29 @@
       "sha256": "4cd9dceea2bf9123dcab2fb1b27f9a966a856f12b8f320425ee42a7055552c50"
     },
     {
-      "path": "public/assets/CompetitionGame-CKGD03Aa.css",
+      "path": "public/assets/ChaseGame-pk39V18C.js",
+      "size": 38996,
+      "sha256": "92c8e1db396edd640cc4455d4b900dddccfef299d3b5e807d9fca9b5683ba71e"
+    },
+    {
+      "path": "public/assets/Classes-CyIqPetr.js",
+      "size": 14058,
+      "sha256": "8b74c50d90b627ff219da9926083276edaf1c46e78229d6886b76be852e71fbd"
+    },
+    {
+      "path": "public/assets/Classes-sEk3esIi.css",
+      "size": 578,
+      "sha256": "3978767bcb488d4fbe01901607f273415e641863a523ed96f0a33a3655c52104"
+    },
+    {
+      "path": "public/assets/CompetitionGame-CHeNKhXb.css",
       "size": 21260,
-      "sha256": "9ec9d8bce4b1d2b9e4745bc821e7c691ca01a7d5b557169dd2ccb657e4d0b69a"
+      "sha256": "189f186b9a8e7e0a6bc9b476ae5455b35bd62e7a974e065d74a7699981a60b1e"
     },
     {
-      "path": "public/assets/CompetitionGame-CQpKSlbK.js",
-      "size": 29568,
-      "sha256": "d0e3d6a4e2118fc167dad5f9bf95da4d61e5895d41a01013379093f0cc973393"
-    },
-    {
-      "path": "public/assets/CompetitionHub-7e3lmMqY.js",
-      "size": 1871,
-      "sha256": "756d84f60df7f2f1fea4135a9e602862abf7b95599f4e3223097d215d72b6411"
+      "path": "public/assets/CompetitionGame-CaSjPc6t.js",
+      "size": 29738,
+      "sha256": "f848f8e9caa7f7438db0732b9b971cf4deb3c4e8cd2822576e319165e3fb3617"
     },
     {
       "path": "public/assets/CompetitionHub-B5SVvbQP.css",
@@ -108,14 +128,34 @@
       "sha256": "a4cd3553925c2cc3bfc4fb3f3f0578f8e670248d871e87bbe25c884e7fa6b967"
     },
     {
-      "path": "public/assets/GameLobby-3ybJRLq_.js",
-      "size": 16247,
-      "sha256": "887e56d0262d5c1eaf14d68e7a1f793dc9311f87ef72fb087b2d93a7d23c60a4"
+      "path": "public/assets/CompetitionHub-BNICjGPl.js",
+      "size": 1959,
+      "sha256": "04463eda3b5b394671d6a3ede48d47e064d0c468cfd3c74212e85360bf4568bf"
     },
     {
-      "path": "public/assets/GameLobby-BNQOGfg3.css",
-      "size": 12588,
-      "sha256": "07ae9a88c41be72f5af1b49b49ec11293e9ab681a230def6c4b2b418207df9e8"
+      "path": "public/assets/CompetitionView-3PwlD_mK.js",
+      "size": 13692,
+      "sha256": "971e409f62fde7ca0bcbdaebde4169275978d6a1d2c4b3d43aef4c773912c41d"
+    },
+    {
+      "path": "public/assets/GameLobby-D__7k0ZU.css",
+      "size": 16269,
+      "sha256": "cb3b1eca1450a21e271d50487f6099cb052759dbb394295e82657eaee07bf02d"
+    },
+    {
+      "path": "public/assets/GameLobby-Hg3qbbRj.js",
+      "size": 22732,
+      "sha256": "15368c37cc09c4b33061d179f9b61ee10c993a0b8eecbed012b19d921416e212"
+    },
+    {
+      "path": "public/assets/OverviewCharts-BjPbEppB.js",
+      "size": 1038696,
+      "sha256": "21369ac12826cdfcc398d8328fde17ee74af824b915dffa9a2aaa6175e85c0e3"
+    },
+    {
+      "path": "public/assets/OverviewCharts-DiHZrh6D.css",
+      "size": 575,
+      "sha256": "819edadbc24bec791bd7a37923f6fb35d3598df43a99875da3fb8910c7e42007"
     },
     {
       "path": "public/assets/RoundedBoxGeometry-CvOFBySd.js",
@@ -123,9 +163,9 @@
       "sha256": "e94cb884ca75484a8cd4e22711d5d4fd87fb61d4041c12038e1ac98c703fe60d"
     },
     {
-      "path": "public/assets/RunnerGame-4cfKL9Yt.js",
-      "size": 50170,
-      "sha256": "1ed12bef03e7a2454261555f9d69dcd29b1c85cacca49b71b62afedd9bc7f057"
+      "path": "public/assets/RunnerGame-BwEcQlBy.js",
+      "size": 50259,
+      "sha256": "89731eda4a8a2f2a9a65e768ce05137a6f7f2777a99f4a8e6dded8adc55c93be"
     },
     {
       "path": "public/assets/RunnerGame-DzOUuo6M.css",
@@ -133,19 +173,59 @@
       "sha256": "e799bdf1411847543a3170aab7271a44f08913a569b0fdeec8b0ef649d4cea82"
     },
     {
-      "path": "public/assets/_plugin-vue_export-helper-Do7dgAAw.js",
-      "size": 76788,
-      "sha256": "e000e5a4a1ff1257a18e27ff92604c98f33a519c5813b35d2cb78d97d3fac158"
+      "path": "public/assets/Students-Jq2IsIIK.js",
+      "size": 12156,
+      "sha256": "bcdc3fc251fa934b8cb53a5c2fda00290ad9bc3dabdf730f96a3c49ea5ef720d"
     },
     {
-      "path": "public/assets/arrow-down-UTJMmEzA.js",
-      "size": 339,
-      "sha256": "6c7a43c67642b176198dbca3226061830399e0a20b8e7049232e0375a88fa754"
+      "path": "public/assets/Students-yxGfdqEJ.css",
+      "size": 601,
+      "sha256": "ec0b2ad82fdca90ea5055cc90dde56df0a33998d90141427eaa122e665351385"
     },
     {
-      "path": "public/assets/arrow-right-TNdm_nmY.js",
+      "path": "public/assets/SystemViews-B_RED9T8.css",
+      "size": 3083,
+      "sha256": "b0857d6b08bd331eee3efd616c9f358268269a97c8077c8dd1ef3e7f98000846"
+    },
+    {
+      "path": "public/assets/SystemViews-Mo8cf-ll.js",
+      "size": 20586,
+      "sha256": "856af45e2c035b509f2e91ad49512cc4fbd7425aa4e3d9be28f688dbf69e996c"
+    },
+    {
+      "path": "public/assets/TeachingViews-BzPBIH-l.css",
+      "size": 1621,
+      "sha256": "1bf60274f459b12f16661f091e6f98685e5b47bab0184a547d44f2e6db941f75"
+    },
+    {
+      "path": "public/assets/TeachingViews-CfVbt4Wk.js",
+      "size": 25466,
+      "sha256": "69bcc5b18fe68e7bf2b05d91272de8dd52620081b0ae1a441aca56fb2d972376"
+    },
+    {
+      "path": "public/assets/_plugin-vue_export-helper-DlAUqK2U.js",
+      "size": 91,
+      "sha256": "cb85b0f263dbe24e857338301c0627076592e9f1f1a5662929f86d2c126444aa"
+    },
+    {
+      "path": "public/assets/adminNext-BNjZOwzB.css",
+      "size": 345404,
+      "sha256": "a5099b799f0b4fd88f9adff98bede979da9cb9676aadcdc284f755dc505925a2"
+    },
+    {
+      "path": "public/assets/adminNext-cfh7R9tA.js",
+      "size": 867377,
+      "sha256": "741a66d4b47e2dd7f71bcd4291dbe61d003b93abd8edfa23e1b3eb1bbec8ff0b"
+    },
+    {
+      "path": "public/assets/arrow-down-DLS4mm40.js",
       "size": 339,
-      "sha256": "428d1a540849388b012575f1f233d074e63102237920736cf3149cc21f7fbb7e"
+      "sha256": "65469bf1fb7f3b5f9fbeafa029b82ff6784de242b54166abac9af8ed8a13d86b"
+    },
+    {
+      "path": "public/assets/arrow-right-B4TVKUBS.js",
+      "size": 339,
+      "sha256": "ecc908ceda1582f994cf14376b281ad20a812f43767a001d16c150ea704c71b8"
     },
     {
       "path": "public/assets/beginner-hands-clean.png",
@@ -158,19 +238,14 @@
       "sha256": "a05058b71a72603f2ae1645e2b56d1535c33ebb5d5abd54b387d903f15902e9d"
     },
     {
-      "path": "public/assets/board-B7N83VD6.js",
-      "size": 7478,
-      "sha256": "f646023f44dcd366a012a87ffb2d1b1dc21c60ee43e02d6d13f9c96af70422d0"
+      "path": "public/assets/board-C0RGIszH.js",
+      "size": 7593,
+      "sha256": "3e6cb70e1988ea2dc757677baf8af55226f89530aee1706b9731183bd8d31fe9"
     },
     {
-      "path": "public/assets/board-o0JJjbyM.css",
+      "path": "public/assets/board-FJdcJTsb.css",
       "size": 6722,
-      "sha256": "ecdcb457eded1bcdbac2967a0adec79590cfda39473a41b40fd17788541c9f4e"
-    },
-    {
-      "path": "public/assets/bug-Dt8T5Is1.js",
-      "size": 841,
-      "sha256": "099b2874b0fb51583fdba5699ccd95b493b49536006b3e0f3b761a2d4fd0495c"
+      "sha256": "59fff9927ffa658bd3dd0795e458ca8e797f4f669193c851454e90be6bf43d88"
     },
     {
       "path": "public/assets/chase-city-loop.png",
@@ -228,14 +303,14 @@
       "sha256": "6dae565e653fbb9f7459c1f5428f64c3c96db20063b637d59515fbba3da63405"
     },
     {
-      "path": "public/assets/flag-Ab5UxQT-.js",
+      "path": "public/assets/flag-DQptzDxI.js",
       "size": 394,
-      "sha256": "97388b64c89cc57dbc64a0f69191c1bf4e8f1dffc4a25a84f4fbe40f734719d6"
+      "sha256": "a5d9c526a6d712392d13036601553ca841e8238c6954205436883e3cbbc822e7"
     },
     {
-      "path": "public/assets/footprints-DMp3ywjV.js",
+      "path": "public/assets/footprints-DTixvrj0.js",
       "size": 624,
-      "sha256": "763ac45b43f1e8b433e26e5ccabdf7aa0da7564a519ad68e39b3b3a072df0d59"
+      "sha256": "5e6bda335322b0886ef309d152b5e80ee70a453fa6c02428af9aa00275cc5fd1"
     },
     {
       "path": "public/assets/home-beginner.png",
@@ -253,29 +328,29 @@
       "sha256": "5d06c1509d78ae97ccac6b3c3002e32cb289a180875e4385d543de78f67183a7"
     },
     {
-      "path": "public/assets/main-BdBtH3g8.css",
-      "size": 86960,
-      "sha256": "0a81c0e6c58352b54ca21379d467b3ad32a24825f69f40b62be4f959bddb803d"
+      "path": "public/assets/main-BuYwi73O.js",
+      "size": 145225,
+      "sha256": "733b65b0ae288591b07c44ace1e4e147b64f75751dc53a29bc8e02562d0869d0"
     },
     {
-      "path": "public/assets/main-DaKWD_ds.js",
-      "size": 137870,
-      "sha256": "595a53838f39dcab42c025c21dcdee9e46643aaecc367b230ac0287491d7b619"
+      "path": "public/assets/main-CKTtYW_G.css",
+      "size": 89099,
+      "sha256": "3e65fca62a3eaf581d6cb942aefbff6c25b3e42aae0bb37aeb5f12539dc490b9"
     },
     {
-      "path": "public/assets/music-2-CsxBMXpm.js",
+      "path": "public/assets/music-2-DMXG15z3.js",
       "size": 1091,
-      "sha256": "bb7fea4cdbdf7e660fb6d3dc4713fd97dc6777f0d5939821b49ce5ddfae7424b"
+      "sha256": "b2897657154f0adc7e29d622690f94f12e5e738e04e009ad01725a9d02bc9dd2"
     },
     {
-      "path": "public/assets/play-BgjNykiJ.js",
-      "size": 309,
-      "sha256": "16ae654bd4bd9791affac0c1c29a76bf2d2b557dabbbbfffd56b824073bb2cdf"
+      "path": "public/assets/preload-helper-ckwbz45p.js",
+      "size": 1142,
+      "sha256": "b1cf8db666a7d7bfc05e8f8c93c4536728e9d086bf6f0270fa1fd0e607491519"
     },
     {
-      "path": "public/assets/rotate-cw-Cf1OVaAp.js",
+      "path": "public/assets/rotate-cw-DJ8C0As_.js",
       "size": 626,
-      "sha256": "75e1e15574e266e86b7ab47538cb23bb6d6026aef0b29d77e3e75c0797b48d73"
+      "sha256": "471fe201067c5ac76327562dda9434a9437406fefd7bbf6b1f673ff38a5dab20"
     },
     {
       "path": "public/assets/runner/README.md",
@@ -293,14 +368,19 @@
       "sha256": "04c0002ed187f72574bd2f1ff67e9b94e594578d6de6e43fe63116cea5920307"
     },
     {
-      "path": "public/assets/send-DnPIzLBc.js",
-      "size": 465,
-      "sha256": "addb6a2a65a0f434806b39e30e0d08310db9a4e0e5cb4aab1d6903d2b3b3d3ba"
+      "path": "public/assets/runtime-dom.esm-bundler-CykabdkM.js",
+      "size": 85606,
+      "sha256": "94c2747794b7fcfd005e3e908c5bdaf169f446b2af68dc2edc5c10e8e4b7bb28"
     },
     {
-      "path": "public/assets/swords-DU4JAuP-.js",
+      "path": "public/assets/send-DrtzeNGp.js",
+      "size": 465,
+      "sha256": "7d96ba34514d5dfbbc6f108ed953ebddcb0479abf16ed6ebb63c987abefaf55c"
+    },
+    {
+      "path": "public/assets/swords-DyybuYkM.js",
       "size": 725,
-      "sha256": "ca9a519296ba85bf5f08efa7daddca2db38637c777c7147d538965694dd50e4b"
+      "sha256": "9d13864a9a2a973b89bc58b79156d468b3b48028149afac31b49126ccc4a6f75"
     },
     {
       "path": "public/assets/three.module-Bk7aMTW6.js",
@@ -308,29 +388,34 @@
       "sha256": "9de67c240e8a874b0a20405fcf3ed58fe87fc9a9f1c8339e5dd7c0bf76f647f9"
     },
     {
-      "path": "public/assets/users-qcCScedI.js",
+      "path": "public/assets/users-BJ-KZRAz.js",
       "size": 479,
-      "sha256": "4e4163aabc587d857f7e164506521f1bb93b8f9fa7d0b4036dd07dc0cdfd4d81"
+      "sha256": "b17e136de18ef2b5d60e003324d71e6d39aa8b0a546834797f2ccf5c1923c9a2"
     },
     {
-      "path": "public/assets/volume-2-FONGzpkZ.js",
+      "path": "public/assets/volume-2-DC_DAQAo.js",
       "size": 564,
-      "sha256": "e21bf775bb6f2c81f2d14d4461c59ae50b5788587ca237a6448301aaf8c36007"
+      "sha256": "7ef0b2f530b0d356fccb064d4da029363c9086d4796b33e278528b1845b8d147"
     },
     {
-      "path": "public/assets/volume-x-DIxlEfBf.js",
-      "size": 564,
-      "sha256": "0a260ee75828882e7fa47e5de79c4fe71fe4f6eb322e815a80bd861cf1621c8d"
+      "path": "public/assets/volume-x-B0e3serR.js",
+      "size": 825,
+      "sha256": "a4dab29db15eb6e32fe03c46c81183a20287c542e89758c55e99c211359e8225"
     },
     {
-      "path": "public/assets/zap-DgiTU48y.js",
+      "path": "public/assets/xlsx-CkFp8p6R.js",
+      "size": 429534,
+      "sha256": "d6662376ca5639f10e1aaa0fd4761322b1fed8c0a602e339d61d9892ae7ff56c"
+    },
+    {
+      "path": "public/assets/zap-BScZdcCq.js",
       "size": 437,
-      "sha256": "b54c68df46f45a1bbb7e44a71f49a11f246b86bf705fb2f01e6333b282eaaed1"
+      "sha256": "11c5d34ce91c746ea5fe40370c56169592cb36b685462e575ca6af6197bf4f5d"
     },
     {
       "path": "public/board.html",
-      "size": 596,
-      "sha256": "659c25a00e9c1dcb1daa0b7c1f337495dde8ea62db4fd73e9c52076cee76f411"
+      "size": 688,
+      "sha256": "6cec7f2d291ff867226527a1e9f6006d1e3d07609b3fea7ec4cac021fc5a10c0"
     },
     {
       "path": "public/favicon.svg",
@@ -339,8 +424,8 @@
     },
     {
       "path": "public/index.html",
-      "size": 643,
-      "sha256": "132815197ea5944ef801ba5f86617e64458d036bae51a2f616b42824fa207d53"
+      "size": 818,
+      "sha256": "7bbc5d25037bebfba9e24aee4bc04497bfaf2684b708412092c933630f8155bd"
     },
     {
       "path": "public/keyboard-layout.js",
