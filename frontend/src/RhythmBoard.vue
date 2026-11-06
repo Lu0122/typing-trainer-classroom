@@ -146,7 +146,7 @@ function tick(now) {
   frame = requestAnimationFrame(tick);
   const delta = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
-  if (!stageRef.value) return;
+  // DOM 音符不依赖 WebGL，设备不支持时仍推进同一时钟。
   // 关键：用本地时钟外推，方块每帧都在动，而不是跟着 1Hz 轮询每秒跳一格。
   const elapsed = props.readElapsed?.() ?? props.elapsed;
   if (hitFlashes.value.some(flash => flash.expiresAt <= now)) hitFlashes.value = hitFlashes.value.filter(flash => flash.expiresAt > now);
@@ -158,10 +158,10 @@ function tick(now) {
   }) : []);
   if (frozenView) {
     visualElapsed.value = frozenView.elapsed;
-    stageRef.value.render({ notes: frozenView.notes, elapsed: frozenView.elapsed + frozenView.fallMs, fallMs: frozenView.fallMs }, delta);
+    stageRef.value?.render({ notes: frozenView.notes, elapsed: frozenView.elapsed + frozenView.fallMs, fallMs: frozenView.fallMs }, delta);
   } else {
     visualElapsed.value = elapsed;
-    stageRef.value.render({ notes: renderedNotes, elapsed: elapsed + fallMs.value, fallMs: fallMs.value }, delta);
+    stageRef.value?.render({ notes: renderedNotes, elapsed: elapsed + fallMs.value, fallMs: fallMs.value }, delta);
   }
   // 画布渲染后 DOM 里已经没有方块元素，验收脚本无从断言「场上有几个方块」。
   // 这里把渲染统计挂到 canvas 的 dataset 上，脚本读它就等价于读 .rn-note 的数量；
@@ -170,7 +170,7 @@ function tick(now) {
   if (canvas instanceof HTMLElement) {
     canvas.dataset.notes = String(renderedNotes.length);
     canvas.dataset.lanes = String(laneCount);
-    const probe = stageRef.value.probe?.();
+    const probe = stageRef.value?.probe?.();
     if (probe) {
       canvas.dataset.judgeRatio = probe.judgeRatio.toFixed(4);
       canvas.dataset.farRatio = probe.farRatio.toFixed(4);
@@ -185,7 +185,8 @@ onMounted(() => {
   if (!host.value) return;
   // judgeRatio 传进舞台：三维场景里的判定线发光带要与 CSS 那条判定线落在同一高度，
   // 否则玩家会同时看到两条位置不同的线，不知道该以哪条为准。
-  stageRef.value = createStage(host.value, { judgeRatio: props.judgeRatio });
+  try { stageRef.value = createStage(host.value, { judgeRatio: props.judgeRatio }); }
+  catch { stageRef.value = null; } // 纯 DOM 赛道仍可正常输入和判定。
   // 验收脚本的调试出口：固定谱面、逐个字母核对方块上的字形方向。
   // 生产路径不读它，导出成本只有一次赋值。
   //

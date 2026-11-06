@@ -3,6 +3,7 @@ const os = require('node:os');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { createDatabase } = require('./database');
 const { createApp } = require('./app');
+const { attachBattleSocket } = require('./battle-socket');
 
 // 挑出「发给学生」用的那个局域网地址。
 // 一台电脑常常同时挂着 WSL、Hyper-V、VMware、VPN 的虚拟网卡，全都打印出来老师分不清。
@@ -62,7 +63,9 @@ const server = app.listen(port, host, () => {
   }
 });
 
+const battleSocket = attachBattleSocket(server, { app, db });
 function shutdown() {
+  battleSocket.close();
   server.close(() => {
     db.close();
     process.exit(0);

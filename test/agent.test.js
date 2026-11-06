@@ -493,3 +493,30 @@ test('问「某班有哪些学生」要的是名单，不是班级人数', async
   assert.ok(count.body.results.find((item) => item.tool === 'classes'));
   context.db.close();
 });
+
+test('管理员不能读取、续写或删除其他管理员的助手会话', async () => {
+  const context = setup();
+  const owner = request.agent(context.app), other = request.agent(context.app);
+  try {
+    await owner.post('/api/admin/login').send({username:'admin',password:'test-pass'}).expect(200);
+    await owner.post('/api/admin/admins').send({username:'teacher01',displayName:'李老师',password:'abc123',role:'manager'}).expect(201);
+    await other.post('/api/admin/login').send({username:'teacher01',password:'abc123'}).expect(200);
+    const first = await owner.post('/api/admin/agent/chat').send({message:'查看概览'}).expect(200);
+    const id = first.body.conversationId;
+    assert.ok(id);
+    assert.equal((await other.get('/api/admin/agent/conversations').expect(200)).body.rows.length, 0);
+    await other.get(`/api/admin/agent/conversations/${id}`).expect(404);
+    await other.post('/api/admin/agent/chat').send({message:'继续',conversationId:id}).expect(404);
+    await other.delete(`/api/admin/agent/conversations/${id}`).expect(404);
+    await other.post('/api/admin/agent/chat').send({message:'继续',conversationId:999999}).expect(404);
+    const legacy = context.db.prepare("INSERT INTO agent_conversations (admin_id,title,created_at,updated_at) VALUES (NULL,'旧对话',?,?)").run(context.now(),context.now()).lastInsertRowid;
+    assert.ok((await other.get('/api/admin/agent/conversations').expect(200)).body.rows.some(row => row.id === legacy));
+    await other.get(`/api/admin/agent/conversations/${legacy}`).expect(200);
+    await other.post('/api/admin/agent/chat').send({message:'继续',conversationId:legacy}).expect(200);
+    await other.delete(`/api/admin/agent/conversations/${legacy}`).expect(200);
+    const detail = await owner.get(`/api/admin/agent/conversations/${id}`).expect(200);
+    assert.equal(detail.body.messages.length, 2);
+    await owner.post('/api/admin/agent/chat').send({message:'继续',conversationId:id}).expect(200);
+    await owner.delete(`/api/admin/agent/conversations/${id}`).expect(200);
+  } finally { context.db.close(); }
+});

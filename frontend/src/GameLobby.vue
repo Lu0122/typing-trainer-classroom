@@ -1,7 +1,8 @@
 <script setup>
 import { computed } from 'vue';
-import { ArrowRight, BarChart3, Bug, CarFront, CircleCheck, Flag, Footprints, Gamepad2, Info, Keyboard, Music2, Play, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
+import { ArrowRight, BarChart3, CarFront, CircleCheck, Flag, Footprints, Gamepad2, Info, Keyboard, Music2, Swords, Timer, Trophy, Users, UsersRound } from 'lucide-vue-next';
 import AppHeader from './AppHeader.vue';
+import LobbyChat from './LobbyChat.vue';
 
 const props = defineProps({ user: { type: Object, default: null } });
 const emit = defineEmits(['select', 'back', 'growth', 'leaderboard', 'account', 'bug-report']);
@@ -18,12 +19,6 @@ function handleNav(key) {
   else if (key === 'growth' || key === 'achievements') emit('growth');
 }
 
-function joinAction() {
-  // 已登录直接进第一个玩法，未登录先去登录/注册
-  if (props.user) emit('select', 'race');
-  else emit('account');
-}
-
 // 卡片跟随指针的高光位置：只写 CSS 变量，避免触发 Vue 重渲染。
 function trackGlow(event) {
   const card = event?.currentTarget ?? event?.target?.closest?.('.game-choice');
@@ -37,6 +32,8 @@ function trackGlow(event) {
 <template>
   <section class="game-lobby">
     <AppHeader
+      variant="hero"
+      decor
       title="游戏大厅"
       subtitle="GAME LOBBY"
       :icon="Gamepad2"
@@ -47,12 +44,10 @@ function trackGlow(event) {
       @nav="handleNav"
       @account="emit('account')"
     >
-      <template #actions>
-        <button class="ah-link" type="button" @click="emit('bug-report')"><Bug :size="15" />Bug 反馈</button>
-        <button class="ah-cta" type="button" @click="joinAction"><Play :size="14" />一起打字，一起上场</button>
-      </template>
+
     </AppHeader>
 
+    <LobbyChat :user="props.user" @enter="emit('select', $event)" @login="emit('account')"/>
     <div class="lobby-scroll">
       <div class="lobby-inner">
         <header class="lobby-hero">
@@ -349,5 +344,16 @@ function trackGlow(event) {
   .game-choice,.game-choice footer strong,.lobby-cta,.lobby-account{transition:none}
   .game-choice:hover{transform:none}
   .game-choice:hover .ra-car,.game-choice:hover .ra-lines,.game-choice:hover .rh-tile,.game-choice:hover .co-orbit,.game-choice:hover .co-shield,.game-choice:hover .chase-orbit,.game-choice:hover .chase-thief-dot,.game-choice:hover .chase-police-dot,.game-choice:hover .bf-vs,.game-choice:hover .bf-flag{animation:none}
+}
+</style>
+
+<style scoped>
+/* Match the home header while keeping lobby actions reachable on small screens. */
+@media (max-width: 700px) {
+  .game-lobby :deep(.app-header.hero) { height:auto; min-height:104px; padding:12px 14px; gap:8px; flex-wrap:wrap; }
+  .game-lobby :deep(.ah-decor) { display:none; }
+  .game-lobby :deep(.ah-actions) { gap:6px; margin-left:auto; }
+  .game-lobby :deep(.ah-cta) { padding:0 9px; font-size:12px; }
+  .game-lobby :deep(.ah-link) { padding:0 8px; }
 }
 </style>

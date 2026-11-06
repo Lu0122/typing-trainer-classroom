@@ -150,6 +150,7 @@ function restoreDraft() {
 }
 
 async function submitReport() {
+  if (busy.value) return;
   if (!props.user) { emit('login'); return; }
   if (!form.title.trim()) { error.value = '请用一句话说清遇到的问题'; return; }
   busy.value = true;
@@ -201,6 +202,7 @@ onUnmounted(() => window.removeEventListener('paste', onPaste));
 <template>
   <main class="bug-page">
     <AppHeader
+      :show-feedback="false"
       title="问题反馈"
       subtitle="BUG REPORT"
       :icon="Bug"

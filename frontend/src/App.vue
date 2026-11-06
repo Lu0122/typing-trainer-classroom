@@ -1,6 +1,7 @@
 <script setup>
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import AppHeader from './AppHeader.vue';
+import ConnectionStatus from './ConnectionStatus.vue';
 import Keyboard from './Keyboard.vue';
 import BeginnerKeyboard from './BeginnerKeyboard.vue';
 import StatsBar from './StatsBar.vue';
@@ -17,6 +18,7 @@ const CompetitionGame = defineAsyncComponent(() => import('./CompetitionGame.vue
 import { beginnerLessons, extraEnglishCopy, extraPinyinCopy, fingerKeyByCode } from './lesson-bank';
 import { expandPracticeBank } from './lesson-expansion';
 import { readPracticeIndex, savePracticeIndex } from './practice-progress.mjs';
+import { createTrainingQueue } from './training-queue.mjs';
 import { AlertTriangle, ArrowLeft, ArrowUpRight, BarChart3, ChevronRight, Flame, Keyboard as KeyboardIcon, ListChecks, LogOut, ShieldCheck, Target, Timer, Trophy, UserRound } from 'lucide-vue-next';
 const page = ref('home'); const category = ref('英文打字'); const passage = ref(null); const typed = ref(''); const pressedCode = ref(null); const wrongCode = ref(null); const wrongNotice = ref(''); const lastCode = ref('KeyboardEvent.code'); const beginnerSequence = ref([]); const beginnerIndex = ref(0); const beginnerCorrect = ref(0); const beginnerWrong = ref(0); const beginnerStartedAt = ref(null); const practiceStartedAt = ref(null); const now = ref(Date.now()); let timer; let wrongFeedbackTimer;
 // 右下角浮动 GitHub 入口只在普通页面出现：整页一屏的联机游戏与挑战进行中会盖住操作区。
@@ -52,6 +54,8 @@ const challengeInputEl = ref(null);
 const challengeAnchorEl = ref(null);
 const challengeResult = ref(null);
 const challengeSubmitting = ref(false);
+const challengeSubmitMessage = ref('');
+let challengeNextRetryAt = 0;
 const challengeExitOpen = ref(false);
 const challengeExitRemaining = ref(null);
 const challengeExitStartedAt = ref(null);
@@ -425,6 +429,39 @@ function schedulePracticeAdvance(kind) {
 }
 
 const recordedTrainingRuns = new Set();
+const trainingQueueState = reactive({ count: 0, blocked: '', storageProblem: false, saving: false });
+const trainingSaved = ref(false);
+let trainingSavedTimer, trainingRefreshTimer;
+// Access through an adapter so browsers that disable localStorage fail visibly, not during startup.
+const trainingStorage = {
+  get length() { return window.localStorage.length; },
+  key: (index) => window.localStorage.key(index),
+  getItem: (key) => window.localStorage.getItem(key),
+  setItem: (key, value) => window.localStorage.setItem(key, value),
+  removeItem: (key) => window.localStorage.removeItem(key)
+};
+const trainingQueue = createTrainingQueue({
+  storage: trainingStorage,
+  currentUserId: () => user.value?.id ?? null,
+  send: async (payload, userId) => {
+    const result = await requestJSON('/api/training-sessions', {
+      method: 'POST', body: JSON.stringify({ ...payload, expectedUserId: userId })
+    });
+    if (!Number.isInteger(result.id) || result.id < 1) throw new Error('未收到有效的保存确认');
+  },
+  onChange: state => Object.assign(trainingQueueState, state),
+  onSaved: userId => {
+    if (String(user.value?.id) !== String(userId)) return;
+    trainingSaved.value = true;
+    clearTimeout(trainingSavedTimer);
+    trainingSavedTimer = setTimeout(() => { trainingSaved.value = false; }, 4000);
+    clearTimeout(trainingRefreshTimer);
+    trainingRefreshTimer = setTimeout(() => { if (String(user.value?.id) === String(userId)) loadLearningData(); }, 1000);
+  }
+});
+watch(() => user.value?.id, () => { trainingSaved.value = false; trainingQueue.userChanged(); });
+function retryTrainingQueue() { trainingQueue.retry(); }
+
 function compareTrainingText(input, target) {
   const entered = Array.from(input); const expected = Array.from(target);
   const correct = entered.reduce((total, char, index) => total + (char === expected[index] ? 1 : 0), 0);
@@ -436,24 +473,58 @@ function recordTrainingSession({ mode, lessonTitle, correctChars, wrongChars, st
   const key = `${mode}:${lessonTitle}:${startedAt}`;
   if (recordedTrainingRuns.has(key)) return;
   recordedTrainingRuns.add(key);
-  const sourceKey = `practice:${user.value.id}:${mode}:${lessonTitle}:${startedAt}`;
-  requestJSON('/api/training-sessions', {
-    method: 'POST', body: JSON.stringify({ mode, lessonTitle, correctChars, wrongChars, durationMs, targetText, typedText, keyStats, sourceKey })
-  }).then(() => loadLearningData()).catch(() => recordedTrainingRuns.delete(key));
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  const sourceKey = `practice:${user.value.id}:${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  trainingQueue.queue(user.value.id, { mode, lessonTitle, correctChars, wrongChars, durationMs, targetText, typedText, keyStats, sourceKey });
 }
-async function loadPassage() { const res = await fetch('/api/passages?category=' + encodeURIComponent(category.value) + '&random=1'); const data = await res.json(); passage.value=data.passages?.[0] || null; typed.value=''; }
+const passageLoadError = ref('');
+let passageRequestId = 0;
+async function loadPassage() {
+  const requestId = ++passageRequestId, requestedCategory = category.value;
+  passageLoadError.value = '';
+  try {
+    const data = await requestJSON('/api/passages?category=' + encodeURIComponent(requestedCategory) + '&random=1');
+    if (requestId !== passageRequestId || category.value !== requestedCategory) return;
+    passage.value = data.passages?.[0] || null; typed.value = '';
+    if (!passage.value) passageLoadError.value = '当前分类暂无练习文章。';
+  } catch (error) {
+    if (requestId === passageRequestId && category.value === requestedCategory) passageLoadError.value = error.message;
+  }
+}
 async function requestJSON(url, options = {}) {
-  const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  let response;
+  try {
+    response = await fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(8000), headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  } catch (error) {
+    throw Object.assign(new Error('无法连接教师机，请检查网络后重试'), { networkError: true, cause: error });
+  }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || '请求失败，请稍后重试');
+  if (!response.ok) throw Object.assign(new Error(data.message || '请求失败，请稍后重试'), { status: response.status });
   return data;
 }
 async function loadCurrentUser() {
   try {
     const data = await requestJSON('/api/auth/me');
     user.value = data.authenticated ? data.user : null;
+    return true;
   } catch {
-    user.value = null;
+    return false;
+  }
+}
+async function recoverConnection() {
+  const wasLoggedIn = !!user.value;
+  await loadAuthConfig();
+  if (!(await loadCurrentUser())) return;
+  trainingQueue.retry();
+  if (user.value) {
+    if (!wasLoggedIn && !challenge.value) restoreChallenge();
+    refreshActiveCompetition();
+    loadLearningData();
+  }
+  if (challenge.value && challengeNextRetryAt !== Infinity && Date.now() >= challenge.value.expiresAt) {
+    challengeNextRetryAt = 0;
+    submitChallenge();
   }
 }
 async function refreshActiveCompetition() {
@@ -546,6 +617,7 @@ function optimizeAvatar(file) {
   });
 }
 async function uploadAvatar(event) {
+  if (avatarBusy.value) { event.target.value = ''; return; }
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
@@ -561,6 +633,7 @@ async function uploadAvatar(event) {
   finally { avatarBusy.value = false; }
 }
 async function submitLogin() {
+  if (authBusy.value) return;
   authBusy.value = true; authMessage.value = '';
   try {
     const data = await requestJSON('/api/auth/login', { method: 'POST', body: JSON.stringify(loginForm) });
@@ -577,6 +650,7 @@ async function submitLogin() {
   finally { authBusy.value = false; }
 }
 async function submitRegister() {
+  if (authBusy.value) return;
   authMessage.value = '';
   authBusy.value = true;
   try {
@@ -594,6 +668,7 @@ async function submitRegister() {
   finally { authBusy.value = false; }
 }
 async function logout() {
+  if (authBusy.value) return;
   authBusy.value = true;
   try { await requestJSON('/api/auth/logout', { method: 'POST' }); user.value = null; activeCompetition.value = null; learningSummary.value = null; learningDiagnostics.value = null; assignments.value = []; authView.value = 'login'; authOpen.value = false; }
   finally { authBusy.value = false; }
@@ -605,10 +680,12 @@ function persistChallenge() {
 function restoreChallenge() {
   try {
     const saved = JSON.parse(localStorage.getItem(challengeStorageKey));
-    if (!saved?.sessionId || !user.value || saved.userId !== user.value.id || Date.now() > saved.expiresAt + 600000) {
+    if (!saved?.sessionId || Date.now() > saved.expiresAt + 600000) {
       localStorage.removeItem(challengeStorageKey);
       return;
     }
+    if (!user.value) return;
+    if (saved.userId !== user.value.id) return;
     challenge.value = saved;
     challengeMode.value = saved.mode === 'english' ? 'english' : 'pinyin';
     challengeInput.value = saved.typedText || '';
@@ -648,8 +725,11 @@ function runChallengeCountdown(milliseconds) {
 }
 
 async function startChallenge(nextMode = challengeMode.value) {
+  if (challengeSubmitting.value) return;
   challengeMode.value = nextMode === 'english' ? 'english' : 'pinyin';
   challengeResult.value = null;
+  challengeSubmitMessage.value = '';
+  challengeNextRetryAt = 0;
   if (!user.value) { authView.value = 'login'; authOpen.value = true; authMessage.value = '请先登录，成绩才能计入排行榜。'; return; }
   challengeSubmitting.value = true;
   try {
@@ -659,7 +739,7 @@ async function startChallenge(nextMode = challengeMode.value) {
     setPage(`challenge-${challenge.value.mode}`);
     persistChallenge();
     runChallengeCountdown(challenge.value.startedAt - Date.now());
-  } catch (error) { authMessage.value = error.message; }
+  } catch (error) { challengeSubmitMessage.value = error.message; }
   finally { challengeSubmitting.value = false; }
 }
 async function submitChallenge() {
@@ -668,20 +748,30 @@ async function submitChallenge() {
   try {
     const data = await requestJSON('/api/challenges/' + challenge.value.sessionId + '/submit', { method: 'POST', body: JSON.stringify({ typedText: challengeInput.value }) });
     challengeResult.value = data;
+    challengeSubmitMessage.value = '';
     challenge.value = null;
     localStorage.removeItem(challengeStorageKey);
     loadLeaderboard(leaderboardScope.value, activeChallengeMode.value);
   } catch (error) {
-    if (error.message.includes('尚未结束')) return;
-    challengeResult.value = { error: error.message };
+    if (error.message.includes('尚未结束')) { challengeNextRetryAt = Date.now() + 1000; return; }
+    if (error.networkError || error.status >= 500 || error.status === 429) {
+      challengeSubmitMessage.value = '成绩尚未确认，正在重试。请保持此页面打开。';
+      challengeNextRetryAt = Date.now() + 5000;
+    } else {
+      challengeSubmitMessage.value = error.message + '。请联系老师处理。';
+      challengeNextRetryAt = Infinity;
+    }
   } finally { challengeSubmitting.value = false; }
 }
+let leaderboardRequestId = 0, challengeLeaderboardRequestId = 0;
 async function loadLeaderboard(scope = leaderboardScope.value, mode = leaderboardMode.value) {
+  const requestId = ++leaderboardRequestId;
   leaderboardLoading.value = true;
   try {
     const modeQuery = mode === 'english' || mode === 'pinyin' ? `&mode=${encodeURIComponent(mode)}` : '';
     const limit = scope === 'all' ? 50 : 20;
     const data = await requestJSON(`/api/leaderboard?period=all&limit=${limit}&scope=${encodeURIComponent(scope)}${modeQuery}`);
+    if (requestId !== leaderboardRequestId) return;
     leaderboardScope.value = data.scope || scope;
     leaderboardMode.value = data.mode || 'all';
     leaderboardRows.value = data.rows || [];
@@ -689,25 +779,26 @@ async function loadLeaderboard(scope = leaderboardScope.value, mode = leaderboar
     leaderboardCurrentRank.value = data.currentRank ?? null;
     leaderboardClassName.value = data.className || '';
   } catch {
-    leaderboardRows.value = [];
-    leaderboardCurrentRank.value = null;
-  } finally { leaderboardLoading.value = false; }
+    if (requestId === leaderboardRequestId) { leaderboardRows.value = []; leaderboardCurrentRank.value = null; }
+  } finally { if (requestId === leaderboardRequestId) leaderboardLoading.value = false; }
 }
 async function loadChallengeLeaderboards(scope = challengeLeaderboardScope.value) {
+  const requestId = ++challengeLeaderboardRequestId;
   challengeLeaderboardLoading.value = true;
   challengeLeaderboardScope.value = scope;
   const limit = scope === 'all' ? 50 : 20;
   await Promise.all(Object.keys(challengeLeaderboards).map(async (mode) => {
     try {
       const data = await requestJSON(`/api/leaderboard?period=all&limit=${limit}&scope=${encodeURIComponent(scope)}&mode=${encodeURIComponent(mode)}`);
+      if (requestId !== challengeLeaderboardRequestId) return;
       challengeLeaderboards[mode].rows = data.rows || [];
       Object.assign(challengeLeaderboards[mode].totals, data.totals || {});
       challengeLeaderboardClassName.value = data.className || '';
     } catch {
-      challengeLeaderboards[mode].rows = [];
+      if (requestId === challengeLeaderboardRequestId) challengeLeaderboards[mode].rows = [];
     }
   }));
-  challengeLeaderboardLoading.value = false;
+  if (requestId === challengeLeaderboardRequestId) challengeLeaderboardLoading.value = false;
 }
 async function switchChallengeLeaderboardScope(scope) { await loadChallengeLeaderboards(scope); }
 async function openLeaderboard() { leaderboardScope.value = user.value ? 'class' : 'all'; leaderboardMode.value = 'all'; await loadLeaderboard(); leaderboardOpen.value = true; }
@@ -756,6 +847,10 @@ function focusChallengeInput() { nextTick(() => { positionChallengeCapture(); ch
 function challengeTypedLine(segment) { return challengeTypedCharacters.value.slice(segment.offset, segment.offset + segment.line.length); }
 function challengeCaretVisible(segment) { return challengeTypedCharacters.value.length >= segment.offset && challengeTypedCharacters.value.length <= segment.offset + segment.line.length; }
 const feedbackFrom = ref('');
+const feedbackOpen = ref(false);
+function openStudentFeedback() { feedbackFrom.value = page.value; feedbackOpen.value = true; }
+function feedbackLogin() { feedbackOpen.value = false; openAccount(); }
+provide('openStudentFeedback', openStudentFeedback);
 function setPage(nextPage) {
   if (competitionPageLocked.value && nextPage !== 'competition') return;
   // 从游戏里点「反馈」时记下来源，反馈页可以自动选好「哪个功能」。
@@ -915,8 +1010,7 @@ onMounted(async () => {
   }
   if (savedPage === 'practice') loadPassage();
   if (pinyinCopy[savedPage]) resetPinyinLesson(savedPage, false);
-  await loadAuthConfig();
-  await loadCurrentUser();
+  await Promise.all([loadAuthConfig(), loadCurrentUser()]);
   await refreshActiveCompetition();
   if (savedPage === 'challenge-home') { challengeLeaderboardScope.value = user.value ? 'class' : 'all'; loadChallengeLeaderboards(challengeLeaderboardScope.value); }
   await loadLearningData();
@@ -927,14 +1021,26 @@ onMounted(async () => {
   repositionCaptureInputs();
   timer=window.setInterval(() => {
     if (!challengeExitOpen.value) now.value=Date.now();
-    if (challenge.value && !challengeExitOpen.value && !challenge.value.paused && !challengeSubmitting.value && now.value >= challenge.value.expiresAt) submitChallenge();
+    if (challenge.value && !challengeExitOpen.value && !challenge.value.paused && !challengeSubmitting.value && now.value >= challenge.value.expiresAt && now.value >= challengeNextRetryAt) submitChallenge();
   },250);
   competitionPollTimer = window.setInterval(refreshActiveCompetition, 1500);
   window.addEventListener('hashchange', enforceCompetitionHash);
 });
-onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.removeEventListener('hashchange', enforceCompetitionHash); window.clearInterval(timer); window.clearInterval(competitionPollTimer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); stopChallengeCountdown(); });
+onBeforeUnmount(() => { trainingQueue.destroy(); clearTimeout(trainingSavedTimer); clearTimeout(trainingRefreshTimer); window.removeEventListener('keydown', handleKey); window.removeEventListener('resize', repositionCaptureInputs); window.removeEventListener('hashchange', enforceCompetitionHash); window.clearInterval(timer); window.clearInterval(competitionPollTimer); window.clearTimeout(wrongFeedbackTimer); window.clearTimeout(practiceAdvanceTimer); stopChallengeCountdown(); });
 </script>
 <template>
+<ConnectionStatus @reconnected="recoverConnection"/>
+<div v-if="feedbackOpen" class="feedback-overlay" role="dialog" aria-modal="true" aria-label="问题反馈" @keydown.stop @keyup.stop>
+  <div v-if="['battle','battle-competition','boss','race','rhythm','chase','runner','competition'].includes(page) || challenge" class="feedback-time-notice" role="status">反馈期间游戏或比赛可能继续计时，请留意当前进度。</div>
+  <BugFeedback :user="user" :from="feedbackFrom" @back="feedbackOpen=false" @login="feedbackLogin" />
+</div>
+<aside v-if="trainingQueueState.count || trainingQueueState.storageProblem || trainingSaved" class="training-save-notice" role="status" aria-live="polite">
+  <span v-if="trainingQueueState.storageProblem">本地保存不可用，关闭页面可能丢失待提交记录，请联系老师。</span>
+  <span v-else-if="trainingQueueState.blocked">{{ trainingQueueState.blocked }}</span>
+  <span v-else-if="trainingQueueState.count">{{ trainingQueueState.saving ? '正在保存练习记录' : '练习记录等待保存' }}（{{ trainingQueueState.count }} 条）</span>
+  <span v-else>练习记录已保存</span>
+  <button v-if="trainingQueueState.count && !trainingQueueState.saving" type="button" @click="retryTrainingQueue">重试</button>
+</aside>
 <BattleGame v-if="page === 'battle'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
 <BattleGame v-else-if="page === 'battle-competition'" :user="user" competition @back="setPage('competition-hub')" @leaderboard="openLeaderboard" @login="openAccount"/>
 <BossGame v-else-if="page === 'boss'" :user="user" @back="setPage('games')" @leaderboard="openLeaderboard" @login="openAccount"/>
@@ -944,9 +1050,9 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 <BugFeedback v-else-if="page === 'bug-feedback'" :user="user" :from="feedbackFrom" @back="setPage('games')" @login="openAccount"/>
 <CompetitionGame v-else-if="page === 'competition'" :user="user" :locked="competitionPageLocked" @back="setPage('competition-hub')" @login="openAccount"/>
 <CompetitionHub v-else-if="page === 'competition-hub'" :user="user" @back="goHome" @select="setPage" @login="openAccount"/>
-<GameLobby v-else-if="page === 'games'" :user="user" @select="setPage" @back="goHome" @growth="openGrowth" @leaderboard="openLeaderboard" @account="openAccount" @bug-report="setPage('bug-feedback')"/>
+<GameLobby v-else-if="page === 'games'" :user="user" @select="setPage" @back="goHome" @growth="openGrowth" @leaderboard="openLeaderboard" @account="openAccount" @bug-report="openStudentFeedback"/>
 <div v-else class="app-shell" :class="{ 'is-home-page': page === 'home', 'is-reference-page': page === 'beginner' || page === 'growth' || page === 'diagnostics' || page === 'diagnostic-drill' || page.startsWith('challenge-') || page.startsWith('english-') || page.startsWith('pinyin-'), 'is-beginner-page': page === 'beginner', 'is-english-home': page === 'english-home', 'is-english-practice': page.startsWith('english-') && page !== 'english-home', 'is-pinyin-practice': page.startsWith('pinyin-') && page !== 'pinyin-home', 'is-pinyin-home': page === 'pinyin-home', 'is-challenge-running': page.startsWith('challenge-') && !!challenge }"><AppHeader variant="hero" title="字练场 2026" subtitle="中文与英文键盘训练" :icon="KeyboardIcon" decor clickable-brand :user="user" @brand="goHome" @account="openAccount" />
-  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="openGames"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button><button class="course-card competition" @click="openCompetitionHub"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button></div><p class="footnote">练习可直接开始；参加现场比赛请先登录，等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
+  <main><section v-if="page==='home'" class="home-view"><div class="breadcrumb">首页 <b>›</b> <strong>选择练习或比赛</strong></div><section class="welcome"><div><p class="eyebrow">欢迎使用</p><h1>字练场 <em>2026</em></h1><p>零基础入门，轻松学打字</p></div></section><div class="home-cards"><button class="course-card orange" @click="openBeginner"><img class="home-course-icon" :src="'/assets/home-beginner.png'" alt="新手入门"/><strong>新手入门</strong><small>字幕键位练习，认识每个手指</small></button><button class="course-card blue" @click="openPractice('英文打字')"><img class="home-course-icon" :src="'/assets/home-english.png'" alt="英文打字"/><strong>英文打字</strong><small>单词、语句与文章练习</small></button><button class="course-card green" @click="openPractice('拼音打字')"><img class="home-course-icon" :src="'/assets/home-pinyin.png'" alt="拼音打字"/><strong>拼音打字</strong><small>练习拼音输入，提升中文速度</small></button><button class="course-card challenge" @click="openChallengePage"><span class="home-challenge-icon">60<small>秒</small></span><strong>挑战模式</strong><small>英文/拼音文章一分钟挑战</small></button><button class="course-card battle" @click="openGames"><span class="home-challenge-icon">VS</span><strong>趣味游戏</strong><small>赛车、音游与占领战等趣味玩法</small></button><button class="course-card competition" @click="openCompetitionHub"><span class="home-challenge-icon">赛</span><strong>打字比赛</strong><small>个人赛与团队赛，由老师统一开赛</small></button></div><p class="footnote">登录后选择练习；参加现场比赛请等待老师统一开赛。</p><div class="home-tools"><button type="button" @click="openBeginner"><KeyboardIcon :size="16"/>打字教程</button><button type="button" @click="openChallengePage"><Timer :size="16"/>挑战模式</button><button type="button" @click="openLeaderboard"><BarChart3 :size="16"/>排行榜</button><template v-if="user"><button type="button" @click="openGrowth"><Target :size="16"/>我的成长</button><button type="button" @click="openDiagnostics"><AlertTriangle :size="16"/>错键诊断</button></template></div></section>
 <section v-else-if="page === 'growth'" class="lesson-view learning-view">
   <div class="lesson-nav"><button @click="goHome"><ArrowLeft :size="14"/>返回</button><span>首页</span><b>›</b><strong>我的成长</strong></div>
   <section class="learning-hero"><div><p class="eyebrow">学生成长中心</p><h1>{{ user?.displayName || '同学' }}，继续保持输入节奏。</h1><p v-if="learningSummary?.hasData">当前阶段：{{ learningSummary.level.label }} · {{ learningSummary.level.next }}</p><p v-else>完成一次练习后，这里会开始记录你的成长轨迹。</p></div><div class="learning-level"><Flame :size="20"/><strong>{{ learningSummary?.stats?.streak || 0 }}</strong><span>连续练习天</span></div></section>
@@ -1078,7 +1184,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
 <section v-else-if="page.startsWith('challenge-')" class="lesson-view challenge-view">
   <div class="lesson-nav"><button @click="requestChallengeExit">返回</button><span>首页</span><b>›</b><span>挑战模式</span><b>›</b><strong>{{ activeChallengeLabel }}</strong></div>
   <section v-if="!challenge && !challengeResult" class="challenge-intro">
-    <div class="challenge-number">60</div><div><p class="eyebrow">{{ activeChallengeLabel }}</p><h2>一分钟完成一篇{{ activeChallengeMode === 'english' ? '英文' : '中文' }}文章。</h2><p>排行榜按正确字数排序，同分时正确率更高者在前。成绩只绑定当前学生账号。</p><button type="button" @click="startChallenge(activeChallengeMode)">{{ user ? (challengeSubmitting ? '准备中…' : '开始挑战') : '登录后开始' }}</button></div>
+    <div class="challenge-number">60</div><div><p class="eyebrow">{{ activeChallengeLabel }}</p><h2>一分钟完成一篇{{ activeChallengeMode === 'english' ? '英文' : '中文' }}文章。</h2><p>排行榜按正确字数排序，同分时正确率更高者在前。成绩只绑定当前学生账号。</p><button type="button" @click="startChallenge(activeChallengeMode)">{{ user ? (challengeSubmitting ? '准备中…' : '开始挑战') : '登录后开始' }}</button><p v-if="challengeSubmitMessage" role="status">{{ challengeSubmitMessage }}</p></div>
   </section>
   <section v-else-if="challenge" class="challenge-running">
     <div class="challenge-practice-toolbar"><span>课程选择：<strong>{{ activeChallengeLabel }}</strong><small class="challenge-page-indicator">第 {{ challengeArticlePage.current }} / {{ challengeArticlePage.total }} 段</small></span><span class="challenge-clock">剩余 <b>{{ challengeRemaining }}</b> 秒</span></div>
@@ -1091,6 +1197,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
     </div>
     <textarea ref="challengeInputEl" v-model="challengeInput" class="challenge-input-capture" aria-label="挑战实际输入" autofocus :disabled="challengeRemaining<=0 || countingDown" :placeholder="activeChallengeMode === 'english' ? '输入英文文章' : '输入中文文章'" @input="persistChallenge" @paste.prevent/>
     </div>
+    <p v-if="challengeRemaining <= 0" class="challenge-submit-status" role="status">{{ challengeSubmitMessage || '正在提交成绩，请稍候…' }} <button v-if="challengeSubmitMessage && !challengeSubmitting" type="button" @click="challengeNextRetryAt = 0; submitChallenge()">立即重试</button></p>
     <StatsBar :seconds="Math.max(0, 60 - challengeRemaining)" :speed="challengeSpeed" :progress="Math.min(100, Math.round(challengeTypedCharacters.length / Math.max(1, challengeTargetCharacters.length) * 100))" :accuracy="challengeAccuracy"/>
     <div v-if="countingDown" class="challenge-countdown" role="status" aria-live="assertive">
       <strong>{{ challengeCountdown }}</strong>
@@ -1100,7 +1207,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleKey); window
   <section v-else class="challenge-result"><Trophy :size="46"/><h2>{{ challengeResult.error ? '提交失败' : '挑战完成' }}</h2><p v-if="challengeResult.error">{{ challengeResult.error }}</p><template v-else><strong>{{ challengeResult.score }}</strong><span>正确字数 · 正确率 {{ Math.round(challengeResult.accuracy) }}%</span><p>个人最好 {{ challengeResult.personalBest }} 字 · 排名 {{ challengeResult.rank || '-' }}</p></template><button type="button" @click="startChallenge(activeChallengeMode)">再来一次</button></section>
 </section>
 
-<section v-else class="lesson-view"><div class="lesson-nav"><button @click="goHome">返回</button><span>首页</span><b>›</b><strong>{{ category }}</strong></div><section class="lesson-panel practice-panel"><div class="lesson-title"><div><p class="eyebrow">自由练习 · {{ category }}</p><h2>{{ passage?.title || '正在准备练习文章' }}</h2><p>在输入框中输入上方文字，系统会实时计算准确率。</p></div><select v-model="category" @change="loadPassage"><option>拼音打字</option><option>校园生活</option><option>成长励志</option></select></div><div class="practice-metrics"><span>正确 <b>{{ score.correct }}</b> 字</span><span>正确率 <b>{{ score.accuracy }}%</b></span><span>最后按键 <b>{{ lastCode }}</b></span></div><div class="text-sheet"><span v-for="(char,i) in targetChars" :key="i" :class="{correct:i<score.input.length&&score.input[i]===char,wrong:i<score.input.length&&score.input[i]!==char,current:i===score.input.length}">{{ char }}</span></div><textarea :value="typed" @input="updateInput" placeholder="在这里输入上方文字"></textarea><Keyboard :keyboard="keyboard" :key-class="keyClass" @virtual-key="handleKey"/></section></section>
+<section v-else class="lesson-view"><div class="lesson-nav"><button @click="goHome">返回</button><span>首页</span><b>›</b><strong>{{ category }}</strong></div><section class="lesson-panel practice-panel"><div class="lesson-title"><div><p class="eyebrow">自由练习 · {{ category }}</p><h2>{{ passage?.title || '正在准备练习文章' }}</h2><p>在输入框中输入上方文字，系统会实时计算准确率。</p><p v-if="passageLoadError" role="alert">{{ passageLoadError }}</p></div><select v-model="category" @change="loadPassage"><option>拼音打字</option><option>校园生活</option><option>成长励志</option></select></div><div class="practice-metrics"><span>正确 <b>{{ score.correct }}</b> 字</span><span>正确率 <b>{{ score.accuracy }}%</b></span><span>最后按键 <b>{{ lastCode }}</b></span></div><div class="text-sheet"><span v-for="(char,i) in targetChars" :key="i" :class="{correct:i<score.input.length&&score.input[i]===char,wrong:i<score.input.length&&score.input[i]!==char,current:i===score.input.length}">{{ char }}</span></div><textarea :value="typed" @input="updateInput" placeholder="在这里输入上方文字"></textarea><Keyboard :keyboard="keyboard" :key-class="keyClass" @virtual-key="handleKey"/></section></section>
 </main>
 <div v-if="challengeExitOpen" class="modal-backdrop" @mousedown.self="cancelChallengeExit">
   <section class="challenge-exit-modal" role="dialog" aria-modal="true" aria-labelledby="challenge-exit-title">

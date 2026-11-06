@@ -14,19 +14,23 @@ const failed = ref(false);
 let offset = 0;
 let pollTimer;
 let clockTimer;
+let reading = false, stopped = false;
 
 async function refresh() {
+  if (reading || stopped) return;
+  reading = true;
   try {
     const response = await fetch(eventMode ? `/api/competitions/${competitionId}/board` : `/api/competition/${mode}/board`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error('bad status');
     const payload = await response.json();
+    if (stopped) return;
     data.value = payload;
     offset = payload.serverNow - Date.now();
     clock.value = Date.now();
     failed.value = false;
   } catch {
-    failed.value = true;
-  }
+    if (!stopped) failed.value = true;
+  } finally { reading = false; }
 }
 
 const phase = computed(() => {
@@ -112,6 +116,7 @@ onMounted(() => {
   clockTimer = setInterval(() => { clock.value = Date.now(); }, 200);
 });
 onBeforeUnmount(() => {
+  stopped = true;
   clearInterval(pollTimer);
   clearInterval(clockTimer);
 });

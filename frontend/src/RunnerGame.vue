@@ -74,6 +74,7 @@ async function refresh() {
 async function flush() {
   if (stopped || writing || !pending || busy.value) return;
   if (reading) await reading;
+  if (stopped || writing || !pending || busy.value) return;
   const packet = pending; pending = null;
   writing = (async () => {
     try { apply(await api('/type', packet)); }
@@ -108,6 +109,7 @@ async function action(path) {
   if (reading) await reading;
   if (writing) await writing;
   if (pending && path !== '/start') await flush();
+  if (busy.value || stopped) return false;
   busy.value = true; message.value = '';
   try { apply(await api(path, path === '/start' ? { language: language.value } : { runId: state.value.id })); return true; }
   catch (error) { message.value = error.message; if (error.status === 401) emit('login'); return false; }

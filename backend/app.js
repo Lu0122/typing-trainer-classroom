@@ -715,6 +715,10 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   });
 
   app.post('/api/training-sessions', requireUser, (request, response) => {
+    // Offline queues must not be submitted under another student's active session.
+    if (request.body?.expectedUserId != null && String(request.body.expectedUserId) !== String(request.user.id)) {
+      return response.status(409).json({ message: '当前账号与练习记录所属账号不一致，请登录原账号' });
+    }
     const allowedModes = new Set(['beginner', 'english-word', 'english-phrase', 'english-article', 'pinyin-syllable', 'pinyin-word', 'pinyin-article']);
     const mode = cleanText(request.body?.mode, 30);
     const lessonTitle = cleanText(request.body?.lessonTitle, 80);
@@ -1595,6 +1599,9 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
              COALESCE((SELECT classes.name FROM class_members cm JOIN classes ON classes.id = cm.class_id
                WHERE cm.user_id = users.id AND cm.left_at IS NULL AND classes.is_active = 1
                ORDER BY cm.joined_at DESC LIMIT 1), '未分班') AS className,
+             (SELECT classes.id FROM class_members cm JOIN classes ON classes.id = cm.class_id
+               WHERE cm.user_id = users.id AND cm.left_at IS NULL
+               ORDER BY cm.joined_at DESC LIMIT 1) AS classId,
              COUNT(scores.id) AS attempts, COALESCE(MAX(scores.score), 0) AS personalBest
       FROM users LEFT JOIN scores ON scores.user_id = users.id ${filter}
       GROUP BY users.id ORDER BY users.created_at DESC, users.id DESC LIMIT ? OFFSET ?
@@ -1935,7 +1942,8 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
     /^\/api\/arena\/[^/]+\/create$/,
     /^\/api\/chase\/create$/,
     /^\/api\/chase\/join-code$/,
-    /^\/api\/runner\/start$/
+    /^\/api\/runner\/start$/,
+    /^\/api\/lobby\/invitations(?:\/[^/]+\/join)?$/
   ];
   let competitionEvent = null;
   app.use((request, response, next) => {
@@ -1954,6 +1962,7 @@ function createApp({ db, adminPassword = 'admin123', now = () => Date.now(), sec
   require('./agent').installAgent(app, { db, requireAdmin, now });
   require('./chase').installChase(app, { db, requireUser, now });
   require('./runner').installRunner(app, { db, requireUser, now });
+  require('./lobby').installLobby(app, { requireUser, now });
   app.use('/vendor/lucide', express.static(path.join(__dirname, '..', 'node_modules', 'lucide', 'dist', 'umd')));
   app.use(express.static(publicPath));
   app.get('/admin', (request, response) => response.sendFile(path.join(publicPath, 'admin.html')));

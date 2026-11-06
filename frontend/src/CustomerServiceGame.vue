@@ -37,6 +37,7 @@ function resetView() {
 }
 
 async function start() {
+  if (busy.value) return;
   if (!props.user) { emit('account'); return; }
   busy.value = true; notice.value = '';
   try {

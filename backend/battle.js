@@ -33,7 +33,7 @@ const TEXTS = [
 class Battle {
   constructor({ now = Date.now, save = () => {}, recordProgress = () => {}, competition = false, random = Math.random, db = null } = {}) {
     this.now = now; this.save = save; this.recordProgress = recordProgress; this.players = new Map();
-    this.random = random; this.db = db;
+    this.random = random; this.db = db; this.lobbyInviteId = crypto.randomUUID(); this.stateRevision = 0; this.stateEpoch = crypto.randomUUID();
     this.competition = competition; this.durationMs = 120_000;
     this.texts = TEXTS; this.article = null;
     this.round = crypto.randomUUID(); this.phase = 'waiting'; this.red = 50;
@@ -111,7 +111,7 @@ class Battle {
       }
     }
     if (!this.competition && this.phase === 'finished' && this.now() - this.result.endedAt >= 20000) {
-      this.phase = 'waiting'; this.red = 50; this.started = null;
+      this.lobbyInviteId = crypto.randomUUID(); this.phase = 'waiting'; this.red = 50; this.started = null;
       this.frontier = [...INITIAL_FRONTIER]; this.lastAttack = null; this.events = [];
       this.broadcastId = 0; this.broadcasts = []; this.fastestSegmentMs = null; this.fastestSpeed = 0;
       this.players = new Map(online.map(p=>[p.id,p]));
@@ -326,7 +326,7 @@ class Battle {
       const correct=all.reduce((s,p)=>s+p.correct,0), attempted=all.reduce((s,p)=>s+p.attempted,0);
       teams[team]={ count:members.length, speed:members.length?Math.round(correct*60/duration/members.length):0, accuracy:attempted?Math.round(correct/attempted*100):100, attacks:all.reduce((s,p)=>s+p.attacks,0), area:this.competition ? Math.round((team==='red'?this.red:100-this.red)*10)/10 : Math.round(team==='red'?this.red:100-this.red) };
     }
-    return { room:'1024', competition:this.competition, inputRules:{allowMistakes:this.competition}, durationMs:this.competition?this.durationMs:null, startsAt:this.competition?this.started:null, endsAt:this.competition&&this.started?this.started+this.durationMs:null, serverNow:this.now(), round:this.round, phase:this.phase, host:this.host, article:this.article, online:online.length, elapsed:this.started?Math.max(0,Math.floor((this.now()-this.started)/1000)):0, balanceIn:Math.max(0,Math.ceil((this.balanceAt-this.now())/1000)), teams, territory:{columns:GRID_COLUMNS,rows:GRID_ROWS,frontier:[...this.frontier],redCells:this.frontier.reduce((sum,columns)=>sum+columns,0),totalCells:GRID_COLUMNS*GRID_ROWS}, players:online.map(p=>({ id:p.id,name:p.name,avatarUrl:p.avatarUrl || null,team:p.team,correct:p.correct,attacks:p.attacks,speed:Math.round(p.correct*60/duration),accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,sequence:(Number.isInteger(p.taskIndex)?p.taskIndex:0)+1,progress:p.ticket?.progress||0,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0) })), me:p?{id:p.id,team:p.team,attacks:p.attacks,correct:p.correct,attempted:p.attempted,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0),progress:p.ticket?.progress||0}:null, comboPower:{tiers:COMBO_TIERS,base:CHARACTER_ATTACK_POWER}, notice:this.notice, broadcasts:this.broadcasts.map((item)=>({...item})), event:this.event, lastAttack:this.lastAttack, events:this.events.map(event=>({...event,impact:event.impact?{...event.impact}:null,captured:event.captured.map(cell=>({...cell}))})), result:this.result };
+    return { snapshotEpoch: this.stateEpoch, snapshotVersion: ++this.stateRevision, room:'1024', competition:this.competition, inputRules:{allowMistakes:this.competition}, durationMs:this.competition?this.durationMs:null, startsAt:this.competition?this.started:null, endsAt:this.competition&&this.started?this.started+this.durationMs:null, serverNow:this.now(), round:this.round, phase:this.phase, host:this.host, article:this.article, online:online.length, elapsed:this.started?Math.max(0,Math.floor((this.now()-this.started)/1000)):0, balanceIn:Math.max(0,Math.ceil((this.balanceAt-this.now())/1000)), teams, territory:{columns:GRID_COLUMNS,rows:GRID_ROWS,frontier:[...this.frontier],redCells:this.frontier.reduce((sum,columns)=>sum+columns,0),totalCells:GRID_COLUMNS*GRID_ROWS}, players:online.map(p=>({ id:p.id,name:p.name,avatarUrl:p.avatarUrl || null,team:p.team,correct:p.correct,attacks:p.attacks,speed:Math.round(p.correct*60/duration),accuracy:p.attempted?Math.round(p.correct/p.attempted*100):100,sequence:(Number.isInteger(p.taskIndex)?p.taskIndex:0)+1,progress:p.ticket?.progress||0,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0) })), me:p?{id:p.id,team:p.team,attacks:p.attacks,correct:p.correct,attempted:p.attempted,combo:p.combo||0,bestCombo:p.bestCombo||0,multiplier:comboPower(p.combo||0),comboLabel:comboLabel(p.combo||0),progress:p.ticket?.progress||0}:null, comboPower:{tiers:COMBO_TIERS,base:CHARACTER_ATTACK_POWER}, notice:this.notice, broadcasts:this.broadcasts.map((item)=>({...item})), event:this.event, lastAttack:this.lastAttack, events:this.events.map(event=>({...event,impact:event.impact?{...event.impact}:null,captured:event.captured.map(cell=>({...cell}))})), result:this.result };
   }
 }
 
@@ -359,6 +359,13 @@ function installBattle(app, { db, requireUser, requireAdmin, now }) {
   });
   const battle = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress, db });
   const competition = new Battle({ now, save: saveBattle, recordProgress: saveBattleProgress, competition: true, db });
+  app.locals.typingBattle = battle;
+  app.locals.battleLobby = {
+    create(user) { battle.tick(); if(battle.phase==='finished') throw Object.assign(new Error('本局已结束，请等待下一局'),{status:409}); const existing=battle.players.get(user.id); const red=[...battle.players.values()].filter(p=>p.team==='red').length,blue=battle.players.size-red; return {...battle.join(user,existing?.team || (red<=blue?'red':'blue')),inviteCode:battle.lobbyInviteId}; },
+    join(user,code) { battle.tick(); if(battle.lobbyInviteId!==code || battle.phase==='finished') throw Object.assign(new Error('邀请的对局已结束'),{status:409}); const existing=battle.players.get(user.id); const red=[...battle.players.values()].filter(p=>p.team==='red').length,blue=battle.players.size-red; return battle.join(user,existing?.team || (red<=blue?'red':'blue')); },
+    inspect(code) { battle.tick(); if(battle.lobbyInviteId!==code)return null; return {phase:battle.phase,count:battle.online().length,capacity:60,joinable:['waiting','running'].includes(battle.phase)}; }
+  };
+
   const route = fn => (req,res,next) => { try { res.json(fn(req)); } catch(e) { if(e.status) res.status(e.status).json({message:e.message}); else next(e); } };
   app.get('/api/battle',requireUser,route(req=>battle.state(req.user.id, req.user)));
   app.post('/api/battle/join',requireUser,route(req=>battle.join(req.user,req.body.team)));

@@ -7,6 +7,8 @@ const vue = require('vue');
 const timingContext = {};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'src', 'rhythm-timing.mjs'), 'utf8')
   .replace(/^export /gm, '') + '\nthis.timing = { createRhythmClock, rhythmPhysicalKey, rhythmPosition, predictRhythmPress };', timingContext);
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'src', 'battle-snapshot.mjs'), 'utf8')
+  .replace(/^export /gm, '') + '\nthis.isBattleSnapshotStale = isBattleSnapshotStale;', timingContext);
 
 // 执行组件的真实输入逻辑；网络与定时器由测试控制，重现慢请求和失败重试。
 function load(component, names, fetch, props = {}, lifecycle = {}) {
@@ -14,7 +16,7 @@ function load(component, names, fetch, props = {}, lifecycle = {}) {
   const source = file.match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .+;\r?$/gm, '');
   const timers = new Map(), timerDelays = new Map(); let nextTimer = 0;
   const context = {
-    ...vue, ...timingContext.timing, onMounted() {}, onBeforeUnmount() {}, watch() {}, defineExpose() {},
+    ...vue, ...timingContext.timing, isBattleSnapshotStale: timingContext.isBattleSnapshotStale, onMounted() {}, onBeforeUnmount() {}, watch() {}, defineExpose() {},
     defineProps: () => ({ user: { id: 1 }, mode: 'rhythm', ...props }), defineEmits: () => () => {},
     fetch, AbortSignal, Date, LANE_COUNT: require('../backend/rhythm-chart').LANE_COUNT, performance: { now: () => Date.now() },
     setTimeout: (fn, delay) => { const id = ++nextTimer; timers.set(id, fn); timerDelays.set(id, delay); return id; },
@@ -396,4 +398,57 @@ test('competition frontend submits later correct positions after mistakes and pr
   assert.equal(game.myCombo.value,2);assert.equal(game.localBattleStats.value.accuracy,89);
   game.input.value='abcdefghi';game.handleBattleInput();
   assert.equal(game.input.value,'abcdefxhi','已经结算的错字不能改成正确字后再计分');
+});
+
+test('runner sends one queued packet when two flushes wait on the same poll', async () => {
+  const calls=[]; let finishRead, finishWrite;
+  const state={id:'run-1',phase:'running',serverNow:1000,lastInputId:0,task:{id:'ticket-1',text:'abc',deadline:100000},lives:3};
+  const game=load('RunnerGame.vue',['state','refresh','input','flush'],(url, options)=>{
+    calls.push({url,body:options.body});
+    if(options.method==='GET')return new Promise(resolve=>{finishRead=()=>resolve(response(state))});
+    return new Promise(resolve=>{finishWrite=()=>resolve(response(state))});
+  },{}, {createRunnerClock:()=>({sync(){},now(){return 1000}})});
+  game.state.value=state;
+  const poll=game.refresh(); game.input({target:{value:'a'},isComposing:false});
+  const first=game.flush(),second=game.flush(); finishRead();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.filter(c=>c.url.endsWith('/type')).length,1);
+  finishWrite(); await Promise.all([poll,first,second]);
+});
+
+test('battle join ignores repeated clicks while the first request is pending', async () => {
+  let finish, posts=0;
+  const state={phase:'waiting',round:'r1',serverNow:Date.now(),players:[],events:[],broadcasts:[],me:{id:1,team:'red'}};
+  const game=load('BattleGame.vue',['join'],(url,options)=>{if(options.method==='POST'){posts++;return new Promise(resolve=>{finish=()=>resolve(response(state))});}return Promise.resolve(response(state));});
+  const a=game.join('red'),b=game.join('red');assert.equal(posts,1);finish();await Promise.all([a,b]);
+});
+
+test('customer service challenge start ignores duplicate submissions', async () => {
+  let finish, posts=0;
+  const game=load('CustomerServiceGame.vue',['start'],()=>{posts++;return new Promise(resolve=>{finish=()=>resolve(response({session:{scenario:{suggestedReplies:[]}}}))})});
+  const a=game.start(),b=game.start();assert.equal(posts,1);finish();await Promise.all([a,b]);
+});
+
+test('rhythm DOM notes keep moving if WebGL stage cannot be created', () => {
+  const scope=vue.effectScope(); let mount, frame;
+  const props=vue.reactive({running:true,elapsed:4000,readElapsed:()=>4000,judgeRatio:0.86,chart:{fallMs:2600,notes:[{id:1,letter:'A',at:5000,lane:0}]},me:{},judgement:{}});
+  try {
+    const board=scope.run(()=>load('RhythmBoard.vue',['host','visualElapsed','shownNotes'],()=>{}, {}, {
+      defineProps:()=>props,watch:vue.watch,onMounted:fn=>{mount=fn},onBeforeUnmount(){},
+      createStage(){throw new Error('WebGL unavailable')},window:{},HTMLElement:class {},
+      requestAnimationFrame:fn=>{frame=fn;return 1},cancelAnimationFrame(){}
+    }));
+    board.host.value={firstElementChild:null};mount();frame(1000);
+    assert.equal(board.visualElapsed.value,4000);
+    assert.equal(board.shownNotes.value.length,1,'无 WebGL 时字母仍按时钟移动');
+  } finally {scope.stop();}
+});
+
+test('rhythm key sound plays locally without waiting for network and respects mute', () => {
+  let sounds=0;
+  class FakeAudio { constructor(){this.state='running';this.currentTime=1;this.destination={};} createOscillator(){sounds++;return {frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}}} createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}}} }
+  const game=load('ArenaGame.vue',['sync','onKeydown','soundOn','rhythmBoard'],()=>{throw new Error('no network expected')},{},{window:{AudioContext:FakeAudio}});
+  game.sync(snapshot());game.rhythmBoard.value={pressKey(){}};game.soundOn.value=true;
+  game.onKeydown({code:'KeyA',key:'a',preventDefault(){}});assert.equal(sounds,1);
+  game.soundOn.value=false;game.onKeydown({code:'KeyB',key:'b',preventDefault(){}});assert.equal(sounds,1);
 });

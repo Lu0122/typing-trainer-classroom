@@ -237,6 +237,11 @@ function installChase(app, { db, requireUser, now = Date.now }) {
     room.create(user, role); rooms.set(code,room); memberRooms.set(user.id,room); return room;
   };
   const route = fn => (req,res,next)=>{try{res.json(fn(req));}catch(e){if(e.status)res.status(e.status).json({message:e.message});else next(e);}};
+  app.locals.chaseLobby = {
+    create(user) { const old=findRoom(user.id); if(old) { old.tick(); if(old.phase !== 'waiting') throw Object.assign(new Error('你已有正在进行的追逐赛，请先返回房间'),{status:409}); return old.state(user.id); } return newRoom(user, 'police').state(user.id); },
+    join(user,code) { prune(); const room=rooms.get(String(code)); if(!room) throw Object.assign(new Error('房间号无效或房间已关闭'),{status:404}); if(room.players.has(user.id)) return room.state(user.id); const old=findRoom(user.id); if(old && old!==room && old.phase!=='waiting') throw Object.assign(new Error('你已有进行中的追逐赛，请先结束当前对局'),{status:409}); const state=room.join(user); if(findRoom(user.id)) detach(user.id); memberRooms.set(user.id,room); return state; },
+    inspect(code) { const room=rooms.get(String(code)); if(!room)return null; room.tick(); if(!room.players.size || (room.phase==='finished' && now()>room.result.endedAt+RESULT_MS)) return null; return {phase:room.phase,count:room.players.size,capacity:2}; }
+  };
   app.get('/api/chase', requireUser, route(req => { prune(); return findRoom(req.user.id)?.state(req.user.id) || {phase:'lobby',serverNow:now()}; }));
   app.post('/api/chase/create', requireUser, route(req => newRoom(req.user, req.body?.role || 'police').state(req.user.id)));
   app.post('/api/chase/bot', requireUser, route(req => { const room = newRoom(req.user, req.body?.role || 'police'); room.addBot(req.user, req.body?.role || 'police'); return room.state(req.user.id); }));

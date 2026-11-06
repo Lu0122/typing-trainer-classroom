@@ -20,7 +20,7 @@ English documentation: [README.en.md](README.en.md) · GitHub: https://github.co
 
 在开发环境执行 `npm run package:win`，即可在 `output/packages/` 生成精简 ZIP。
 完整解压后双击 `启动字练场.bat`，无需安装 Node.js、npm 或重新构建页面。
-运行包带匹配的 Node 与 SQLite、当前前端和必要依赖；包含 `.env`，不带原有 `data/`。
+运行包带匹配的 Node 与 SQLite、当前前端和必要依赖；`.env` 使用示例配置，不包含本机密钥，也不带原有 `data/`。首次使用前请配置后台密码。
 运行包支持重复启动检测、自动打开浏览器和局域网访问，详细使用与数据迁移见 [Windows 运行版说明](docs/WINDOWS-RUNTIME.md)。
 执行 `npm run verify:runtime` 可将最新运行包解压到项目外目录，验证离线启动、静态资源、原生数据库、数据持久化及端口冲突处理。
 

@@ -1128,7 +1128,7 @@ function installAgent(app, { db, requireAdmin, now = () => Date.now() }) {
   app.get('/api/admin/agent/conversations/:id', requireAdmin, (request, response) => {
     const id = Number.parseInt(request.params.id, 10);
     if (!Number.isInteger(id)) return response.status(400).json({ message: '会话编号不正确' });
-    const conversation = db.prepare('SELECT id, title, created_at AS createdAt FROM agent_conversations WHERE id = ?').get(id);
+    const conversation = db.prepare('SELECT id, title, created_at AS createdAt FROM agent_conversations WHERE id = ? AND (admin_id IS ? OR admin_id IS NULL)').get(id, request.admin?.id ?? null);
     if (!conversation) return response.status(404).json({ message: '会话不存在' });
     const rows = db.prepare(`
       SELECT id, message, result_json AS resultJson, source, created_at AS createdAt
@@ -1153,9 +1153,12 @@ function installAgent(app, { db, requireAdmin, now = () => Date.now() }) {
   app.delete('/api/admin/agent/conversations/:id', requireAdmin, (request, response) => {
     const id = Number.parseInt(request.params.id, 10);
     if (!Number.isInteger(id)) return response.status(400).json({ message: '会话编号不正确' });
-    db.prepare('DELETE FROM agent_audit_logs WHERE conversation_id = ?').run(id);
-    const result = db.prepare('DELETE FROM agent_conversations WHERE id = ?').run(id);
-    if (!result.changes) return response.status(404).json({ message: '会话不存在' });
+    const exists = db.prepare('SELECT id FROM agent_conversations WHERE id = ? AND (admin_id IS ? OR admin_id IS NULL)').get(id, request.admin?.id ?? null);
+    if (!exists) return response.status(404).json({ message: '会话不存在' });
+    db.transaction(() => {
+      db.prepare('DELETE FROM agent_audit_logs WHERE conversation_id = ?').run(id);
+      db.prepare('DELETE FROM agent_conversations WHERE id = ?').run(id);
+    })();
     response.json({ ok: true });
   });
 
@@ -1178,6 +1181,8 @@ function installAgent(app, { db, requireAdmin, now = () => Date.now() }) {
       conversationId = db.prepare('INSERT INTO agent_conversations (admin_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)')
         .run(request.admin?.id ?? null, title, now(), now()).lastInsertRowid;
     } else {
+      const owned = db.prepare('SELECT id FROM agent_conversations WHERE id = ? AND (admin_id IS ? OR admin_id IS NULL)').get(conversationId, request.admin?.id ?? null);
+      if (!owned) return response.status(404).json({ message: '会话不存在' });
       db.prepare('UPDATE agent_conversations SET updated_at = ? WHERE id = ?').run(now(), conversationId);
     }
 

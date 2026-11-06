@@ -543,3 +543,17 @@
 @keyframes challenge-countdown-pop{0%{transform:scale(.62);opacity:.25}28%{transform:scale(1);opacity:1}100%{transform:scale(1.06);opacity:.92}}
 @media (prefers-reduced-motion:reduce){.challenge-countdown,.challenge-countdown strong{animation:none}}
 @media (max-width:620px){.app-shell:not(.is-reference-page) .home-tools{position:static;right:auto;bottom:auto;left:auto;justify-content:center;flex-wrap:wrap;margin:22px auto 0;padding-bottom:env(safe-area-inset-bottom)}}
+
+/* Connection feedback stays compact and does not block the typing workspace. */
+.connection-notice { position: fixed; z-index: 10000; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100vw - 24px); padding: 11px 14px; border: 1px solid #e7b670; border-radius: 12px; background: #fff9ed; color: #663d10; box-shadow: 0 8px 28px #382b1c26; font-size: 14px; }
+.connection-notice-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #c67918; }
+.connection-notice strong { display: block; }
+.connection-notice p { margin: 3px 0 0; line-height: 1.4; }
+.connection-notice button, .challenge-submit-status button { flex: none; border: 1px solid #c69048; border-radius: 7px; padding: 6px 10px; color: #663d10; background: #fff; cursor: pointer; }
+.challenge-submit-status { margin: 12px 0; color: #8c4c0a; font-weight: 600; }
+@media (max-width: 600px) { .connection-notice { width: calc(100vw - 24px); font-size: 13px; } }
+.training-save-notice { position: fixed; z-index: 9999; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px; max-width: min(440px, calc(100vw - 24px)); padding: 10px 13px; border: 1px solid #e7b670; border-radius: 10px; background: #fff9ed; color: #663d10; box-shadow: 0 6px 20px #382b1c22; font-size: 13px; line-height: 1.4; }
+.training-save-notice button { flex: none; border: 1px solid #c69048; border-radius: 7px; padding: 5px 9px; color: #663d10; background: #fff; cursor: pointer; }
+
+.feedback-overlay { position:fixed; inset:0; z-index:9000; overflow:auto; overscroll-behavior:contain; background:#f3f7fc; }
+.feedback-time-notice { padding:8px 16px; text-align:center; color:#754b09; background:#fff4d7; font-size:13px; }

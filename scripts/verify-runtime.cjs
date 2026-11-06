@@ -86,7 +86,7 @@ async function main() {
   assert.equal(board.inputRules.allowMistakes, true);
   const settings = require('dotenv').parse(fs.readFileSync(path.join(extracted, '.env')));
   const admin = await fetch(base + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: settings.ADMIN_PASSWORD || 'admin123' }) });
-  assert.equal(admin.status, 200, '运行包沿用 .env 后台密码');
+  assert.equal(admin.status, 200, '运行包使用自身配置的后台密码');
   const adminCookie = admin.headers.get('set-cookie')?.split(';')[0] || '';
   const registration = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'runtime901', displayName: '运行包验收', password: 'Classroom123' }) });
   if (settings.STUDENT_REGISTRATION_ENABLED === 'true') {

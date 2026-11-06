@@ -10,8 +10,8 @@
 //   compact  56px  功能页与游戏页用，隐藏副标题与装饰
 //
 // 四个槽位固定：品牌（props 生成） / 导航（nav 数组） / 状态（status 插槽） / 操作（actions 插槽）。
-import { computed, ref } from 'vue';
-import { ArrowLeft, UserRound } from 'lucide-vue-next';
+import { computed, inject, ref } from 'vue';
+import { ArrowLeft, Bug, UserRound } from 'lucide-vue-next';
 
 const props = defineProps({
   variant: { type: String, default: 'compact' }, // 'hero' | 'compact'
@@ -21,6 +21,7 @@ const props = defineProps({
   backLabel: { type: String, default: '' },
   user: { type: Object, default: null },
   showUser: { type: Boolean, default: true },
+  showFeedback: { type: Boolean, default: true },
   decor: { type: Boolean, default: false },
   clickableBrand: { type: Boolean, default: false },
   nav: { type: Array, default: () => [] } // [{ key, label, icon, active }]
@@ -29,6 +30,7 @@ const props = defineProps({
 const emit = defineEmits(['back', 'account', 'nav', 'brand']);
 
 const hero = computed(() => props.variant === 'hero');
+const openFeedback = inject('openStudentFeedback', null);
 
 // 弹窗关闭后把焦点还给返回按钮，沿用各游戏页原有的无障碍行为
 const backEl = ref(null);
@@ -75,6 +77,7 @@ defineExpose({ focus: () => backEl.value?.focus() });
 
     <div class="ah-actions">
       <slot name="actions" />
+      <button v-if="showFeedback && openFeedback" class="ah-feedback" type="button" @click="openFeedback"><Bug :size="15" /><span>问题反馈</span></button>
       <button v-if="showUser" class="ah-user" type="button" @click="emit('account')">
         <span class="ah-avatar">
           <img v-if="user?.avatarUrl" :src="user.avatarUrl" :alt="`${user.displayName}的头像`" />
@@ -161,6 +164,9 @@ defineExpose({ focus: () => backEl.value?.focus() });
 .ah-actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex:none}
 .ah-status + .ah-actions{margin-left:0}
 
+.ah-feedback{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:34px;padding:0 11px;border:1px solid rgba(255,255,255,.48);border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-size:12px;white-space:nowrap;cursor:pointer}
+.ah-feedback:hover{background:rgba(255,255,255,.26)}
+.ah-feedback:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .ah-user{
   display:flex;align-items:center;gap:8px;
   height:38px;padding:0 12px 0 6px;
@@ -202,6 +208,7 @@ defineExpose({ focus: () => backEl.value?.focus() });
   .ah-nav{display:none}
   .ah-status{font-size:12px;gap:10px}
 }
+@media (max-width:600px){.ah-feedback{padding:0 8px}.ah-feedback span{font-size:0}.ah-feedback span::after{content:"反馈";font-size:12px}}
 @media (max-width:900px){
   .ah-copy b{font-size:15px}
   .hero .ah-copy b{font-size:20px}

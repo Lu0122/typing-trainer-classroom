@@ -42,7 +42,7 @@ async function buildPayload(target) {
   copy(path.join(root, 'public'), publicPath, (file, info) => {
     const relative = path.relative(path.join(root, 'public'), file).replaceAll('\\', '/');
     if (info.isDirectory()) return !['.vite', '.playwright-cli'].includes(path.basename(file));
-    return !['index.html', 'board.html'].includes(relative) && !generatedAsset.test(path.basename(file)) && !/\.(?:log|map)$/i.test(file);
+    return !['index.html', 'board.html', 'admin-next.html'].includes(relative) && !generatedAsset.test(path.basename(file)) && !/\.(?:log|map)$/i.test(file);
   });
 
   const server = await esbuild.build({

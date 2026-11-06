@@ -18,11 +18,13 @@
     "better-sqlite3": "^11.8.1",
     "dotenv": "^16.4.7",
     "echarts": "^5.6.0",
+    "element-plus": "2.9.11",
     "express": "^5.2.1",
     "lucide": "^0.468.0",
     "lucide-vue-next": "^0.468.0",
     "qs": "^6.16.0",
     "three": "^0.179.1",
+    "ws": "8.18.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

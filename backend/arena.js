@@ -545,9 +545,13 @@ function createHub(mode, opts) {
       this.prune();
       const room = this.rooms.find(item => item.no === roomNo);
       if (!room) throw Object.assign(new Error('邀请码不存在或房间已关闭'), { status: 404 });
+      room.tick();
+      if (!room.players.size) throw Object.assign(new Error('房间已关闭'), { status: 404 });
+      if (room.players.has(user.id)) return room;
       if (room.phase !== 'waiting') throw Object.assign(new Error('比赛已经开始，请创建或加入其他房间'), { status: 409 });
       if (room.players.size >= room.rules.capacity) throw Object.assign(new Error('房间已满'), { status: 409 });
       const old = this.roomOf(user.id);
+      if (old && old !== room && old.phase !== 'waiting') throw Object.assign(new Error('你已有进行中的赛车，请先结束当前对局'), { status: 409 });
       if (old && old !== room) { const player = old.players.get(user.id); if (player) old.leave(user.id, player.seat); }
       this.membership.set(user.id, room);
       return room;
@@ -583,6 +587,16 @@ function installArena(app, { db, requireUser, now }) {
     try { res.json(fn(hubs[req.params.mode], req)); } catch (error) { if (error.status) res.status(error.status).json({ message: error.message }); else next(error); }
   };
   const roomOf = (hub, req) => hub.roomOf(req.user.id);
+  app.locals.raceLobby = {
+    create(user) { const hub=hubs.race; const old=hub.roomOf(user.id); if(old) { old.tick(); if(old.phase !== 'waiting') throw Object.assign(new Error('你已有正在进行的赛车，请先返回房间'),{status:409}); return old.state(user.id); } return hub.matchmake(user,{fresh:true}).join(user); },
+    join(user,code) { return hubs.race.joinByCode(user,code).join(user); },
+    inspect(code) { const hub=hubs.race; hub.prune(); const room=hub.rooms.find(r=>String(r.no)===String(code)); if(!room)return null; room.tick(); return {phase:room.phase,count:room.players.size,capacity:room.rules.capacity}; }
+  };
+  app.locals.rhythmLobby = {
+    create(user) { const hub=hubs.rhythm; const old=hub.roomOf(user.id); if(old) { old.tick(); if(old.phase !== 'waiting') throw Object.assign(new Error('你已有进行中的音游，请先返回房间'),{status:409}); return old.state(user.id); } return hub.matchmake(user).join(user); },
+    join(user,code) { return hubs.rhythm.joinByCode(user,code).join(user); },
+    inspect(code) { const hub=hubs.rhythm; hub.prune(); const room=hub.rooms.find(r=>String(r.no)===String(code)); if(!room)return null; room.tick(); return {phase:room.phase,count:room.players.size,capacity:room.rules.capacity}; }
+  };
   app.get('/api/arena/:mode', requireUser, route((hub, req) => {
     // 赛车：进入页面即自动匹配并加入房间（GET 也是一次「到场」）；
     // 音游保留先加入再游玩的流程，未加入时读到的是大厅房间的等待态。

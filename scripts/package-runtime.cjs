@@ -32,7 +32,7 @@ function packageRoot(name) { return path.join(root, 'node_modules', ...name.spli
 
 async function main() {
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('请在 Windows x64 上制作此运行包，以匹配 SQLite 原生模块。');
-  if (!fs.existsSync(path.join(root, '.env'))) throw new Error('缺少 .env。');
+  if (!fs.existsSync(path.join(root, '.env.example'))) throw new Error('缺少 .env.example。');
   if (fs.existsSync(release) || fs.existsSync(archive)) throw new Error('输出目录已存在，请稍后重新打包。');
   // Verify the native module against the exact Node executable shipped below.
   const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.close();
@@ -53,7 +53,8 @@ async function main() {
   copy(path.join(packageRoot('lucide'), 'dist', 'umd', 'lucide.js'), path.join(release, 'node_modules', 'lucide', 'dist', 'umd', 'lucide.js'));
   copy(process.execPath, path.join(release, 'runtime', 'node.exe'));
   copy(path.join(path.dirname(process.execPath), 'LICENSE'), path.join(release, 'licenses', 'Node-LICENSE.txt'));
-  copy(path.join(root, '.env'), path.join(release, '.env'));
+  // Never include the developer's local credentials or configuration in a distributable.
+  copy(path.join(root, '.env.example'), path.join(release, '.env'));
   copy(path.join(root, '.env.example'), path.join(release, '.env.example'));
   fs.writeFileSync(path.join(release, '启动字练场.bat'), '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0launcher.cjs" %*\r\nif errorlevel 1 pause\r\n');
   // 一键更新 / 回滚：都用包内自带的 node 跑 update.cjs，不依赖系统环境。
@@ -80,9 +81,30 @@ async function main() {
     const match = input.replaceAll('\\', '/').match(/(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)/);
     if (match) names.add(match[1]);
   }
+  // The admin bundle includes Element Plus and its transitive frontend libraries.
+  // Collect their installed licenses as well as the server bundle dependencies.
+  const frontendPackages = new Map();
+  function collectFrontend(name, fromDirectory) {
+    let current = fromDirectory;
+    let directory;
+    while (true) {
+      const candidate = path.join(current, 'node_modules', ...name.split('/'));
+      if (fs.existsSync(path.join(candidate, 'package.json'))) { directory = candidate; break; }
+      const parent = path.dirname(current);
+      if (parent === current) throw new Error(`前端依赖缺失：${name}`);
+      current = parent;
+    }
+    if (frontendPackages.has(directory)) return;
+    const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
+    frontendPackages.set(directory, { name, metadata });
+    for (const dependency of Object.keys(metadata.dependencies || {})) collectFrontend(dependency, directory);
+  }
+  collectFrontend('element-plus', root);
+  const packages = new Map([...names].map(name => [packageRoot(name), { name }]));
+  for (const [directory, metadata] of frontendPackages) packages.set(directory, metadata);
   const notices = [];
-  for (const name of [...names].sort()) {
-    const directory = packageRoot(name);
+  for (const [directory, entry] of [...packages].sort((a, b) => a[1].name.localeCompare(b[1].name))) {
+    const name = entry.name;
     const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
     notices.push(`${name} ${metadata.version} (${metadata.license || 'see license'})`);
     for (const file of fs.readdirSync(directory).filter(file => /^(?:licen[cs]e|copying|notice)(?:\.|$)/i.test(file))) {

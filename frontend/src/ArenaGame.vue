@@ -115,7 +115,8 @@ function onArenaKeydown(event) {
 // ── 音效：打对字一声轻响，升档音调更高，打错是低音提示 ────────────
 // 用最小的 WebAudio 振荡器实现，不引入音频资源；关掉开关后完全静音。
 let audioCtx = null;
-const soundOn = ref(true);
+// 教室内默认关闭音游音效；玩家可按需开启，不影响赛车原有设置。
+const soundOn = ref(race.value);
 function beep(freq, dur = 0.05, gain = 0.035) {
   if (!soundOn.value) return;
   try {
@@ -312,6 +313,8 @@ function onKeydown(event) {
   event.preventDefault();
   const at = toElapsed(event), inputId = ++inputSequence;
   rhythmBoard.value?.pressKey(key, at, inputId);
+  // 声音只表示按键已接收，判定与得分仍以服务端为准。
+  beep(620, 0.025, 0.018);
   keyBuffer.value.push({ key, at, inputId });
   // 缓冲满了立刻发，避免超过服务端单包上限被拒。
   if (keyBuffer.value.length >= KEYS_MAX) { clearTimeout(flushTimer); flushTimer = null; flushKeys(); return; }
@@ -363,6 +366,7 @@ onBeforeUnmount(() => {
   stopped = true; clearInterval(poll); clearInterval(clockTimer); clearTimeout(sendTimer); clearTimeout(feedbackTimer); clearTimeout(flushTimer); clearTimeout(launchTimer);
   window.removeEventListener('keydown', onKeydown);
   window.removeEventListener('keydown', onArenaKeydown);
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
   if (!cleanLeave && me.value) fetch(`/api/arena/${props.mode}/leave`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seat: me.value.seat }) }).catch(() => {});
 });
 </script>
@@ -410,9 +414,9 @@ onBeforeUnmount(() => {
           <header class="rhythm-hero">
             <div>
               <h1><span>跟着节奏，</span><em>敲准每一个字母！</em></h1>
-              <p>音乐 + 打字 = 更有趣的练习体验</p>
+              <p>按下方块上的字母，跟随节奏准确击键。</p>
             </div>
-            <div class="rhythm-difficulty" :aria-label="`当前难度：${difficultyLabel}`">
+            <div class="rhythm-difficulty" :aria-label="`当前难度：${difficultyLabel}`"><button type="button" class="rhythm-sound-toggle" :aria-pressed="soundOn" @click="soundOn = !soundOn"><Volume2 v-if="soundOn" :size="14"/><VolumeX v-else :size="14"/>按键音效{{ soundOn ? '开' : '关' }}</button>
               <small>难度选择 · {{ difficultyLabel }} · {{ difficultyHint }}</small>
               <div><button type="button" :class="{ 'is-selected': selectedDifficulty === 'easy' }" :aria-pressed="selectedDifficulty === 'easy'" :disabled="running || busy" @click="chooseDifficulty('easy')">简单</button><button type="button" :class="{ 'is-selected': selectedDifficulty === 'normal' }" :aria-pressed="selectedDifficulty === 'normal'" :disabled="running || busy" @click="chooseDifficulty('normal')">普通</button><button type="button" :class="{ 'is-selected': selectedDifficulty === 'hard' }" :aria-pressed="selectedDifficulty === 'hard'" :disabled="running || busy" @click="chooseDifficulty('hard')">困难</button></div>
             </div>

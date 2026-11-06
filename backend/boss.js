@@ -312,6 +312,11 @@ function installBoss(app, { db, requireUser, now }) {
         Math.round(player.correct / player.attempted * 100), Math.round(player.correct / durationMs * 60000), durationMs, at, `boss:${round}:${player.seat}`, finalized ? 1 : 0);
   };
   const room = new EliminationRoom({ now, record, save: result => db.prepare('INSERT OR IGNORE INTO boss_results VALUES (?,?,?)').run(result.id, result.endedAt, JSON.stringify(result)) });
+  app.locals.bossLobby = {
+    create(user) { room.tick(); if(room.phase==='finished') throw Object.assign(new Error('本局已结束，请等待下一局'),{status:409}); return room.join(user); },
+    join(user,code) { room.tick(); if(room.round!==code || room.phase==='finished') throw Object.assign(new Error('邀请的对局已结束'),{status:409}); return room.join(user); },
+    inspect(code) { room.tick(); if(room.round!==code)return null; return {phase:room.phase,count:room.players.size,capacity:60,joinable:['waiting','running'].includes(room.phase)}; }
+  };
   const route = fn => (req, res, next) => { try { res.json(fn(req)); } catch (error) { if (error.status) res.status(error.status).json({ message: error.message }); else next(error); } };
   app.get('/api/boss', requireUser, route(req => room.state(req.user.id)));
   app.post('/api/boss/join', requireUser, route(req => room.join(req.user)));

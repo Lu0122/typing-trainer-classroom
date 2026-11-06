@@ -461,7 +461,7 @@ async function action(path, body = {}) {
 
 async function chooseMode(nextMode) {
   if (nextMode === mode.value) return;
-  await leaveServer();
+  if (!await leaveServer()) return;
   mode.value = nextMode;
   state.value = null;
   draft.value = '';
@@ -532,19 +532,22 @@ function charClass(char, index) {
 }
 
 async function leave() {
-  await leaveServer();
+  if (!await leaveServer()) return;
   stopped = true;
   emit('back');
 }
 
 async function leaveServer() {
-  if (!state.value?.me || busy.value) return;
+  if (busy.value) { message.value = '正在处理，请稍后再试。'; return false; }
+  if (!state.value?.me) return true;
   busy.value = true;
   try {
     await api('/leave', { seat: state.value.me.seat });
     state.value = null;
+    return true;
   } catch (error) {
     message.value = `退出失败：${error.message}`;
+    return false;
   } finally {
     busy.value = false;
   }

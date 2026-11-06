@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { ArrowDown, BarChart3, ChevronRight, FileText, Flag, Flame, Gauge, Keyboard, Send, Target, Users, Timer, Trophy, Volume2, Zap } from 'lucide-vue-next';
 import BattleMap from './BattleMap.vue';
+import { isBattleSnapshotStale } from './battle-snapshot.mjs';
 import AppHeader from './AppHeader.vue';
 import './battle.css';
 const props=defineProps({ user:Object, competition:{type:Boolean,default:false} });
@@ -28,24 +29,62 @@ watch(() => state.value?.phase, (phase, previous) => {
 });
 let poll, pending=false, stopped=false, attackPulseTimer, characterSendTimer, broadcastTimer, queuedTicket='';
 let advanceRequested = false;
+let characterRetryDelay = 500, characterRetryAt = 0;
 const seenBroadcastIds = new Set(); let broadcastHydrated = false; let lastActivityId = 0; let activityHydrated = false;
 const battleBase = computed(() => props.competition ? '/api/battle/competition' : '/api/battle');
-async function api(path,options={}) { const url=props.competition&&!props.user&&path===''?battleBase.value+'/board':battleBase.value+path;const r=await fetch(url,{...options,signal:AbortSignal.timeout(5000),headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok) throw new Error(data.message||'连接失败'); return data; }
+async function api(path,options={}) { const url=props.competition&&!props.user&&path===''?battleBase.value+'/board':battleBase.value+path;const r=await fetch(url,{...options,signal:AbortSignal.timeout(5000),headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok) throw Object.assign(new Error(data.message||'连接失败'), { status: r.status }); return data; }
+let socket = null, socketRetryTimer, socketWatchdog, socketReady = false, socketRetryDelay = 1000, lastSocketMessage = 0;
+async function applyState(data) {
+  if (stopped || busy.value || characterSending.value) return;
+  if (isBattleSnapshotStale(data, state.value)) return;
+  if(data.round!==state.value?.round||data.me?.team!==state.value?.me?.team){task.value=null;input.value='';queuedTicket='';clearTimeout(characterSendTimer);seenBroadcastIds.clear();broadcastHydrated=false;globalAnnouncement.value=null;lastActivityId=0;activityHydrated=false;activityPinned.value=true;activityNewCount.value=0;activityExpanded.value=false;}
+  state.value=data; if(!connected.value)error.value=''; connected.value=true;
+  const broadcasts = Array.isArray(data.broadcasts) ? data.broadcasts : [];
+  if (!broadcastHydrated) { broadcasts.forEach((item) => seenBroadcastIds.add(item.id)); broadcastHydrated = true; }
+  else { const latest = broadcasts.at(-1); if (latest && !seenBroadcastIds.has(latest.id)) { seenBroadcastIds.add(latest.id); globalAnnouncement.value = latest; clearTimeout(broadcastTimer); broadcastTimer = setTimeout(() => { globalAnnouncement.value = null; }, 5200); } }
+  if(data.result&&data.result.id!==dismissed.value)result.value=data.result;
+  if(data.phase==='running'&&data.me&&!task.value){task.value=await api('/task');queuedTicket=task.value.id;if(allowsMistakes.value)input.value=task.value.typed||'';nextTick(()=>inputEl.value?.focus());}
+}
 async function refresh() {
   if(pending||(!props.user&&!props.competition)||characterSending.value) return; pending=true;
-  try {
-    const data=await api(''); if(stopped)return;
-    if(busy.value)return;
-    if(data.round!==state.value?.round||data.me?.team!==state.value?.me?.team){task.value=null;input.value='';queuedTicket='';clearTimeout(characterSendTimer);seenBroadcastIds.clear();broadcastHydrated=false;globalAnnouncement.value=null;lastActivityId=0;activityHydrated=false;activityPinned.value=true;activityNewCount.value=0;activityExpanded.value=false;}
-    state.value=data; if(!connected.value)error.value=''; connected.value=true;
-    const broadcasts = Array.isArray(data.broadcasts) ? data.broadcasts : [];
-    if (!broadcastHydrated) { broadcasts.forEach((item) => seenBroadcastIds.add(item.id)); broadcastHydrated = true; }
-    else { const latest = broadcasts.at(-1); if (latest && !seenBroadcastIds.has(latest.id)) { seenBroadcastIds.add(latest.id); globalAnnouncement.value = latest; clearTimeout(broadcastTimer); broadcastTimer = setTimeout(() => { globalAnnouncement.value = null; }, 5200); } }
-    if(data.result&&data.result.id!==dismissed.value)result.value=data.result;
-    if(data.phase==='running'&&data.me&&!task.value){task.value=await api('/task');queuedTicket=task.value.id;if(allowsMistakes.value)input.value=task.value.typed||'';nextTick(()=>inputEl.value?.focus());}
-  } catch(e) { connected.value=false; error.value=e.message; } finally { pending=false; }
+  try { await applyState(await api('')); }
+  catch(e) { if (!stopped) { connected.value=false; error.value=e.message; } } finally { pending=false; }
 }
+function connectBattleStream() {
+  if (stopped || props.competition || !props.user || socket || typeof WebSocket === 'undefined') return;
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let current;
+  try { current = new WebSocket(`${protocol}//${location.host}/api/battle/stream`); }
+  catch { socketRetryTimer = setTimeout(connectBattleStream, 15000); return; }
+  socket = current;
+  current.onmessage = async event => {
+    if (stopped || socket !== current) return;
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type !== 'state' || !message.data || !Number.isFinite(message.data.serverNow)) return;
+      lastSocketMessage = Date.now(); socketReady = true; socketRetryDelay = 1000;
+      if (!pending) { pending = true; try { await applyState(message.data); } finally { pending = false; } }
+    } catch { /* The next snapshot or HTTP fallback will recover. */ }
+  };
+  current.onclose = () => {
+    if (socket !== current) return;
+    socket = null; socketReady = false;
+    if (stopped) return;
+    refresh();
+    const delay = socketRetryDelay + Math.random() * 500;
+    socketRetryDelay = Math.min(socketRetryDelay * 2, 15000);
+    socketRetryTimer = setTimeout(connectBattleStream, delay);
+  };
+  current.onerror = () => current.close();
+}
+function closeBattleStream() {
+  clearTimeout(socketRetryTimer); clearInterval(socketWatchdog);
+  socketReady = false;
+  if (socket) { const current = socket; socket = null; current.close(); }
+}
+
 async function join(team) {
+  if(busy.value || stopped) return;
   if(!props.user){emit('login');return;}
   busy.value=true; error.value='';
   try { state.value=await api('/join',{method:'POST',body:JSON.stringify({team})}); } catch(e){error.value=e.message;} finally{busy.value=false;await refresh();}
@@ -69,7 +108,7 @@ function handleBattleInput() {
   if (input.value.length > task.value.text.length) input.value=input.value.slice(0,task.value.text.length);
   if (!canAttackCharacter.value) return;
   clearTimeout(characterSendTimer);
-  characterSendTimer=setTimeout(sendCharacterBatch,220);
+  characterSendTimer=setTimeout(sendCharacterBatch, Math.max(220, characterRetryAt - Date.now()));
 }
 function attackCharacter() { clearTimeout(characterSendTimer); sendCharacterBatch(); }
 async function advanceTask() {
@@ -97,25 +136,34 @@ function handleBattleEnter(event) {
 }
 async function sendCharacterBatch() {
   if (characterSending.value || !task.value || !canAttackCharacter.value) return;
+  if (Date.now() < characterRetryAt) { clearTimeout(characterSendTimer); characterSendTimer = setTimeout(sendCharacterBatch, characterRetryAt - Date.now()); return; }
   const currentTask = task.value;
   const prefix = input.value.slice(0, taskProgress.value + 12);
   const hasAttack = !allowsMistakes.value || prefix.slice(taskProgress.value).split('').some((char,index)=>char===currentTask.text[taskProgress.value+index]);
   battleSubmittedTicket = currentTask.id;
   battleSubmittedText.value = prefix;
   characterSending.value=true; error.value='';
+  let retry = true;
+  let retryDelay = 0;
   try {
     state.value=await api('/characters',{method:'POST',body:JSON.stringify({ticket:currentTask.id,text:prefix})});
+    characterRetryDelay = 500; characterRetryAt = 0;
     const completed=prefix.length>=currentTask.text.length;
     if(completed) { advanceRequested=false; task.value=null; input.value=''; queuedTicket=''; }
     else task.value={...currentTask,progress:prefix.length,typed:prefix};
     if (hasAttack) { attackPulse.value=state.value?.me?.team||'red'; clearTimeout(attackPulseTimer); attackPulseTimer=setTimeout(()=>{attackPulse.value='';},280); }
     if(state.value.result) result.value=state.value.result;
-  } catch(e) { error.value=e.message; if(e.message.includes('失效')) { task.value=null; input.value=''; queuedTicket=''; } }
+  } catch(e) {
+    error.value=e.message;
+    if(e.message.includes('失效')) { task.value=null; input.value=''; queuedTicket=''; }
+    else if (e.status && e.status < 500 && e.status !== 429) { retry = false; }
+    else { retryDelay = characterRetryDelay + Math.random() * 250; characterRetryAt = Date.now() + retryDelay; characterRetryDelay = Math.min(characterRetryDelay * 2, 5000); }
+  }
   finally {
     characterSending.value=false;
     if(!task.value) await refresh();
-    else if(input.value.length>taskProgress.value && (allowsMistakes.value||input.value===task.value.text.slice(0,input.value.length))) { clearTimeout(characterSendTimer); characterSendTimer=setTimeout(sendCharacterBatch,0); }
-    else if(advanceRequested) await advanceTask();
+    else if(retry && input.value.length>taskProgress.value && (allowsMistakes.value||input.value===task.value.text.slice(0,input.value.length))) { clearTimeout(characterSendTimer); characterSendTimer=setTimeout(sendCharacterBatch,retryDelay); }
+    else if(retry && advanceRequested) await advanceTask();
     nextTick(()=>inputEl.value?.focus());
   }
 }
@@ -171,18 +219,19 @@ function cancelLeave() { leaveConfirmOpen.value = false; }
 async function confirmLeave() {
   if (leaving.value) return;
   leaving.value = true; leaveConfirmOpen.value = false; stopped = true;
-  clearTimeout(characterSendTimer); clearTimeout(broadcastTimer); clearInterval(poll); clearTimeout(attackPulseTimer);
+  clearTimeout(characterSendTimer); clearTimeout(broadcastTimer); clearInterval(poll); clearTimeout(attackPulseTimer); closeBattleStream();
   try { if (props.user) await api('/leave', { method: 'POST' }); leftCleanly.value = true; }
   finally { leaving.value = false; emit('back'); }
 }
 onMounted(()=>{
-  refresh(); poll=setInterval(refresh,1000);
+  refresh(); connectBattleStream(); poll=setInterval(() => { if (!socketReady) refresh(); },1000);
+  socketWatchdog = setInterval(() => { if (socketReady && Date.now() - lastSocketMessage > 6000) socket?.close(); }, 3000);
   countdownClock = setInterval(() => {
     battleClock.value = Date.now();
     if (props.competition && state.value?.phase === 'countdown' && countdownSeconds.value === 0) refresh();
   }, 200);
 });
-onBeforeUnmount(()=>{stopped=true;clearInterval(countdownClock);clearTimeout(startSignalTimer);clearTimeout(characterSendTimer);clearTimeout(broadcastTimer);clearInterval(poll);clearTimeout(attackPulseTimer);if(props.user&&!leftCleanly.value)fetch(battleBase.value+'/leave',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});});
+onBeforeUnmount(()=>{stopped=true;closeBattleStream();clearInterval(countdownClock);clearTimeout(startSignalTimer);clearTimeout(characterSendTimer);clearTimeout(broadcastTimer);clearInterval(poll);clearTimeout(attackPulseTimer);if(props.user&&!leftCleanly.value)fetch(battleBase.value+'/leave',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});});
 </script>
 <template>
 <div class="battle-game" :class="{'attack-pulse-red':attackPulse==='red','attack-pulse-blue':attackPulse==='blue'}">
